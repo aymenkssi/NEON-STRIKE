@@ -16,9 +16,10 @@ type Props = {
   hitSignal: number;
   damageSignal: number;
   onPause: () => void;
+  onSwitchWeapon: (index: number) => void;
 };
 
-export default function HUD({ stats, hitSignal, damageSignal, onPause }: Props) {
+export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchWeapon }: Props) {
   const insets = useSafeAreaInsets();
   const hitScale = useSharedValue(0);
   const dmgOpacity = useSharedValue(0);
@@ -75,6 +76,42 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause }: Props) 
         <Pressable testID="pause-button" onPress={onPause} style={styles.pauseBtn}>
           <MaterialCommunityIcons name="pause" size={22} color={colors.onSurface} />
         </Pressable>
+      </View>
+
+      {/* Top-center: weapon switcher */}
+      <View style={[styles.weaponRow, { top: padT }]} pointerEvents="box-none">
+        {stats.weapons.map((w, i) => {
+          const selected = i === stats.weaponIndex;
+          return (
+            <Pressable
+              key={w.short}
+              testID={`weapon-${w.short}`}
+              disabled={!w.unlocked}
+              onPress={() => onSwitchWeapon(i)}
+              style={[
+                styles.weaponChip,
+                selected && styles.weaponChipActive,
+                !w.unlocked && styles.weaponChipLocked,
+              ]}
+            >
+              {w.unlocked ? (
+                <>
+                  <MaterialCommunityIcons
+                    name="pistol"
+                    size={16}
+                    color={selected ? colors.onBrand : colors.onSurfaceSecondary}
+                  />
+                  <Text style={[styles.weaponChipText, selected && { color: colors.onBrand }]}>{w.short}</Text>
+                </>
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="lock" size={14} color={colors.onSurfaceTertiary} />
+                  <Text style={styles.weaponLockText}>W{w.unlockWave}</Text>
+                </>
+              )}
+            </Pressable>
+          );
+        })}
       </View>
 
       {/* Crosshair + hit marker */}
@@ -161,4 +198,25 @@ const styles = StyleSheet.create({
   ammoText: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 44, letterSpacing: 1 },
   ammoMax: { color: colors.onSurfaceTertiary, fontSize: 22 },
   reloadText: { color: colors.warning, fontFamily: fonts.displaySemi, fontSize: 18, letterSpacing: 1 },
+  weaponRow: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  weaponChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  weaponChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  weaponChipLocked: { opacity: 0.5 },
+  weaponChipText: { color: colors.onSurfaceSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1 },
+  weaponLockText: { color: colors.onSurfaceTertiary, fontFamily: fonts.displayMed, fontSize: 11, letterSpacing: 1 },
 });

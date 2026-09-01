@@ -11,6 +11,7 @@ export const colors = {
   brandSecondary: "#00FFFF",
   brandTertiary: "#1B4D25",
   warning: "#FFB000",
+  onWarning: "#000000",
   error: "#FF003C",
   onError: "#FFFFFF",
   border: "#252A34",

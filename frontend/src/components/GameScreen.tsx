@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import { GameEngine, type GameStats } from "../game/GameEngine";
 import { sound } from "../audio/sound";
 import { showRewarded } from "../ads";
+import { colors, fonts } from "../theme";
 import HUD from "./HUD";
 import TouchControls from "./TouchControls";
 import PauseMenu from "./PauseMenu";
@@ -17,7 +18,21 @@ type Props = {
   onExit: () => void;
 };
 
-const INITIAL: GameStats = { health: 100, ammo: 5, maxAmmo: 5, reloading: false, score: 0, wave: 1, kills: 0 };
+const INITIAL: GameStats = {
+  health: 100,
+  ammo: 5,
+  maxAmmo: 5,
+  reloading: false,
+  score: 0,
+  wave: 1,
+  kills: 0,
+  weaponIndex: 0,
+  weapons: [
+    { short: "SG", name: "SHOTGUN", unlocked: true, unlockWave: 1 },
+    { short: "SMG", name: "SMG", unlocked: false, unlockWave: 2 },
+    { short: "AR", name: "ASSAULT RIFLE", unlocked: false, unlockWave: 4 },
+  ],
+};
 
 export default function GameScreen({ username, lookSensitivity, soundEnabled, onExit }: Props) {
   const engineRef = useRef<GameEngine | null>(null);
@@ -27,6 +42,14 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
   const [hitSignal, setHitSignal] = useState(0);
   const [damageSignal, setDamageSignal] = useState(0);
   const [canRevive, setCanRevive] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<any>(null);
+
+  const notify = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 1600);
+  }, []);
 
   useEffect(() => {
     sound.init().then(() => sound.setEnabled(soundEnabled));
@@ -61,6 +84,7 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
             setStatus("gameover");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
           },
+          onNotify: notify,
           playSound: (n) => sound.play(n),
         },
         { lookSensitivity }
@@ -100,7 +124,21 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
       {status === "playing" && <TouchControls getEngine={getEngine} />}
 
       {status !== "gameover" && (
-        <HUD stats={stats} hitSignal={hitSignal} damageSignal={damageSignal} onPause={pause} />
+        <HUD
+          stats={stats}
+          hitSignal={hitSignal}
+          damageSignal={damageSignal}
+          onPause={pause}
+          onSwitchWeapon={(i) => engineRef.current?.switchWeapon(i)}
+        />
+      )}
+
+      {toast && status === "playing" && (
+        <View style={styles.toastWrap} pointerEvents="none">
+          <View style={styles.toast}>
+            <Text style={styles.toastText}>{toast}</Text>
+          </View>
+        </View>
       )}
 
       {status === "paused" && <PauseMenu onResume={resume} onRestart={restart} onExit={onExit} />}
@@ -121,4 +159,14 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#05070a" },
+  toastWrap: { position: "absolute", top: "22%", left: 0, right: 0, alignItems: "center" },
+  toast: {
+    backgroundColor: "rgba(13,15,18,0.85)",
+    borderWidth: 1.5,
+    borderColor: colors.brand,
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
+  toastText: { color: colors.brand, fontFamily: fonts.display, fontSize: 16, letterSpacing: 1.5 },
 });

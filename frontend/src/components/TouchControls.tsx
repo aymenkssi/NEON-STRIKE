@@ -81,10 +81,12 @@ export default function TouchControls({ getEngine }: Props) {
     e.shoot();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     if (fireInterval.current) clearInterval(fireInterval.current);
-    fireInterval.current = setInterval(() => {
-      getEngine()?.shoot();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    }, 380);
+    if (e.isAuto()) {
+      fireInterval.current = setInterval(() => {
+        getEngine()?.shoot();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }, e.getFireInterval());
+    }
   };
   const stopFire = () => {
     if (fireInterval.current) {

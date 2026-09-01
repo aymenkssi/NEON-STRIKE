@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { submitScore } from "../api/leaderboard";
+import { showRewarded } from "../ads";
 import AdBanner from "../ads/AdBanner";
 
 type Props = {
@@ -20,13 +21,16 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
   const [state, setState] = useState<"submitting" | "done" | "error">("submitting");
   const [rank, setRank] = useState<number | null>(null);
   const [isHigh, setIsHigh] = useState(false);
+  const [displayScore, setDisplayScore] = useState(result.score);
+  const [doubled, setDoubled] = useState(false);
+  const [doubling, setDoubling] = useState(false);
 
-  const doSubmit = async () => {
+  const doSubmit = async (scoreValue: number) => {
     setState("submitting");
     try {
       const res = await submitScore({
         name: username,
-        score: result.score,
+        score: scoreValue,
         wave: result.wave,
         kills: result.kills,
       });
@@ -39,8 +43,23 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
   };
 
   useEffect(() => {
-    doSubmit();
+    doSubmit(result.score);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const doubleScore = () => {
+    if (doubled || doubling) return;
+    setDoubling(true);
+    showRewarded(
+      () => {
+        const ns = result.score * 2;
+        setDisplayScore(ns);
+        setDoubled(true);
+        doSubmit(ns);
+      },
+      () => setDoubling(false)
+    );
+  };
 
   return (
     <View style={[styles.overlay, { paddingTop: insets.top }]} testID="game-over-screen">
@@ -48,10 +67,11 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
         <Text style={styles.dead}>YOU DIED</Text>
 
         <View style={styles.statsRow}>
-          <Stat label="SCORE" value={result.score.toLocaleString()} big />
+          <Stat label="SCORE" value={displayScore.toLocaleString()} big />
           <Stat label="WAVE" value={String(result.wave)} />
           <Stat label="KILLS" value={String(result.kills)} />
         </View>
+        {doubled && <Text style={styles.doubledTag}>SCORE DOUBLÉ ×2 🎉</Text>}
 
         <View style={styles.rankBox}>
           {state === "submitting" && (
@@ -67,13 +87,21 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
             </Text>
           )}
           {state === "error" && (
-            <Pressable onPress={doSubmit} testID="retry-submit">
+            <Pressable onPress={() => doSubmit(displayScore)} testID="retry-submit">
               <Text style={styles.errorText}>Échec de l’envoi. Réessayer</Text>
             </Pressable>
           )}
         </View>
 
         <View style={styles.actions}>
+          {!doubled && (
+            <Pressable testID="double-score-button" style={[styles.btn, styles.doubleBtn]} onPress={doubleScore}>
+              <MaterialCommunityIcons name="star-four-points" size={20} color={colors.onWarning} />
+              <Text style={[styles.btnText, { color: colors.onWarning }]}>
+                {doubling ? "…" : "SCORE ×2 (PUB)"}
+              </Text>
+            </Pressable>
+          )}
           {canRevive && (
             <Pressable testID="revive-button" style={[styles.btn, styles.reviveBtn]} onPress={onRevive}>
               <MaterialCommunityIcons name="heart-plus" size={20} color={colors.onBrand} />
@@ -131,6 +159,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   reviveBtn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  doubleBtn: { backgroundColor: colors.warning, borderColor: colors.warning },
+  doubledTag: { color: colors.warning, fontFamily: fonts.display, fontSize: 16, letterSpacing: 1, marginTop: spacing.sm },
   restartBtn: { backgroundColor: "transparent", borderColor: colors.brand },
   menuBtn: { backgroundColor: "transparent", borderColor: colors.border },
   btnText: { fontFamily: fonts.display, fontSize: 15, letterSpacing: 1 },
