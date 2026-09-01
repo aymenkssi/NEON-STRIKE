@@ -1,0 +1,56 @@
+{
+  "summary": "Neon Protocol MVP tested end-to-end. Backend: 15/15 pytest passing on /api/scores, /api/leaderboard, /api/leaderboard/best, /api/rewards/ad including validation (empty name -> 422, name>16 -> 422, negative score -> 422, high-score flag, rank ordering, limit clamping, personal best). Frontend (landscape 844x390): Main menu renders correctly (NEON PROTOCOL, PLAYER, JOUER, CLASSEMENT, RÉGLAGES), leaderboard modal fetches and displays live rows, settings modal sliders/toggle work, play-button starts game with GLView + HUD (WAVE 1, 100 HP, 5/5 ammo, 0 KILLS, pause) and touch controls (FIRE/JUMP/RELOAD) all visible and no runtime crash. AdBanner shows 'ADVERTISEMENT' placeholder as expected on web. CRITICAL frontend bug: pause-button is visually rendered but pointer-blocked by TouchControls' look-zone (right 55%) - elementFromPoint at pause-button center returns a DIV inside GestureDetector, not the Pressable. Direct DOM dispatch confirmed the PauseMenu renders correctly with resume-button, pause-restart-button, pause-exit-button testIDs; the issue is purely rendering order in GameScreen.tsx (TouchControls mounts after HUD so lookZone sits on top of the pause button).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "GameScreen / HUD / TouchControls",
+        "issue": "pause-button is unreachable by real user taps. TouchControls is rendered AFTER HUD in GameScreen.tsx (line 101-104), so its lookZone (position:absolute, right:0, width:55%) sits on top of HUD's pause-button in the top-right and captures all pointer events. Verified via document.elementFromPoint(pauseBtnCenter) returning a plain DIV from the gesture zone. Direct DOM click dispatch opens the pause menu correctly, proving the handler works.",
+        "testID": "pause-button",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "In-game -> Pause",
+        "issue": "User cannot open pause menu via tap on pause-button because look-gesture overlay blocks it. Fix: render <TouchControls /> BEFORE <HUD /> in GameScreen.tsx (so HUD paints on top and its Pressables receive events), or shrink the lookZone to avoid the top-right 44px pause-button rect (e.g. top: 60, right: 60).",
+        "affected_testIDs": ["pause-button", "pause-menu", "resume-button", "pause-restart-button", "pause-exit-button"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "MainMenu / HUD (styling)",
+        "issue": "Deprecated style API warnings in console: 'textShadow*' style props are deprecated (use single 'textShadow') and 'props.pointerEvents is deprecated (use style.pointerEvents)'. Non-blocking but should be migrated. Reference: /app/frontend/src/components/MainMenu.tsx:133 (title2 uses textShadowColor + textShadowRadius) and any View using pointerEvents prop (HUD.tsx:50,55,67,68,81,87 and TouchControls.tsx:97,101,102)."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_neon_protocol_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "FIX (critical): In /app/frontend/src/components/GameScreen.tsx, swap the render order so <TouchControls /> is rendered BEFORE <HUD />. This way HUD's pause-button (topmost in DOM) receives pointer events. Alternatively, in TouchControls.tsx add top padding/inset to lookZone so it does not overlap the ~48x48 pause-button rect at top-right.",
+    "MIGRATE (minor): Replace deprecated textShadowColor/textShadowOffset/textShadowRadius in MainMenu.tsx title2 with the new single 'textShadow' style prop (RN 0.76+ style API).",
+    "MIGRATE (minor): Replace <View pointerEvents=...> prop with style.pointerEvents in HUD.tsx and TouchControls.tsx to remove deprecation warnings.",
+    "OPTIONAL: Consider a POST /api/scores 200 -> 201 for RESTful create semantics (currently returns 200 with SubmitResult which is functionally fine)."
+  ],
+  "critical_code_review_comments": [
+    "GameScreen.tsx renders TouchControls after HUD, which is the root cause of the pause-button being pointer-blocked. This is a simple rendering-order fix.",
+    "backend/server.py correctly excludes MongoDB _id via projection {\"_id\": 0} in leaderboard queries -- good.",
+    "Pydantic constraints enforce max_length=16 and ge=0 -- validation is airtight and returns 422 for bad inputs.",
+    "Server code is a single 129-line file; well within size limits."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_neon_protocol_api.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "90%"},
+  "seed_data_creation": "Backend test suite inserted ~15 scores prefixed with 'TEST<timestamp>' plus a 'TESTER' entry with score 1500 (from prior manual seed). No production data was modified. Test data uses a timestamp prefix for easy cleanup.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend is stable at 100% pass. The only critical issue is a UI z-order/pointer-event bug in GameScreen.tsx that prevents opening the PauseMenu via tap. After E1 swaps <TouchControls /> and <HUD /> order (or fixes the lookZone bounds), retest: click play-button -> click pause-button -> verify [data-testid=\"pause-menu\"] appears and resume-button/pause-restart-button/pause-exit-button all work. Use landscape viewport 844x390. AdBanner 'ADVERTISEMENT' placeholder on web is expected (native AdMob only on device builds).",
+  "rca_of_issue": "Root cause: In /app/frontend/src/components/GameScreen.tsx the JSX order places <HUD /> before <TouchControls />. Because both are absolutely positioned via StyleSheet.absoluteFill, TouchControls paints on top. TouchControls.tsx defines lookZone as {position:'absolute', right:0, top:0, bottom:0, width:'55%'} and wraps it in a GestureDetector (react-native-gesture-handler) that consumes all pointer events over the right 55% of the screen. HUD's pause-button sits at approx (788,12) in a 844x390 viewport, which falls inside that 55% band, so document.elementFromPoint returns the lookZone view instead of the Pressable. Reproduction: viewport 844x390 -> click play-button -> click pause-button via Playwright -> pause-menu never appears; but dispatching MouseEvent directly on the Pressable element (bypassing hit-testing) opens the menu correctly. Mitigation: reorder render so HUD is last (paints on top), or add a top-right cutout / larger top-offset to lookZone so it doesn't overlap the pause-button hitbox."
+}
