@@ -84,6 +84,8 @@ yarn doctor      # expo-doctor (compatibilité des dépendances)
 
 Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit la version compatible avec le SDK Expo.
 
+⚠️ `react-native-google-mobile-ads` est volontairement bloqué en **16.0.x** : à partir de 16.3, il embarque le SDK Google Mobile Ads 25, compilé avec une version de Kotlin plus récente que celle d'Expo SDK 54, ce qui fait échouer le build Android (`:react-native-google-mobile-ads:compileReleaseKotlin`). Ne le mettre à jour qu'avec une montée de version du SDK Expo.
+
 ## À prévoir avant une publication
 
 - **Identifiant d'application** : `com.aymenkssi.neonstrike` (Android et iOS). Il ne peut plus changer une fois l'app publiée sur le Play Store.
