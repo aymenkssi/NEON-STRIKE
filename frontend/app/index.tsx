@@ -22,7 +22,8 @@ export default function Index() {
   const [lookSensitivity, setLookSensitivity] = useState(0.008);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [level, setLevel] = useState(1);
-  const { progress, loaded, addCredits, completeLevel, buyUpgrade, claimDaily } = useProgress();
+  const { progress, loaded, addCredits, completeLevel, buyUpgrade, claimDaily, recordSession, claimMission, claimAchievement } =
+    useProgress();
 
   useEffect(() => {
     (async () => {
@@ -90,6 +91,8 @@ export default function Index() {
           progress={progress}
           onBuyUpgrade={buyUpgrade}
           onClaimDaily={claimDaily}
+          onClaimMission={claimMission}
+          onClaimAchievement={claimAchievement}
           onPlay={startGame}
           messages={messages}
         />
@@ -103,6 +106,7 @@ export default function Index() {
           modifiers={modifiersFrom(progress.upgrades)}
           onLevelDone={completeLevel}
           onAddCredits={addCredits}
+          onSession={recordSession}
           onExit={() => setScreen("menu")}
         />
       )}

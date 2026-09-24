@@ -10,6 +10,10 @@ import Animated, {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts } from "../theme";
 import type { GameStats } from "../game/GameEngine";
+import { POWERUPS } from "../game/content";
+
+const POWERUP_ICONS = { rage: "fire", haste: "run-fast", infinite: "infinity" } as const;
+const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 
 type Props = {
   stats: GameStats;
@@ -66,6 +70,16 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
         <Text style={[styles.healthLabel, { color: healthColor }]}>
           {stats.health}/{stats.maxHealth} PV
         </Text>
+        {stats.powerups.length > 0 && (
+          <View style={styles.powerRow} testID="hud-powerups">
+            {stats.powerups.map((p) => (
+              <View key={p.kind} style={[styles.powerChip, { borderColor: hex(POWERUPS[p.kind].color) }]}>
+                <MaterialCommunityIcons name={POWERUP_ICONS[p.kind]} size={14} color={hex(POWERUPS[p.kind].color)} />
+                <Text style={[styles.powerText, { color: hex(POWERUPS[p.kind].color) }]}>{p.remaining}s</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Top-right: score + kills + pause */}
@@ -174,6 +188,18 @@ const styles = StyleSheet.create({
   },
   healthFill: { height: "100%", borderRadius: 2 },
   healthLabel: { fontFamily: fonts.displaySemi, fontSize: 12, letterSpacing: 1 },
+  powerRow: { flexDirection: "row", gap: 6, marginTop: 4 },
+  powerChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    backgroundColor: "rgba(13,15,18,0.7)",
+  },
+  powerText: { fontFamily: fonts.display, fontSize: 12, fontVariant: ["tabular-nums"] },
   topRight: { position: "absolute", flexDirection: "row", alignItems: "flex-start", gap: 12 },
   scoreText: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 30, letterSpacing: 1, lineHeight: 32 },
   killRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },

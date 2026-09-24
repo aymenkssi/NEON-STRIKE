@@ -100,6 +100,10 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Étoiles** : ★ niveau terminé, ★★ au moins 50 % de santé, ★★★ au moins 30 % de tirs à la tête.
 - **Crédits** gagnés en combat, en fin de niveau (bonus + étoiles, ×2 avec une pub) et via la **récompense quotidienne** (série de 7 jours).
 - **Arsenal** : améliorations permanentes (dégâts, santé max, chargeur, rechargement), 5 niveaux chacune.
+- **Zombies** (`frontend/src/game/content.ts`) : rôdeur, coureur (dès le niveau 3), blindé (niveau 5) et explosif (niveau 7, explose au contact et en chaîne), plus un boss par niveau.
+- **Combos** (DOUBLE KILL, TRIPLE KILL… en moins de 2,5 s) avec bonus de score et de crédits ; **bonus temporaires** lâchés par les zombies : dégâts ×2, vitesse, munitions infinies.
+- **6 secteurs** de 5 niveaux, chacun avec ses couleurs et son nom ; secousses d'écran et explosions.
+- **Objectifs** (`frontend/src/game/meta.ts`) : 3 missions du jour (les mêmes pour tous, renouvelées à minuit), 17 succès récompensés en crédits et des statistiques de joueur.
 - La progression est sauvegardée sur l'appareil (`frontend/src/hooks/use-progress.ts`, clé `np_progress_v1`).
 
 ## Achat de crédits (Google Play Billing)

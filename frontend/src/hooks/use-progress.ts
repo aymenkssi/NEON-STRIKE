@@ -10,6 +10,17 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/src/game/progression";
+import {
+  ACHIEVEMENTS,
+  advanceMissions,
+  achievementView,
+  emptyStats,
+  mergeStats,
+  missionView,
+  missionsForDay,
+  type MissionState,
+  type PlayerStats,
+} from "@/src/game/meta";
 
 // One JSON blob keeps the save atomic (storage values are primitives only).
 const KEY = "np_progress_v1";
@@ -21,6 +32,9 @@ export type Progress = {
   upgrades: UpgradeLevels;
   dailyLast: string; // dayKey of the last claim, "" if never
   dailyStreak: number;
+  stats: PlayerStats;
+  missions: MissionState | null;
+  achievementsClaimed: string[];
 };
 
 const DEFAULT: Progress = {
@@ -30,13 +44,19 @@ const DEFAULT: Progress = {
   upgrades: NO_UPGRADES,
   dailyLast: "",
   dailyStreak: 0,
+  stats: emptyStats(),
+  missions: null,
+  achievementsClaimed: [],
 };
 
 function parse(raw: string | null): Progress {
   if (!raw) return DEFAULT;
   try {
     const p = JSON.parse(raw);
-    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) } };
+    // Older saves have no stats/missions: fill every missing field from the defaults.
+    const stats = { ...emptyStats(), ...(p.stats || {}) };
+    stats.byKind = { ...emptyStats().byKind, ...(p.stats?.byKind || {}) };
+    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats };
   } catch {
     return DEFAULT;
   }
@@ -101,5 +121,38 @@ export function useProgress() {
     return amount;
   }, [update]);
 
-  return { progress, loaded, addCredits, completeLevel, buyUpgrade, claimDaily };
+  // Adds a play session (kills, levels…) to lifetime stats and today's missions.
+  const recordSession = useCallback(
+    (session: PlayerStats) =>
+      update((p) => {
+        const missions = missionsForDay(p.missions, dayKey(), p.unlockedLevel);
+        return { ...p, stats: mergeStats(p.stats, session), missions: advanceMissions(missions, session) };
+      }),
+    [update]
+  );
+
+  const claimMission = useCallback(
+    (id: string) => {
+      const m = missionView(missionsForDay(ref.current.missions, dayKey(), ref.current.unlockedLevel)).find((x) => x.id === id);
+      if (!m || !m.done || m.claimed) return 0;
+      update((p) => {
+        const missions = missionsForDay(p.missions, dayKey(), p.unlockedLevel);
+        return { ...p, credits: p.credits + m.reward, missions: { ...missions, claimed: [...missions.claimed, id] } };
+      });
+      return m.reward;
+    },
+    [update]
+  );
+
+  const claimAchievement = useCallback(
+    (id: string) => {
+      const a = achievementView(ref.current, ref.current.achievementsClaimed).find((x) => x.id === id);
+      if (!a || !a.done || a.claimed || !ACHIEVEMENTS.some((x) => x.id === id)) return 0;
+      update((p) => ({ ...p, credits: p.credits + a.reward, achievementsClaimed: [...p.achievementsClaimed, id] }));
+      return a.reward;
+    },
+    [update]
+  );
+
+  return { progress, loaded, addCredits, completeLevel, buyUpgrade, claimDaily, recordSession, claimMission, claimAchievement };
 }
