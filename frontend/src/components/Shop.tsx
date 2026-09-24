@@ -6,6 +6,7 @@ import { colors, fonts, spacing, radius } from "../theme";
 import { getPacks, onPacksChange } from "../iap/catalog";
 import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange, retryUnfinishedPurchases } from "../iap";
 import Panel from "./Panel";
+import { formatNumber, useLang, useT } from "@/src/i18n";
 
 type Props = {
   credits: number;
@@ -19,6 +20,8 @@ export default function Shop({ credits, onClose }: Props) {
   const [buying, setBuying] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [packs, setPacks] = useState(getPacks());
+  const t = useT();
+  const lang = useLang();
   useEffect(() => onPacksChange(() => setPacks(getPacks())), []);
 
   useEffect(() => onStoreChange(() => setStatus(getStoreStatus())), []);
@@ -34,10 +37,10 @@ export default function Shop({ credits, onClose }: Props) {
     const res = await buyPack(sku);
     setBuying(null);
     if (res.kind === "granted") {
-      setNotice({ tone: "ok", text: `+${res.credits.toLocaleString()} crédits ajoutés. Merci !` });
+      setNotice({ tone: "ok", text: t("shop.granted", { n: formatNumber(res.credits) }) });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } else if (res.kind === "pending") {
-      setNotice({ tone: "warn", text: "Paiement en attente : les crédits seront ajoutés dès sa validation." });
+      setNotice({ tone: "warn", text: t("shop.pending") });
     } else if (res.kind === "error") {
       setNotice({ tone: "error", text: res.message });
     }
@@ -46,18 +49,22 @@ export default function Shop({ credits, onClose }: Props) {
   const available = status === "ready";
 
   return (
-    <Panel title="BOUTIQUE" icon="cart" credits={credits} onClose={onClose} testID="shop">
+    <Panel title={t("shop.title")} icon="cart" credits={credits} onClose={onClose} testID="shop">
       <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
         {packs.map((pack) => {
           const price = getLocalizedPrice(pack.sku);
           const canBuy = available && !!price && !buying;
           return (
             <View key={pack.sku} style={[styles.card, pack.tag && styles.cardFeatured]} testID={`pack-${pack.sku}`}>
-              {pack.tag ? <Text style={styles.tag}>{pack.tag}</Text> : <View style={styles.tagSpacer} />}
+              {pack.tag ? (
+                <Text style={styles.tag}>{(lang === "en" && pack.tag_en) || pack.tag}</Text>
+              ) : (
+                <View style={styles.tagSpacer} />
+              )}
               <MaterialCommunityIcons name="circle-multiple" size={34} color={colors.warning} />
-              <Text style={styles.amount}>{pack.credits.toLocaleString()}</Text>
-              <Text style={styles.unit}>CRÉDITS</Text>
-              <Text style={styles.bonus}>{pack.bonus ? `${pack.bonus} de bonus` : " "}</Text>
+              <Text style={styles.amount}>{formatNumber(pack.credits)}</Text>
+              <Text style={styles.unit}>{t("shop.credits")}</Text>
+              <Text style={styles.bonus}>{pack.bonus ? t("shop.bonus", { b: pack.bonus }) : " "}</Text>
               <Pressable
                 testID={`buy-${pack.sku}`}
                 disabled={!canBuy}
@@ -90,12 +97,12 @@ export default function Shop({ credits, onClose }: Props) {
       ) : (
         <Text style={styles.footer}>
           {status === "unavailable"
-            ? "Les achats sont disponibles uniquement dans l’application Android installée depuis Google Play."
+            ? t("shop.unavailable")
             : status === "connecting"
-              ? "Connexion à Google Play…"
+              ? t("shop.connecting")
               : status === "error"
-                ? "Impossible de joindre Google Play. Vérifie ta connexion puis rouvre la boutique."
-                : "Paiement sécurisé par Google Play. Les crédits sont ajoutés immédiatement."}
+                ? t("shop.error")
+                : t("shop.secure")}
         </Text>
       )}
     </Panel>

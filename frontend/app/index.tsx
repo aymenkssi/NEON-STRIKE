@@ -10,9 +10,11 @@ import Welcome from "@/src/components/Welcome";
 import type { AuthMode } from "@/src/components/AuthForm";
 import { modifiersFrom } from "@/src/game/progression";
 import { initStore } from "@/src/iap";
+import { reportSession } from "@/src/api/session";
 import { music } from "@/src/audio/music";
 import { setRemotePacks } from "@/src/iap/catalog";
 import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
+import { useT } from "@/src/i18n";
 
 const KEYS = {
   lookSens: "np_look_sensitivity",
@@ -31,6 +33,7 @@ export default function Index() {
   const [level, setLevel] = useState(1);
   const { account, loaded: accountLoaded, playAsGuest, signedIn, signedOut } = useAccount();
   const isGuest = account.mode !== "account";
+  const t = useT();
   const {
     progress,
     loaded,
@@ -83,6 +86,11 @@ export default function Index() {
   }, []);
 
   // Connect to Google Play only once the save is loaded, so purchased credits are added to it.
+  // Once the player has chosen guest or account: counts the visit in the admin statistics.
+  useEffect(() => {
+    if (accountLoaded && account.mode !== "unset") reportSession();
+  }, [accountLoaded, account.mode]);
+
   useEffect(() => {
     if (loaded) initStore(addCredits);
   }, [loaded, addCredits]);
@@ -131,7 +139,7 @@ export default function Index() {
     );
   }
 
-  const username = account.username ?? "INVITÉ";
+  const username = account.username ?? t("common.guestName");
 
   return (
     <View style={styles.root}>

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
@@ -16,6 +16,7 @@ from starlette.middleware.cors import CORSMiddleware
 import accounts
 import cloudsave
 import liveops
+import stats
 from auth import current_player, hash_token
 from database import client, db
 from play_verifier import PlayVerifier
@@ -84,6 +85,9 @@ class SubmitResult(BaseModel):
 class PurchaseVerify(BaseModel):
     product_id: str = Field(..., max_length=64)
     purchase_token: str = Field(..., min_length=10, max_length=4096)
+    # Price paid, as shown by Google Play to the app (statistics only, never trusted for credits).
+    price: Optional[float] = Field(default=None, ge=0, le=100_000)
+    currency: Optional[str] = Field(default=None, pattern=r"^[A-Z]{3}$")
 
 
 class PurchaseResult(BaseModel):
@@ -101,7 +105,7 @@ async def root():
 
 
 @api.post("/players", response_model=PlayerCreated)
-async def create_player(payload: PlayerCreate):
+async def create_player(payload: PlayerCreate, request: Request):
     token = secrets.token_urlsafe(32)
     player = {
         "id": str(uuid.uuid4()),
@@ -111,6 +115,7 @@ async def create_player(payload: PlayerCreate):
         "last_score_at": 0.0,
     }
     await db.players.insert_one(player)
+    await stats.record_visit(player, request)
     return PlayerCreated(id=player["id"], token=token, name=player["name"])
 
 
@@ -185,7 +190,7 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
 
     if PURCHASE_VERIFICATION == "disabled":
         logger.warning("PURCHASE_VERIFICATION=disabled: accepting %s without Google check", payload.product_id)
-        state, order_id, is_test = "purchased", None, True
+        state, order_id, is_test, region = "purchased", None, True, None
     else:
         if not verifier.configured:
             raise HTTPException(503, "Purchase verification not configured")
@@ -194,7 +199,7 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
         except Exception:
             logger.exception("Google Play verification failed")
             raise HTTPException(502, "Google Play unavailable")
-        state, order_id, is_test = result.state, result.order_id, result.is_test
+        state, order_id, is_test, region = result.state, result.order_id, result.is_test, result.region_code
 
     if state == "pending":
         return PurchaseResult(status="pending")
@@ -210,6 +215,10 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
                 "credits": credits,
                 "order_id": order_id,
                 "is_test": is_test,
+                "price": payload.price if payload.currency else None,
+                "currency": payload.currency if payload.price is not None else None,
+                # Google's billing country when it gives one, else the player's country.
+                "country": region or player.get("country"),
                 "created_at": now_iso(),
             }
         )
@@ -222,6 +231,8 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
 
 app.include_router(api)
 app.include_router(accounts.router)
+app.include_router(stats.public)
+app.include_router(stats.admin)
 app.include_router(cloudsave.router)
 app.include_router(liveops.public)
 app.include_router(liveops.admin)
@@ -231,7 +242,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Client-Country", "X-Client-Lang", "X-App-Version", "X-Platform"],
 )
 
 
@@ -245,6 +256,7 @@ async def create_indexes():
     await cloudsave.setup()
     await accounts.setup()
     await liveops.setup()
+    await stats.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
 

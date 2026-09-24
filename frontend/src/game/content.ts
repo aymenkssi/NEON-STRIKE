@@ -75,17 +75,21 @@ export type Sector = {
   box: number;
   neonA: number;
   neonB: number;
+  horizon: number; // sky glow at the horizon, also the fog colour
+  skyTop: number;
+  tower: number; // skyline buildings
+  particles: "dust" | "rain" | "snow" | "embers";
 };
 
 export const LEVELS_PER_SECTOR = 5;
 
 export const SECTORS: Sector[] = [
-  { index: 1, name: "NEON DISTRICT", background: 0x1a2740, fogDensity: 0.006, floor: 0x233350, gridMain: 0x2affff, gridSub: 0x2a6a9a, box: 0x46587a, neonA: 0x39ff14, neonB: 0x00ffff },
-  { index: 2, name: "TOXIC DOCKS", background: 0x14301f, fogDensity: 0.008, floor: 0x1c3325, gridMain: 0x7dff3a, gridSub: 0x2a7a3a, box: 0x3d5a45, neonA: 0xb6ff00, neonB: 0x39ff14 },
-  { index: 3, name: "MAGENTA HEIGHTS", background: 0x2a1638, fogDensity: 0.007, floor: 0x2a1c3a, gridMain: 0xff2bd6, gridSub: 0x7a2a9a, box: 0x5a3d6e, neonA: 0xff2bd6, neonB: 0x00ffff },
-  { index: 4, name: "EMBER QUARTER", background: 0x3a1a12, fogDensity: 0.008, floor: 0x331c16, gridMain: 0xff7a1a, gridSub: 0x9a3a1a, box: 0x6e4a3d, neonA: 0xffb000, neonB: 0xff3b1a },
-  { index: 5, name: "FROST GRID", background: 0x16283a, fogDensity: 0.009, floor: 0x1c2a3a, gridMain: 0xaaf0ff, gridSub: 0x3a7aa0, box: 0x5a7088, neonA: 0xaaf0ff, neonB: 0xffffff },
-  { index: 6, name: "BLACKOUT CORE", background: 0x12121c, fogDensity: 0.009, floor: 0x181822, gridMain: 0xff003c, gridSub: 0x5a1a2a, box: 0x2a2a38, neonA: 0xff003c, neonB: 0x8a2be2 },
+  { index: 1, name: "NEON DISTRICT", background: 0x1a2740, fogDensity: 0.006, floor: 0x233350, gridMain: 0x2affff, gridSub: 0x2a6a9a, box: 0x46587a, neonA: 0x39ff14, neonB: 0x00ffff, horizon: 0x2a3f66, skyTop: 0x060a18, tower: 0x141c2c, particles: "dust" },
+  { index: 2, name: "TOXIC DOCKS", background: 0x14301f, fogDensity: 0.008, floor: 0x1c3325, gridMain: 0x7dff3a, gridSub: 0x2a7a3a, box: 0x3d5a45, neonA: 0xb6ff00, neonB: 0x39ff14, horizon: 0x24502f, skyTop: 0x06120a, tower: 0x122018, particles: "rain" },
+  { index: 3, name: "MAGENTA HEIGHTS", background: 0x2a1638, fogDensity: 0.007, floor: 0x2a1c3a, gridMain: 0xff2bd6, gridSub: 0x7a2a9a, box: 0x5a3d6e, neonA: 0xff2bd6, neonB: 0x00ffff, horizon: 0x4a2260, skyTop: 0x0e0618, tower: 0x1e1228, particles: "dust" },
+  { index: 4, name: "EMBER QUARTER", background: 0x3a1a12, fogDensity: 0.008, floor: 0x331c16, gridMain: 0xff7a1a, gridSub: 0x9a3a1a, box: 0x6e4a3d, neonA: 0xffb000, neonB: 0xff3b1a, horizon: 0x6a2a14, skyTop: 0x140606, tower: 0x22120e, particles: "embers" },
+  { index: 5, name: "FROST GRID", background: 0x16283a, fogDensity: 0.009, floor: 0x1c2a3a, gridMain: 0xaaf0ff, gridSub: 0x3a7aa0, box: 0x5a7088, neonA: 0xaaf0ff, neonB: 0xffffff, horizon: 0x2e4a66, skyTop: 0x081220, tower: 0x1a2636, particles: "snow" },
+  { index: 6, name: "BLACKOUT CORE", background: 0x12121c, fogDensity: 0.009, floor: 0x181822, gridMain: 0xff003c, gridSub: 0x5a1a2a, box: 0x2a2a38, neonA: 0xff003c, neonB: 0x8a2be2, horizon: 0x2a0e1c, skyTop: 0x050508, tower: 0x121218, particles: "rain" },
 ];
 
 export function sectorOf(level: number): Sector {
@@ -96,10 +100,11 @@ export function sectorOf(level: number): Sector {
 // ---------------- Power-ups ----------------
 export type PowerUpKind = "rage" | "haste" | "infinite";
 
-export const POWERUPS: Record<PowerUpKind, { name: string; color: number; seconds: number }> = {
-  rage: { name: "DÉGÂTS ×2", color: 0xff2a2a, seconds: 10 },
-  haste: { name: "VITESSE", color: 0x00ffff, seconds: 10 },
-  infinite: { name: "MUNITIONS ∞", color: 0xffb000, seconds: 8 },
+// Names: translation keys power.<kind>.
+export const POWERUPS: Record<PowerUpKind, { color: number; seconds: number }> = {
+  rage: { color: 0xff2a2a, seconds: 10 },
+  haste: { color: 0x00ffff, seconds: 10 },
+  infinite: { color: 0xffb000, seconds: 8 },
 };
 
 export const POWERUP_DROP_CHANCE = 0.07;

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from auth import current_player, hash_token
 from database import db
+from stats import client_ip
 
 logger = logging.getLogger("neon.cloudsave")
 router = APIRouter(prefix="/api")
@@ -109,7 +110,7 @@ def _rate_limited(ip: str) -> bool:
 
 @router.post("/players/recover", response_model=Recovered)
 async def recover(payload: RecoverIn, request: Request):
-    ip = request.client.host if request.client else "?"
+    ip = client_ip(request)
     if _rate_limited(ip):
         raise HTTPException(429, "Too many attempts, try again later")
     raw = normalize_code(payload.code)

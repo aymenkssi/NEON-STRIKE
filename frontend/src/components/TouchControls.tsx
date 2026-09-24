@@ -1,5 +1,5 @@
-import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, type LayoutChangeEvent } from "react-native";
+import React, { useCallback, useState } from "react";
+import { View, Text, StyleSheet, Pressable, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useSharedValue, runOnJS, withTiming } from "react-native-reanimated";
@@ -7,13 +7,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, fonts } from "../theme";
 import type { FireMode, GameEngine } from "../game/GameEngine";
+import { useT, type Key } from "@/src/i18n";
 
 type Props = { getEngine: () => GameEngine | null; fireMode: FireMode; fireModes: FireMode[] };
 
-const MODE_UI: Record<FireMode, { icon: string; label: string }> = {
-  single: { icon: "numeric-1-circle-outline", label: "COUP/COUP" },
-  burst: { icon: "dots-horizontal-circle-outline", label: "RAFALE ×3" },
-  auto: { icon: "infinity", label: "AUTO" },
+const MODE_UI: Record<FireMode, { icon: string; label: Key }> = {
+  single: { icon: "numeric-1-circle-outline", label: "fire.short.single" },
+  burst: { icon: "dots-horizontal-circle-outline", label: "fire.short.burst" },
+  auto: { icon: "infinity", label: "fire.short.auto" },
 };
 
 const KNOB_MAX = 55;
@@ -22,6 +23,7 @@ const SPRINT_AT = 0.85; // push beyond 85% of the radius to sprint
 
 export default function TouchControls({ getEngine, fireMode, fireModes }: Props) {
   const insets = useSafeAreaInsets();
+  const t = useT();
   // Resting spot of the joystick (bottom-left of the left zone), set once the zone is measured.
   const homeX = useSharedValue(Math.max(insets.left, 24) + RING / 2 + 16);
   const homeY = useSharedValue(300);
@@ -148,18 +150,19 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
       </GestureDetector>
 
       {/* Combat buttons (right, over look zone) */}
-      <Pressable
+      <HoldButton
         testID="jump-button"
-        onPressIn={() => {
+        onDown={() => {
           getEngine()?.jumpDown();
           Haptics.selectionAsync().catch(() => {});
         }}
-        onPressOut={() => getEngine()?.jumpUp()}
-        style={({ pressed }) => [styles.jumpBtn, pressed && styles.pressed]}
+        onUp={() => getEngine()?.jumpUp()}
+        style={styles.jumpBtn}
+        pressedStyle={styles.pressed}
       >
         <MaterialCommunityIcons name="arrow-up-bold" size={26} color={colors.brandSecondary} />
         <Text style={styles.smallLabel}>JUMP</Text>
-      </Pressable>
+      </HoldButton>
 
       <Pressable
         testID="reload-button"
@@ -185,20 +188,49 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
         >
           <MaterialCommunityIcons name={MODE_UI[fireMode].icon as any} size={16} color={colors.brandSecondary} />
           <Text style={styles.modeText} testID="fire-mode-label">
-            {MODE_UI[fireMode].label}
+            {t(MODE_UI[fireMode].label)}
           </Text>
         </Pressable>
       )}
 
-      <Pressable
-        testID="fire-button"
-        onPressIn={startFire}
-        onPressOut={stopFire}
-        style={({ pressed }) => [styles.fireBtn, pressed && styles.firePressed]}
-      >
+      <HoldButton testID="fire-button" onDown={startFire} onUp={stopFire} style={styles.fireBtn} pressedStyle={styles.firePressed}>
         <MaterialCommunityIcons name="pistol" size={40} color="#fff" />
         <Text style={styles.fireLabel}>FIRE</Text>
-      </Pressable>
+      </HoldButton>
+    </View>
+  );
+}
+
+// Reacts on touch down with no delay: Pressable ignores taps shorter than its press delay on the
+// web, which loses quick shots. Uses the plain responder system, like Pressable on Android.
+function HoldButton(p: {
+  testID?: string;
+  onDown: () => void;
+  onUp: () => void;
+  style: StyleProp<ViewStyle>;
+  pressedStyle: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const up = () => {
+    setPressed(false);
+    p.onUp();
+  };
+  return (
+    <View
+      testID={p.testID}
+      accessibilityRole="button"
+      style={[p.style, pressed && p.pressedStyle]}
+      onStartShouldSetResponder={() => true}
+      onResponderTerminationRequest={() => false}
+      onResponderGrant={() => {
+        setPressed(true);
+        p.onDown();
+      }}
+      onResponderRelease={up}
+      onResponderTerminate={up}
+    >
+      {p.children}
     </View>
   );
 }

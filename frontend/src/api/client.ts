@@ -1,7 +1,10 @@
 // HTTP client for the Neon Strike backend with an anonymous player session.
 // On first use the app registers a player and keeps its secret token in secure storage;
 // every authenticated call sends it as a Bearer token.
+import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { storage } from "@/src/utils/storage";
+import { deviceRegion, getLang } from "@/src/i18n";
 
 const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/+$/, "");
 const SESSION_KEY = "np_player_session";
@@ -11,6 +14,16 @@ export const backendConfigured = BASE.length > 0;
 type Session = { id: string; token: string };
 let session: Session | null = null;
 let creating: Promise<Session> | null = null;
+
+// Context for the admin statistics (country of the phone, language, app version, platform).
+function clientHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "X-Client-Lang": getLang(), "X-Platform": Platform.OS };
+  const region = deviceRegion();
+  if (region) h["X-Client-Country"] = region;
+  const version = Constants.expoConfig?.version;
+  if (version) h["X-App-Version"] = version;
+  return h;
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -26,6 +39,7 @@ async function request(path: string, init: RequestInit = {}, token?: string) {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...clientHeaders(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.headers || {}),
       },

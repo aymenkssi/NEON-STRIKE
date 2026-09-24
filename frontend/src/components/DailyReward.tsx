@@ -5,6 +5,7 @@ import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { DAILY_REWARDS, dailyStatus } from "../game/progression";
 import Panel from "./Panel";
+import { useT } from "@/src/i18n";
 
 type Props = {
   credits: number;
@@ -17,6 +18,7 @@ type Props = {
 export default function DailyReward({ credits, lastClaim, streak, onClaim, onClose }: Props) {
   const { canClaim, dayIndex } = dailyStatus(lastClaim, streak);
   const [claimed, setClaimed] = useState<number | null>(null);
+  const t = useT();
 
   const claim = () => {
     const amount = onClaim();
@@ -27,8 +29,8 @@ export default function DailyReward({ credits, lastClaim, streak, onClaim, onClo
   };
 
   return (
-    <Panel title="RÉCOMPENSE DU JOUR" icon="gift" credits={credits} onClose={onClose} testID="daily-reward">
-      <Text style={styles.hint}>Connecte-toi chaque jour pour augmenter ta récompense. Un jour manqué remet la série à zéro.</Text>
+    <Panel title={t("daily.title")} icon="gift" credits={credits} onClose={onClose} testID="daily-reward">
+      <Text style={styles.hint}>{t("daily.hint")}</Text>
       <View style={styles.row}>
         {DAILY_REWARDS.map((amount, i) => {
           const done = claimed !== null ? i <= dayIndex : canClaim ? i < dayIndex : i <= dayIndex;
@@ -38,7 +40,7 @@ export default function DailyReward({ credits, lastClaim, streak, onClaim, onClo
               key={i}
               style={[styles.day, today && styles.dayToday, done && styles.dayDone, i === 6 && styles.dayBig]}
             >
-              <Text style={[styles.dayLabel, today && { color: colors.brand }]}>JOUR {i + 1}</Text>
+              <Text style={[styles.dayLabel, today && { color: colors.brand }]}>{t("daily.day", { n: i + 1 })}</Text>
               <MaterialCommunityIcons
                 name={done ? "check-circle" : i === 6 ? "treasure-chest" : "circle-multiple"}
                 size={i === 6 ? 28 : 22}
@@ -50,14 +52,14 @@ export default function DailyReward({ credits, lastClaim, streak, onClaim, onClo
         })}
       </View>
       {claimed !== null ? (
-        <Text style={styles.claimed}>+{claimed} crédits récupérés !</Text>
+        <Text style={styles.claimed}>{t("daily.claimed", { n: claimed })}</Text>
       ) : canClaim ? (
         <Pressable testID="claim-daily" style={styles.claimBtn} onPress={claim}>
           <MaterialCommunityIcons name="gift-open" size={20} color={colors.onBrand} />
-          <Text style={styles.claimText}>RÉCUPÉRER {DAILY_REWARDS[dayIndex]}</Text>
+          <Text style={styles.claimText}>{t("daily.claim", { n: DAILY_REWARDS[dayIndex] })}</Text>
         </Pressable>
       ) : (
-        <Text style={styles.wait}>Déjà récupéré aujourd’hui. Reviens demain !</Text>
+        <Text style={styles.wait}>{t("daily.wait")}</Text>
       )}
     </Panel>
   );

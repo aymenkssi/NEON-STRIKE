@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator } from 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { AUTH_ERRORS, PASSWORD_MIN, USERNAME_RE, checkUsername, loginAccount, registerAccount } from "../api/account";
+import { useT } from "@/src/i18n";
 
 export type AuthMode = "register" | "login";
 
@@ -16,6 +17,7 @@ type Availability = "idle" | "checking" | "ok" | "taken" | "invalid" | "unknown"
 
 export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
+  const t = useT();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -49,7 +51,7 @@ export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
     if ("username" in r) {
       await onDone(r.username, mode);
     } else {
-      setError(AUTH_ERRORS[r.error]);
+      setError(t(AUTH_ERRORS[r.error]));
       if (r.error === "taken") setAvailability("taken");
     }
     setBusy(false);
@@ -57,10 +59,10 @@ export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
 
   const hint: Record<Availability, { text: string; color: string } | null> = {
     idle: null,
-    checking: { text: "Vérification…", color: colors.onSurfaceSecondary },
-    ok: { text: "Nom disponible", color: colors.brand },
-    taken: { text: "Nom déjà pris", color: colors.error },
-    invalid: { text: "3 à 16 lettres, chiffres ou _", color: colors.warning },
+    checking: { text: t("auth.checking"), color: colors.onSurfaceSecondary },
+    ok: { text: t("auth.available"), color: colors.brand },
+    taken: { text: t("auth.taken"), color: colors.error },
+    invalid: { text: t("auth.usernameRule"), color: colors.warning },
     unknown: null,
   };
   const h = hint[availability];
@@ -78,7 +80,7 @@ export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
             style={[styles.tab, mode === m && styles.tabActive]}
             testID={`auth-tab-${m}`}
           >
-            <Text style={[styles.tabText, mode === m && { color: colors.onBrand }]}>{m === "register" ? "CRÉER UN COMPTE" : "SE CONNECTER"}</Text>
+            <Text style={[styles.tabText, mode === m && { color: colors.onBrand }]}>{m === "register" ? t("auth.register") : t("auth.login")}</Text>
           </Pressable>
         ))}
       </View>
@@ -89,7 +91,7 @@ export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
           testID="auth-username"
           value={username}
           onChangeText={(t) => setUsername(t.replace(/\s/g, "").slice(0, 16))}
-          placeholder="Nom d’utilisateur"
+          placeholder={t("auth.username")}
           placeholderTextColor={colors.onSurfaceTertiary}
           autoCapitalize="none"
           autoCorrect={false}
@@ -109,7 +111,7 @@ export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
           testID="auth-password"
           value={password}
           onChangeText={setPassword}
-          placeholder={`Mot de passe (${PASSWORD_MIN} caractères min.)`}
+          placeholder={t("auth.password", { n: PASSWORD_MIN })}
           placeholderTextColor={colors.onSurfaceTertiary}
           secureTextEntry={!showPassword}
           autoCapitalize="none"
@@ -133,14 +135,14 @@ export default function AuthForm({ initialMode, onDone, onCancel }: Props) {
       <View style={styles.actions}>
         {onCancel && (
           <Pressable onPress={onCancel} style={[styles.btn, styles.ghost]} testID="auth-cancel">
-            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>RETOUR</Text>
+            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("common.back")}</Text>
           </Pressable>
         )}
         <Pressable onPress={submit} disabled={!canSubmit} style={[styles.btn, styles.primary, !canSubmit && { opacity: 0.4 }]} testID="auth-submit">
           {busy ? (
             <ActivityIndicator color={colors.onBrand} />
           ) : (
-            <Text style={[styles.btnText, { color: colors.onBrand }]}>{mode === "register" ? "CRÉER MON COMPTE" : "CONNEXION"}</Text>
+            <Text style={[styles.btnText, { color: colors.onBrand }]}>{mode === "register" ? t("auth.submitRegister") : t("auth.submitLogin")}</Text>
           )}
         </Pressable>
       </View>

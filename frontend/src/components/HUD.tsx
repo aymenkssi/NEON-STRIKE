@@ -11,6 +11,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts } from "../theme";
 import type { GameStats } from "../game/GameEngine";
 import { POWERUPS } from "../game/content";
+import { formatNumber, useT } from "@/src/i18n";
 
 const POWERUP_ICONS = { rage: "fire", haste: "run-fast", infinite: "infinity" } as const;
 const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
@@ -33,6 +34,7 @@ type Props = {
 
 export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchWeapon }: Props) {
   const insets = useSafeAreaInsets();
+  const t = useT();
   const hitScale = useSharedValue(0);
   const dmgOpacity = useSharedValue(0);
 
@@ -69,14 +71,14 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
         <View style={styles.waveRow}>
           <MaterialCommunityIcons name="skull" size={16} color={colors.brand} />
           <Text style={styles.waveText}>
-            NIV {stats.level} · VAGUE {stats.wave}/{stats.totalWaves}
+            {t("hud.levelWave", { n: stats.level, w: stats.wave, max: stats.totalWaves })}
           </Text>
         </View>
         <View style={styles.healthBar}>
           <View style={[styles.healthFill, { width: `${healthPct}%`, backgroundColor: healthColor }]} />
         </View>
         <Text style={[styles.healthLabel, { color: healthColor }]}>
-          {stats.health}/{stats.maxHealth} PV
+          {t("hud.hp", { hp: stats.health, max: stats.maxHealth })}
         </Text>
         {stats.powerups.length > 0 && (
           <View style={styles.powerRow} testID="hud-powerups">
@@ -93,10 +95,10 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       {/* Top-right: score + kills + pause */}
       <View style={[styles.topRight, { right: padR, top: padT }]} pointerEvents="box-none">
         <View style={{ alignItems: "flex-end" }} pointerEvents="none">
-          <Text style={styles.scoreText}>{stats.score.toLocaleString()}</Text>
+          <Text style={styles.scoreText}>{formatNumber(stats.score)}</Text>
           <View style={styles.killRow}>
             <MaterialCommunityIcons name="target" size={13} color={colors.onSurfaceSecondary} />
-            <Text style={styles.killText}>{stats.kills} KILLS</Text>
+            <Text style={styles.killText}>{t("hud.kills", { n: stats.kills })}</Text>
           </View>
           <View style={styles.killRow}>
             <MaterialCommunityIcons name="circle-multiple" size={13} color={colors.warning} />
@@ -166,7 +168,7 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       {/* Bottom-right ammo (above fire btn area) */}
       <View style={[styles.ammoBox, { right: padR }]} pointerEvents="none">
         {stats.reloading ? (
-          <Text style={styles.reloadText}>RELOADING…</Text>
+          <Text style={styles.reloadText}>{t("hud.reloading")}</Text>
         ) : (
           <Text style={styles.ammoText}>
             {stats.ammo}

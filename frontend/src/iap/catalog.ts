@@ -10,13 +10,14 @@ export type CoinPack = {
   suggestedPrice?: string;
   bonus?: string | null; // extra credits vs. the smallest pack
   tag?: string | null;
+  tag_en?: string | null; // label for English players
 };
 
 export const COIN_PACKS: CoinPack[] = [
   { sku: "coins_500", credits: 500, suggestedPrice: "0,99 €" },
   { sku: "coins_1200", credits: 1200, suggestedPrice: "1,99 €", bonus: "+20 %" },
-  { sku: "coins_3500", credits: 3500, suggestedPrice: "4,99 €", bonus: "+40 %", tag: "POPULAIRE" },
-  { sku: "coins_8000", credits: 8000, suggestedPrice: "9,99 €", bonus: "+60 %", tag: "MEILLEURE OFFRE" },
+  { sku: "coins_3500", credits: 3500, suggestedPrice: "4,99 €", bonus: "+40 %", tag: "POPULAIRE", tag_en: "POPULAR" },
+  { sku: "coins_8000", credits: 8000, suggestedPrice: "9,99 €", bonus: "+60 %", tag: "MEILLEURE OFFRE", tag_en: "BEST VALUE" },
 ];
 
 let packs: CoinPack[] = COIN_PACKS;
@@ -31,13 +32,16 @@ export function getPack(sku: string): CoinPack | undefined {
 }
 
 // Replaces the shop content with the packs configured on the server.
-export function setRemotePacks(remote: { sku: string; credits: number; bonus: string | null; tag: string | null }[]) {
+export function setRemotePacks(
+  remote: { sku: string; credits: number; bonus: string | null; tag: string | null; tag_en?: string | null }[]
+) {
   if (!remote.length) return;
   packs = remote.map((r) => ({
     sku: r.sku,
     credits: r.credits,
     bonus: r.bonus,
     tag: r.tag,
+    tag_en: r.tag_en ?? null,
     suggestedPrice: COIN_PACKS.find((p) => p.sku === r.sku)?.suggestedPrice,
   }));
   listeners.forEach((fn) => fn());

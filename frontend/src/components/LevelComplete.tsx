@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { showRewarded } from "../ads";
 import { MAX_LEVEL, WEAPON_UNLOCK_LEVEL, levelReward, type LevelResult } from "../game/progression";
+import { useT, type Key } from "@/src/i18n";
 
 type Props = {
   result: LevelResult;
@@ -14,16 +15,9 @@ type Props = {
   onExit: () => void;
 };
 
-const WEAPON_NAMES: Record<string, string> = {
-  smg: "SMG",
-  rifle: "ASSAULT RIFLE",
-  railgun: "RAILGUN",
-  minigun: "MINIGUN",
-  launcher: "LANCE-GRENADES",
-};
-
 export default function LevelComplete({ result, onDoubleCredits, onNext, onExit }: Props) {
   const insets = useSafeAreaInsets();
+  const t = useT();
   const reward = levelReward(result);
   const [doubled, setDoubled] = useState(false);
   const [doubling, setDoubling] = useState(false);
@@ -31,9 +25,9 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
   const newWeapon = Object.keys(WEAPON_UNLOCK_LEVEL).find((k) => WEAPON_UNLOCK_LEVEL[k] === result.level + 1);
 
   const criteria = [
-    { label: "Niveau terminé", ok: true },
-    { label: "Finir avec 50 % de santé ou plus", ok: result.health >= result.maxHealth * 0.5 },
-    { label: "30 % de tirs à la tête ou plus", ok: result.kills > 0 && result.headshots / result.kills >= 0.3 },
+    { label: t("complete.crit1"), ok: true },
+    { label: t("complete.crit2"), ok: result.health >= result.maxHealth * 0.5 },
+    { label: t("complete.crit3"), ok: result.kills > 0 && result.headshots / result.kills >= 0.3 },
   ];
 
   const double = () => {
@@ -51,8 +45,8 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
   return (
     <View style={[styles.overlay, { paddingTop: insets.top }]} testID="level-complete-screen">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.kicker}>{isLast ? "CAMPAGNE TERMINÉE" : "SECTEUR NETTOYÉ"}</Text>
-        <Text style={styles.title}>NIVEAU {result.level}</Text>
+        <Text style={styles.kicker}>{isLast ? t("complete.campaignDone") : t("complete.cleared")}</Text>
+        <Text style={styles.title}>{t("menu.levelN", { n: result.level })}</Text>
 
         <View style={styles.starsRow}>
           {[1, 2, 3].map((i) => (
@@ -73,23 +67,23 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
               </View>
             ))}
             <Text style={styles.statsLine}>
-              {result.kills} éliminations · {result.headshots} tirs à la tête · {result.health}/{result.maxHealth} PV
+              {t("complete.stats", { kills: result.kills, heads: result.headshots, hp: result.health, max: result.maxHealth })}
             </Text>
           </View>
 
           <View style={[styles.col, styles.rewardBox]}>
-            <RewardRow label="Combat" value={reward.combat} />
-            <RewardRow label="Bonus de niveau" value={reward.bonus} />
-            <RewardRow label="Bonus étoiles" value={reward.starBonus} />
+            <RewardRow label={t("complete.combat")} value={reward.combat} />
+            <RewardRow label={t("complete.levelBonus")} value={reward.bonus} />
+            <RewardRow label={t("complete.starBonus")} value={reward.starBonus} />
             <View style={styles.divider} />
-            <RewardRow label={doubled ? "Total ×2" : "Total"} value={doubled ? reward.total * 2 : reward.total} strong />
+            <RewardRow label={doubled ? t("complete.totalX2") : t("complete.total")} value={doubled ? reward.total * 2 : reward.total} strong />
           </View>
         </View>
 
         {newWeapon && (
           <View style={styles.unlockNote}>
             <MaterialCommunityIcons name="pistol" size={16} color={colors.brandSecondary} />
-            <Text style={styles.unlockText}>Nouvelle arme au niveau suivant : {WEAPON_NAMES[newWeapon]}</Text>
+            <Text style={styles.unlockText}>{t("complete.newWeapon", { name: t(`weapon.${newWeapon}` as Key) })}</Text>
           </View>
         )}
 
@@ -97,18 +91,18 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
           {!doubled && (
             <Pressable testID="double-credits-button" style={[styles.btn, styles.doubleBtn]} onPress={double}>
               <MaterialCommunityIcons name="star-four-points" size={20} color={colors.onWarning} />
-              <Text style={[styles.btnText, { color: colors.onWarning }]}>{doubling ? "…" : "CRÉDITS ×2 (PUB)"}</Text>
+              <Text style={[styles.btnText, { color: colors.onWarning }]}>{doubling ? "…" : t("complete.double")}</Text>
             </Pressable>
           )}
           {!isLast && (
             <Pressable testID="next-level-button" style={[styles.btn, styles.nextBtn]} onPress={onNext}>
-              <Text style={[styles.btnText, { color: colors.onBrand }]}>NIVEAU SUIVANT</Text>
+              <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("complete.next")}</Text>
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.onBrand} />
             </Pressable>
           )}
           <Pressable testID="level-menu-button" style={[styles.btn, styles.menuBtn]} onPress={onExit}>
             <MaterialCommunityIcons name="home" size={20} color={colors.onSurfaceSecondary} />
-            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>MENU</Text>
+            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("common.menu")}</Text>
           </Pressable>
         </View>
       </ScrollView>

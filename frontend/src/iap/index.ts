@@ -13,6 +13,7 @@ import { storage } from "@/src/utils/storage";
 import { verifyPurchaseOnServer } from "@/src/api/purchases";
 import { getPack, getPacks, onPacksChange } from "./catalog";
 import type { PurchaseOutcome, StoreStatus } from "./types";
+import { t } from "@/src/i18n";
 
 type ExpoIap = typeof import("expo-iap");
 type Purchase = import("expo-iap").Purchase;
@@ -36,6 +37,7 @@ const GRANTED_KEY = "np_iap_granted";
 
 let status: StoreStatus = iap ? "connecting" : "unavailable";
 const prices: Record<string, string> = {};
+const amounts: Record<string, { price: number; currency: string }> = {};
 const listeners = new Set<() => void>();
 let onGrant: ((credits: number, sku: string) => void) | null = null;
 let granted: string[] = [];
@@ -81,20 +83,20 @@ async function handlePurchase(purchase: Purchase) {
 
   const token = purchase.purchaseToken || purchase.id;
   if (!granted.includes(token)) {
-    const verdict = await verifyPurchaseOnServer(sku, token);
+    const verdict = await verifyPurchaseOnServer(sku, token, amounts[sku]);
     if (verdict.status === "pending") {
       if (inFlight?.sku === sku) settle({ kind: "pending", sku });
       return;
     }
     if (verdict.status === "invalid") {
-      if (inFlight?.sku === sku) settle({ kind: "error", message: "Achat non reconnu par Google Play." });
+      if (inFlight?.sku === sku) settle({ kind: "error", message: t("iap.invalid") });
       return;
     }
     if (verdict.status === "unreachable") {
       if (inFlight?.sku === sku) {
         settle({
           kind: "error",
-          message: "Paiement reçu, vérification en cours. Tes crédits seront ajoutés automatiquement.",
+          message: t("iap.verifying"),
         });
       }
       return;
@@ -159,7 +161,12 @@ async function refreshProducts() {
   if (!iap || status !== "ready") return;
   try {
     const products = await iap.fetchProducts({ skus: getPacks().map((p) => p.sku), type: "in-app" });
-    for (const p of (products ?? []) as { id: string; displayPrice: string }[]) prices[p.id] = p.displayPrice;
+    for (const p of (products ?? []) as { id: string; displayPrice: string; price?: number | null; currency?: string }[]) {
+      prices[p.id] = p.displayPrice;
+      if (typeof p.price === "number" && p.currency && /^[A-Z]{3}$/.test(p.currency)) {
+        amounts[p.id] = { price: p.price, currency: p.currency };
+      }
+    }
   } catch {}
   emit();
 }
@@ -180,17 +187,17 @@ export async function retryUnfinishedPurchases() {
 
 export async function buyPack(sku: string): Promise<PurchaseOutcome> {
   if (!iap || status !== "ready") {
-    return { kind: "error", message: "La boutique Google Play n’est pas disponible. Vérifie ta connexion." };
+    return { kind: "error", message: t("iap.storeDown") };
   }
-  if (!prices[sku]) return { kind: "error", message: "Ce pack n’est pas encore disponible." };
-  if (inFlight) return { kind: "error", message: "Un achat est déjà en cours." };
+  if (!prices[sku]) return { kind: "error", message: t("iap.packUnavailable") };
+  if (inFlight) return { kind: "error", message: t("iap.busy") };
   const lib = iap;
   return new Promise<PurchaseOutcome>((resolve) => {
     inFlight = { sku, resolve };
     // Safety net: never leave the shop locked if Play sends no result at all.
     setTimeout(() => {
       if (inFlight?.resolve === resolve) {
-        settle({ kind: "error", message: "Aucune réponse de Google Play. Si tu as payé, tes crédits arriveront automatiquement." });
+        settle({ kind: "error", message: t("iap.timeout") });
       }
     }, PURCHASE_TIMEOUT_MS);
     Promise.resolve()

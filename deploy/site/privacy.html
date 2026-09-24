@@ -20,21 +20,24 @@
     <p>Responsable du traitement : <strong>[NOM DU RESPONSABLE]</strong>. Contact : <strong>[ADRESSE E-MAIL DE CONTACT]</strong>.</p>
 
     <h2>Ce que nous ne collectons pas</h2>
-    <p>Neon Strike ne demande ni compte, ni adresse e-mail, ni numéro de téléphone, ni localisation, ni accès à vos contacts ou photos. Votre progression (crédits, niveaux, étoiles, améliorations) est enregistrée uniquement sur votre téléphone.</p>
+    <p>Neon Strike ne demande ni adresse e-mail, ni numéro de téléphone, ni localisation GPS, ni accès à vos contacts ou photos. Le compte est facultatif : en mode invité, votre progression (crédits, niveaux, étoiles, améliorations) reste uniquement sur votre téléphone.</p>
 
     <h2>Données envoyées à nos serveurs</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Donnée</th><th>Pourquoi</th><th>Durée</th></tr></thead>
         <tbody>
-          <tr><td>Identifiant de joueur anonyme, créé au premier lancement</td><td>Rattacher vos scores et vos achats à votre appareil, sans compte</td><td>Tant que le jeu est en service</td></tr>
-          <tr><td>Nom de survivant choisi dans le jeu, meilleur score, niveau atteint, nombre d'éliminations</td><td>Afficher le classement mondial</td><td>Tant que le jeu est en service</td></tr>
-          <tr><td>Jeton d'achat Google Play, produit acheté, numéro de commande</td><td>Vérifier auprès de Google qu'un achat est réel avant d'accorder les crédits, et empêcher la fraude</td><td>Le temps nécessaire aux obligations comptables</td></tr>
+          <tr><td>Identifiant de joueur anonyme, créé au premier lancement</td><td>Rattacher vos achats (et, avec un compte, vos scores et votre sauvegarde) à votre appareil</td><td>Tant que le jeu est en service</td></tr>
+          <tr><td>Compte (facultatif) : nom d'utilisateur et mot de passe. Le mot de passe n'est jamais stocké en clair, seulement une empreinte chiffrée (scrypt)</td><td>Vous connecter et retrouver votre progression sur un autre téléphone</td><td>Jusqu'à la suppression du compte</td></tr>
+          <tr><td>Sauvegarde de la progression (comptes uniquement)</td><td>Synchroniser votre progression entre vos appareils</td><td>Jusqu'à la suppression du compte</td></tr>
+          <tr><td>Nom d'utilisateur, meilleur score, niveau atteint, nombre d'éliminations (comptes uniquement)</td><td>Afficher le classement mondial</td><td>Tant que le jeu est en service</td></tr>
+          <tr><td>Pays (déduit de l'adresse IP ou, à défaut, de la région réglée sur le téléphone), langue du jeu, version de l'application, type d'appareil (Android…), dates de première et de dernière visite, nombre de sessions</td><td>Statistiques d'audience du jeu (nombre de joueurs actifs, répartition par pays). L'adresse IP sert seulement à déterminer le pays et n'est pas enregistrée</td><td>Tant que le jeu est en service</td></tr>
+          <tr><td>Jeton d'achat Google Play, produit acheté, numéro de commande, prix payé et devise, pays de facturation</td><td>Vérifier auprès de Google qu'un achat est réel avant d'accorder les crédits, empêcher la fraude, suivre les ventes</td><td>Le temps nécessaire aux obligations comptables</td></tr>
           <tr><td>Adresse IP et heure des requêtes (journaux techniques)</td><td>Sécurité et bon fonctionnement du serveur</td><td>Durée courte, puis suppression</td></tr>
         </tbody>
       </table>
     </div>
-    <p>Le nom de survivant est visible par tous les joueurs dans le classement : n'y mettez pas votre vrai nom si vous ne le souhaitez pas.</p>
+    <p>Le nom d'utilisateur est visible par tous les joueurs dans le classement : n'y mettez pas votre vrai nom si vous ne le souhaitez pas. Le pays est déterminé grâce à la base <a href="https://db-ip.com" rel="noopener">IP Geolocation by DB-IP</a>, consultée sur notre serveur : votre adresse n'est transmise à aucun tiers.</p>
 
     <h2>Achats intégrés</h2>
     <p>Les paiements sont traités par Google Play. Nous ne recevons jamais vos coordonnées bancaires. Voir les <a href="https://payments.google.com/payments/apis-secure/u/0/get_legal_document?ldo=0&ldt=privacynotice" rel="noopener">règles de confidentialité de Google Payments</a>.</p>
@@ -49,7 +52,7 @@
     <p>Neon Strike n'est pas destiné aux enfants de moins de 13 ans.</p>
 
     <h2>Vos droits</h2>
-    <p>Conformément au RGPD, vous pouvez demander l'accès, la rectification ou la suppression de vos données (score et nom dans le classement), ou vous opposer à leur traitement, en écrivant à <strong>[ADRESSE E-MAIL DE CONTACT]</strong>. Indiquez votre nom de survivant et, si possible, la date de votre meilleur score. Vous pouvez aussi introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" rel="noopener">cnil.fr</a>). Désinstaller le jeu efface toutes les données stockées sur votre téléphone.</p>
+    <p>Conformément au RGPD, vous pouvez demander l'accès, la rectification ou la suppression de vos données (compte, sauvegarde, score, statistiques), ou vous opposer à leur traitement, en écrivant à <strong>[ADRESSE E-MAIL DE CONTACT]</strong>. Indiquez votre nom d'utilisateur (ou, en mode invité, la date à laquelle vous avez installé le jeu). Vous pouvez aussi introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" rel="noopener">cnil.fr</a>). Désinstaller le jeu efface toutes les données stockées sur votre téléphone.</p>
 
     <footer>
       <a href="/">Accueil</a>
