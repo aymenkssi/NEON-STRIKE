@@ -87,6 +87,14 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **AdMob** : `EXPO_PUBLIC_AD_MODE=production` + vos unités d'annonces dans `.env` ; l'`iosAppId` est encore l'ID de test Google.
 - **Backend** : à héberger (Render, Railway, Fly.io…) avec une base MongoDB Atlas, puis `EXPO_PUBLIC_BACKEND_URL` doit pointer vers son URL publique.
 
+## Progression du jeu
+
+- **Campagne** de 30 niveaux (`frontend/src/game/progression.ts`) : 2 à 3 vagues par niveau, un boss à la dernière vague, difficulté croissante.
+- **Étoiles** : ★ niveau terminé, ★★ au moins 50 % de santé, ★★★ au moins 30 % de tirs à la tête.
+- **Crédits** gagnés en combat, en fin de niveau (bonus + étoiles, ×2 avec une pub) et via la **récompense quotidienne** (série de 7 jours).
+- **Arsenal** : améliorations permanentes (dégâts, santé max, chargeur, rechargement), 5 niveaux chacune.
+- La progression est sauvegardée sur l'appareil (`frontend/src/hooks/use-progress.ts`, clé `np_progress_v1`).
+
 ## Pistes d'évolution
 
 Voir le backlog dans [`memory/PRD.md`](memory/PRD.md) : nouvelles armes et bonus, boss toutes les N vagues, mini-carte, interstitiel en fin de partie, défi quotidien, statistiques de joueur en ligne.

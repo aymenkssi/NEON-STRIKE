@@ -3,6 +3,8 @@ import { View, StyleSheet, StatusBar } from "react-native";
 import { storage } from "@/src/utils/storage";
 import MainMenu from "@/src/components/MainMenu";
 import GameScreen from "@/src/components/GameScreen";
+import { useProgress } from "@/src/hooks/use-progress";
+import { modifiersFrom } from "@/src/game/progression";
 
 const KEYS = {
   username: "np_username",
@@ -16,6 +18,8 @@ export default function Index() {
   const [username, setUsername] = useState("PLAYER");
   const [lookSensitivity, setLookSensitivity] = useState(0.008);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [level, setLevel] = useState(1);
+  const { progress, loaded, addCredits, completeLevel, buyUpgrade, claimDaily } = useProgress();
 
   useEffect(() => {
     (async () => {
@@ -42,12 +46,13 @@ export default function Index() {
     storage.setItem(KEYS.sound, v);
   };
 
-  const startGame = () => {
+  const startGame = (lvl: number) => {
     if (!username || !username.trim()) updateUsername("PLAYER");
+    setLevel(lvl);
     setScreen("game");
   };
 
-  if (!ready) return <View style={styles.root} />;
+  if (!ready || !loaded) return <View style={styles.root} />;
 
   return (
     <View style={styles.root}>
@@ -60,6 +65,9 @@ export default function Index() {
           setLookSensitivity={updateLookSens}
           soundEnabled={soundEnabled}
           setSoundEnabled={updateSound}
+          progress={progress}
+          onBuyUpgrade={buyUpgrade}
+          onClaimDaily={claimDaily}
           onPlay={startGame}
         />
       ) : (
@@ -67,6 +75,11 @@ export default function Index() {
           username={username && username.trim() ? username.trim() : "PLAYER"}
           lookSensitivity={lookSensitivity}
           soundEnabled={soundEnabled}
+          startLevel={level}
+          unlockedLevel={progress.unlockedLevel}
+          modifiers={modifiersFrom(progress.upgrades)}
+          onLevelDone={completeLevel}
+          onAddCredits={addCredits}
           onExit={() => setScreen("menu")}
         />
       )}

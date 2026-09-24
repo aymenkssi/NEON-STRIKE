@@ -10,6 +10,12 @@ import { colors, fonts, spacing, radius } from "../theme";
 import AdBanner from "../ads/AdBanner";
 import Leaderboard from "./Leaderboard";
 import Settings from "./Settings";
+import LevelSelect from "./LevelSelect";
+import Arsenal from "./Arsenal";
+import DailyReward from "./DailyReward";
+import CreditBadge from "./CreditBadge";
+import { dailyStatus, type UpgradeKey } from "../game/progression";
+import type { Progress } from "../hooks/use-progress";
 
 type Props = {
   username: string;
@@ -18,8 +24,14 @@ type Props = {
   setLookSensitivity: (v: number) => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
-  onPlay: () => void;
+  progress: Progress;
+  onBuyUpgrade: (key: UpgradeKey) => boolean;
+  onClaimDaily: () => number;
+  onPlay: (level: number) => void;
 };
+
+// Auto-open the daily reward once per app launch, not every time the menu mounts.
+let dailyAutoShown = false;
 
 const COVER = require("../../assets/images/neon-cover.png");
 
@@ -28,10 +40,19 @@ export default function MainMenu(props: Props) {
   const insets = useSafeAreaInsets();
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLevels, setShowLevels] = useState(false);
+  const [showArsenal, setShowArsenal] = useState(false);
+  const { progress } = props;
+  const dailyReady = dailyStatus(progress.dailyLast, progress.dailyStreak).canClaim;
+  const [showDaily, setShowDaily] = useState(() => {
+    if (dailyAutoShown || !dailyReady) return false;
+    dailyAutoShown = true;
+    return true;
+  });
 
   const play = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onPlay();
+    setShowLevels(true);
   };
 
   return (
@@ -42,6 +63,21 @@ export default function MainMenu(props: Props) {
         locations={[0, 0.45, 1]}
         style={StyleSheet.absoluteFill}
       />
+
+      <View
+        style={[styles.topBar, { top: Math.max(insets.top, 12), right: Math.max(insets.right, 20) }]}
+        pointerEvents="box-none"
+      >
+        <CreditBadge amount={progress.credits} testID="menu-credits" />
+        <Pressable testID="open-daily" style={styles.topBtn} onPress={() => setShowDaily(true)}>
+          <MaterialCommunityIcons name="gift" size={20} color={colors.warning} />
+          {dailyReady && <View style={styles.dot} />}
+        </Pressable>
+        <Pressable testID="open-arsenal" style={[styles.topBtn, styles.arsenalBtn]} onPress={() => setShowArsenal(true)}>
+          <MaterialCommunityIcons name="store" size={18} color={colors.brandSecondary} />
+          <Text style={styles.arsenalText}>ARSENAL</Text>
+        </Pressable>
+      </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View
@@ -68,7 +104,10 @@ export default function MainMenu(props: Props) {
 
             <Pressable testID="play-button" style={styles.playBtn} onPress={play}>
               <MaterialCommunityIcons name="play" size={26} color={colors.onBrand} />
-              <Text style={styles.playText}>JOUER</Text>
+              <View>
+                <Text style={styles.playText}>JOUER</Text>
+                <Text style={styles.playSub}>NIVEAU {progress.unlockedLevel}</Text>
+              </View>
             </Pressable>
 
             <Pressable testID="open-leaderboard" style={styles.iconBtn} onPress={() => setShowLeaderboard(true)}>
@@ -85,6 +124,35 @@ export default function MainMenu(props: Props) {
         </View>
       </KeyboardAvoidingView>
 
+      {showLevels && (
+        <LevelSelect
+          unlockedLevel={progress.unlockedLevel}
+          stars={progress.stars}
+          credits={progress.credits}
+          onSelect={(lvl) => {
+            setShowLevels(false);
+            onPlay(lvl);
+          }}
+          onClose={() => setShowLevels(false)}
+        />
+      )}
+      {showArsenal && (
+        <Arsenal
+          credits={progress.credits}
+          upgrades={progress.upgrades}
+          onBuy={props.onBuyUpgrade}
+          onClose={() => setShowArsenal(false)}
+        />
+      )}
+      {showDaily && (
+        <DailyReward
+          credits={progress.credits}
+          lastClaim={progress.dailyLast}
+          streak={progress.dailyStreak}
+          onClaim={props.onClaimDaily}
+          onClose={() => setShowDaily(false)}
+        />
+      )}
       {showLeaderboard && <Leaderboard username={username} onClose={() => setShowLeaderboard(false)} />}
       {showSettings && (
         <Settings
@@ -129,7 +197,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.brand,
   },
-  playText: { color: colors.onBrand, fontFamily: fonts.display, fontSize: 22, letterSpacing: 2 },
+  playText: { color: colors.onBrand, fontFamily: fonts.display, fontSize: 22, letterSpacing: 2, lineHeight: 24 },
+  playSub: { color: colors.onBrand, fontFamily: fonts.displaySemi, fontSize: 10, letterSpacing: 1.5, opacity: 0.7, lineHeight: 12 },
+  topBar: { position: "absolute", flexDirection: "row", alignItems: "center", gap: spacing.sm, zIndex: 5 },
+  topBtn: {
+    height: 34,
+    minWidth: 34,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(13,15,18,0.85)",
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  arsenalBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(0,255,255,0.45)" },
+  arsenalText: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
+  dot: { position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },
   iconBtn: {
     width: 50,
     height: 50,

@@ -40,8 +40,8 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
   }));
   const dmgStyle = useAnimatedStyle(() => ({ opacity: dmgOpacity.value }));
 
-  const healthColor =
-    stats.health > 50 ? colors.brand : stats.health > 25 ? colors.warning : colors.error;
+  const healthPct = stats.maxHealth > 0 ? (stats.health / stats.maxHealth) * 100 : 0;
+  const healthColor = healthPct > 50 ? colors.brand : healthPct > 25 ? colors.warning : colors.error;
 
   const padL = Math.max(insets.left, 16);
   const padR = Math.max(insets.right, 16);
@@ -56,12 +56,16 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       <View style={[styles.topLeft, { left: padL, top: padT }]} pointerEvents="none">
         <View style={styles.waveRow}>
           <MaterialCommunityIcons name="skull" size={16} color={colors.brand} />
-          <Text style={styles.waveText}>WAVE {stats.wave}</Text>
+          <Text style={styles.waveText}>
+            NIV {stats.level} · VAGUE {stats.wave}/{stats.totalWaves}
+          </Text>
         </View>
         <View style={styles.healthBar}>
-          <View style={[styles.healthFill, { width: `${stats.health}%`, backgroundColor: healthColor }]} />
+          <View style={[styles.healthFill, { width: `${healthPct}%`, backgroundColor: healthColor }]} />
         </View>
-        <Text style={[styles.healthLabel, { color: healthColor }]}>{stats.health} HP</Text>
+        <Text style={[styles.healthLabel, { color: healthColor }]}>
+          {stats.health}/{stats.maxHealth} PV
+        </Text>
       </View>
 
       {/* Top-right: score + kills + pause */}
@@ -71,6 +75,10 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
           <View style={styles.killRow}>
             <MaterialCommunityIcons name="target" size={13} color={colors.onSurfaceSecondary} />
             <Text style={styles.killText}>{stats.kills} KILLS</Text>
+          </View>
+          <View style={styles.killRow}>
+            <MaterialCommunityIcons name="circle-multiple" size={13} color={colors.warning} />
+            <Text style={[styles.killText, { color: colors.warning }]}>+{stats.credits}</Text>
           </View>
         </View>
         <Pressable testID="pause-button" onPress={onPause} style={styles.pauseBtn}>
@@ -106,13 +114,23 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
               ) : (
                 <>
                   <MaterialCommunityIcons name="lock" size={14} color={colors.onSurfaceTertiary} />
-                  <Text style={styles.weaponLockText}>W{w.unlockWave}</Text>
+                  <Text style={styles.weaponLockText}>NIV{w.unlockLevel}</Text>
                 </>
               )}
             </Pressable>
           );
         })}
       </View>
+
+      {/* Boss health */}
+      {stats.boss && (
+        <View style={[styles.bossWrap, { top: padT + 44 }]} pointerEvents="none" testID="boss-bar">
+          <Text style={styles.bossLabel}>BOSS</Text>
+          <View style={styles.bossBar}>
+            <View style={[styles.bossFill, { width: `${(stats.boss.health / stats.boss.max) * 100}%` }]} />
+          </View>
+        </View>
+      )}
 
       {/* Crosshair + hit marker */}
       <View style={styles.center} pointerEvents="none">
@@ -198,6 +216,18 @@ const styles = StyleSheet.create({
   ammoText: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 44, letterSpacing: 1 },
   ammoMax: { color: colors.onSurfaceTertiary, fontSize: 22 },
   reloadText: { color: colors.warning, fontFamily: fonts.displaySemi, fontSize: 18, letterSpacing: 1 },
+  bossWrap: { position: "absolute", alignSelf: "center", alignItems: "center", gap: 2 },
+  bossLabel: { color: colors.error, fontFamily: fonts.display, fontSize: 13, letterSpacing: 3 },
+  bossBar: {
+    width: 260,
+    height: 10,
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.error,
+    overflow: "hidden",
+  },
+  bossFill: { height: "100%", backgroundColor: colors.error },
   weaponRow: {
     position: "absolute",
     alignSelf: "center",

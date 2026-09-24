@@ -6,10 +6,11 @@ import { colors, fonts, spacing, radius } from "../theme";
 import { submitScore } from "../api/leaderboard";
 import { showRewarded } from "../ads";
 import AdBanner from "../ads/AdBanner";
+import type { RunResult } from "../game/GameEngine";
 
 type Props = {
   username: string;
-  result: { score: number; wave: number; kills: number };
+  result: RunResult;
   canRevive: boolean;
   onRevive: () => void;
   onRestart: () => void;
@@ -31,7 +32,7 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
       const res = await submitScore({
         name: username,
         score: scoreValue,
-        wave: result.wave,
+        wave: result.level, // the API's "wave" column now stores the campaign level
         kills: result.kills,
       });
       setRank(res.rank);
@@ -68,10 +69,16 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
 
         <View style={styles.statsRow}>
           <Stat label="SCORE" value={displayScore.toLocaleString()} big />
-          <Stat label="WAVE" value={String(result.wave)} />
+          <Stat label="NIVEAU" value={String(result.level)} />
           <Stat label="KILLS" value={String(result.kills)} />
         </View>
         {doubled && <Text style={styles.doubledTag}>SCORE DOUBLÉ ×2 🎉</Text>}
+        {result.credits > 0 && (
+          <View style={styles.creditsRow}>
+            <MaterialCommunityIcons name="circle-multiple" size={16} color={colors.warning} />
+            <Text style={styles.creditsText}>+{result.credits} crédits récupérés</Text>
+          </View>
+        )}
 
         <View style={styles.rankBox}>
           {state === "submitting" && (
@@ -110,7 +117,7 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
           )}
           <Pressable testID="restart-button" style={[styles.btn, styles.restartBtn]} onPress={onRestart}>
             <MaterialCommunityIcons name="restart" size={20} color={colors.brand} />
-            <Text style={[styles.btnText, { color: colors.brand }]}>REJOUER</Text>
+            <Text style={[styles.btnText, { color: colors.brand }]}>RÉESSAYER LE NIVEAU</Text>
           </Pressable>
           <Pressable testID="menu-button" style={[styles.btn, styles.menuBtn]} onPress={onExit}>
             <MaterialCommunityIcons name="home" size={20} color={colors.onSurfaceSecondary} />
@@ -143,6 +150,8 @@ const styles = StyleSheet.create({
   stat: { alignItems: "center" },
   statValue: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 26 },
   statLabel: { color: colors.onSurfaceSecondary, fontFamily: fonts.displayMed, fontSize: 11, letterSpacing: 1.5, marginTop: -2 },
+  creditsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm },
+  creditsText: { color: colors.warning, fontFamily: fonts.displaySemi, fontSize: 15, letterSpacing: 0.5 },
   rankBox: { marginTop: spacing.md, minHeight: 24 },
   rankRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   rankInfo: { color: colors.onSurface, fontFamily: fonts.text, fontSize: 14 },
