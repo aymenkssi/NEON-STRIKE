@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator } from "
 import { BlurView } from "expo-blur";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
-import { fetchLeaderboard, type LeaderboardRow } from "../api/leaderboard";
+import { fetchLeaderboard, fetchMyRank, type LeaderboardRow } from "../api/leaderboard";
 
 type Props = { username: string; onClose: () => void };
 
 export default function Leaderboard({ username, onClose }: Props) {
   const [state, setState] = useState<"loading" | "done" | "error">("loading");
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
+  const [me, setMe] = useState<LeaderboardRow | null>(null);
 
   const load = async () => {
     setState("loading");
@@ -17,6 +18,7 @@ export default function Leaderboard({ username, onClose }: Props) {
       const data = await fetchLeaderboard(50);
       setRows(data);
       setState("done");
+      fetchMyRank(username).then(setMe, () => setMe(null));
     } catch {
       setState("error");
     }
@@ -24,6 +26,7 @@ export default function Leaderboard({ username, onClose }: Props) {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const medal = (rank: number) =>
@@ -67,14 +70,14 @@ export default function Leaderboard({ username, onClose }: Props) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: spacing.md }}
             renderItem={({ item }) => {
-              const isMe = item.name === username;
+              const isMe = me ? item.id === me.id : item.name === username;
               return (
                 <View style={[styles.row, isMe && styles.meRow]}>
                   <Text style={[styles.rank, { color: medal(item.rank) }]}>#{item.rank}</Text>
                   <Text style={[styles.name, isMe && { color: colors.brand }]} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={styles.wave}>N{item.wave}</Text>
+                  <Text style={styles.wave}>N{item.level}</Text>
                   <Text style={[styles.score, isMe && { color: colors.brand }]}>
                     {item.score.toLocaleString()}
                   </Text>
@@ -82,6 +85,16 @@ export default function Leaderboard({ username, onClose }: Props) {
               );
             }}
           />
+        )}
+        {state === "done" && me && !rows.some((r) => r.id === me.id) && (
+          <View style={[styles.row, styles.meRow]} testID="leaderboard-me">
+            <Text style={[styles.rank, { color: colors.onSurfaceSecondary }]}>#{me.rank}</Text>
+            <Text style={[styles.name, { color: colors.brand }]} numberOfLines={1}>
+              {me.name} (toi)
+            </Text>
+            <Text style={styles.wave}>N{me.level}</Text>
+            <Text style={[styles.score, { color: colors.brand }]}>{me.score.toLocaleString()}</Text>
+          </View>
         )}
       </View>
     </BlurView>

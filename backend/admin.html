@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Neon Strike Admin</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #161a21; --panel2: #1e232c; --line: #2a303b;
+    --text: #f3f4f6; --muted: #9ca3af; --green: #39ff14; --cyan: #00ffff;
+    --amber: #ffb000; --red: #ff3b5c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 0 16px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 0 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; letter-spacing: .06em; margin: 0; }
+  h1 span { color: var(--green); }
+  h2 { font-size: 17px; letter-spacing: .04em; margin: 36px 0 6px; color: var(--cyan); }
+  p.hint { color: var(--muted); margin: 0 0 14px; max-width: 75ch; font-size: 14px; }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  input, select, textarea { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font: inherit; width: 100%; }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--green); }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+  textarea { min-height: 90px; resize: vertical; }
+  td.num input { max-width: 110px; font-variant-numeric: tabular-nums; }
+  code { color: var(--cyan); }
+  button { font: inherit; font-weight: 600; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  button.primary { background: var(--green); border-color: var(--green); color: #000; }
+  button.danger { color: var(--red); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  .row > label { flex: 1 1 180px; }
+  label { display: block; font-size: 13px; color: var(--muted); }
+  label > input, label > select, label > textarea { margin-top: 4px; color: var(--text); }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; flex: 0 0 auto; padding-bottom: 8px; }
+  .status { min-height: 22px; font-size: 14px; margin-top: 10px; }
+  .ok { color: var(--green); } .err { color: var(--red); }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .05em; border-radius: 999px; padding: 2px 9px; }
+  .pill.live { background: rgba(57,255,20,.15); color: var(--green); }
+  .pill.off { background: #2a303b; color: var(--muted); }
+  .pill.sched { background: rgba(255,176,0,.15); color: var(--amber); }
+  .msg { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; display: grid; gap: 6px; }
+  .msg h3 { margin: 0; font-size: 16px; }
+  .msg .meta { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .msg .body { white-space: pre-wrap; }
+  .msg .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .kind-info { border-left: 4px solid var(--cyan); }
+  .kind-promo { border-left: 4px solid var(--amber); }
+  .kind-warning { border-left: 4px solid var(--red); }
+  #login { max-width: 420px; margin: 12vh auto 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="panel">
+    <h1>NEON <span>STRIKE</span> · Admin</h1>
+    <p class="hint">Entrez le jeton d'administration (<code>ADMIN_TOKEN</code> du fichier <code>deploy/.env</code>).</p>
+    <form id="login-form" class="row">
+      <label for="token-input">Jeton<input id="token-input" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Se connecter</button>
+    </form>
+    <div id="login-status" class="status"></div>
+  </section>
+
+  <div id="app" hidden>
+    <header>
+      <h1>NEON <span>STRIKE</span> · Admin</h1>
+      <button id="logout" type="button">Se déconnecter</button>
+    </header>
+
+    <h2>Packs de crédits</h2>
+    <p class="hint">Les crédits, étiquettes et l'ordre s'appliquent au prochain lancement du jeu. Le <strong>prix en euros</strong> se règle dans Play Console (Monétiser → Produits intégrés) : l'app affiche toujours le prix de Google. Un nouveau pack doit aussi être créé dans Play Console avec le même ID produit.</p>
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ID produit (Play)</th><th>Crédits</th><th>Bonus affiché</th><th>Étiquette</th><th>Ordre</th><th>Visible</th><th></th></tr></thead>
+          <tbody id="packs"></tbody>
+          <tfoot>
+            <tr>
+              <td><input id="new-sku" placeholder="coins_20000" aria-label="ID produit du nouveau pack"></td>
+              <td class="num"><input id="new-credits" type="number" min="1" placeholder="20000" aria-label="Crédits"></td>
+              <td><input id="new-bonus" maxlength="24" placeholder="+80 %" aria-label="Bonus"></td>
+              <td><input id="new-tag" maxlength="24" placeholder="NOUVEAU" aria-label="Étiquette"></td>
+              <td class="num"><input id="new-sort" type="number" min="0" value="50" aria-label="Ordre"></td>
+              <td><input id="new-active" type="checkbox" checked aria-label="Visible"></td>
+              <td><button id="add-pack" class="primary" type="button">Ajouter</button></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div id="packs-status" class="status"></div>
+    </section>
+
+    <h2>Messages aux joueurs</h2>
+    <p class="hint">Chaque message actif s'affiche une fois par joueur, à l'ouverture du menu. Sans date de fin, il reste affiché aux nouveaux joueurs jusqu'à ce que vous le désactiviez.</p>
+    <section class="panel">
+      <form id="msg-form">
+        <div class="row">
+          <label for="msg-title" style="flex:2 1 280px">Titre<input id="msg-title" maxlength="80" required placeholder="Week-end double crédits !"></label>
+          <label for="msg-kind" style="flex:0 1 180px">Type
+            <select id="msg-kind">
+              <option value="info">Information</option>
+              <option value="promo">Promotion</option>
+              <option value="warning">Alerte / maintenance</option>
+            </select>
+          </label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label for="msg-body">Message<textarea id="msg-body" maxlength="1000" required placeholder="Tous les packs de la boutique donnent 50 % de crédits en plus jusqu'à dimanche soir."></textarea></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label for="msg-start">Début (optionnel)<input id="msg-start" type="datetime-local"></label>
+          <label for="msg-end">Fin (optionnelle)<input id="msg-end" type="datetime-local"></label>
+          <label class="check" for="msg-active"><input id="msg-active" type="checkbox" checked> Actif</label>
+          <button class="primary" type="submit" id="msg-submit">Publier</button>
+          <button type="button" id="msg-cancel" hidden>Annuler la modification</button>
+        </div>
+      </form>
+      <div id="msg-status" class="status"></div>
+      <div id="messages"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEY = "neon_admin_token";
+  let token = "";
+  try { token = sessionStorage.getItem(KEY) || ""; } catch (e) {}
+  let editingId = null;
+
+  async function api(method, path, body) {
+    const res = await fetch("/api/admin" + path, {
+      method,
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) { logout("Jeton invalide."); throw new Error("401"); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Erreur " + res.status);
+    return data;
+  }
+
+  function say(el, text, ok) { el.textContent = text; el.className = "status " + (ok ? "ok" : "err"); }
+  function logout(msg) {
+    token = ""; try { sessionStorage.removeItem(KEY); } catch (e) {}
+    $("app").hidden = true; $("login").hidden = false;
+    if (msg) say($("login-status"), msg, false);
+  }
+
+  $("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    token = $("token-input").value.trim();
+    try {
+      await loadPacks();
+      try { sessionStorage.setItem(KEY, token); } catch (e2) {}
+      $("login").hidden = true; $("app").hidden = false;
+      loadMessages();
+    } catch (err) {
+      if (err.message !== "401") say($("login-status"), err.message, false);
+    }
+  });
+  $("logout").addEventListener("click", () => logout());
+
+  // ---------------- Packs ----------------
+  function cell(child) { const td = document.createElement("td"); td.appendChild(child); return td; }
+  function input(type, value, attrs) {
+    const i = document.createElement("input"); i.type = type;
+    if (type === "checkbox") i.checked = !!value; else i.value = value ?? "";
+    Object.assign(i, attrs || {}); return i;
+  }
+
+  async function loadPacks() {
+    const packs = await api("GET", "/packs");
+    const tbody = $("packs"); tbody.replaceChildren();
+    for (const p of packs) {
+      const tr = document.createElement("tr");
+      const sku = document.createElement("code"); sku.textContent = p.sku;
+      const credits = input("number", p.credits, { min: 1 });
+      const bonus = input("text", p.bonus, { maxLength: 24 });
+      const tag = input("text", p.tag, { maxLength: 24 });
+      const sort = input("number", p.sort, { min: 0 });
+      const active = input("checkbox", p.active);
+      const save = document.createElement("button"); save.textContent = "Enregistrer"; save.className = "primary"; save.type = "button";
+      const del = document.createElement("button"); del.textContent = "Supprimer"; del.className = "danger"; del.type = "button";
+      [credits, bonus, tag, sort].forEach((el) => el.setAttribute("aria-label", p.sku));
+      save.onclick = async () => {
+        try {
+          await api("PUT", "/packs/" + encodeURIComponent(p.sku), {
+            credits: Number(credits.value), bonus: bonus.value, tag: tag.value, sort: Number(sort.value), active: active.checked,
+          });
+          say($("packs-status"), "Pack " + p.sku + " enregistré.", true); loadPacks();
+        } catch (err) { say($("packs-status"), err.message, false); }
+      };
+      del.onclick = async () => {
+        if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Confirmer ?"; return; }
+        try { await api("DELETE", "/packs/" + encodeURIComponent(p.sku)); say($("packs-status"), "Pack " + p.sku + " supprimé.", true); loadPacks(); }
+        catch (err) { say($("packs-status"), err.message, false); del.dataset.armed = ""; del.textContent = "Supprimer"; }
+      };
+      const actions = document.createElement("div"); actions.style.display = "flex"; actions.style.gap = "6px"; actions.append(save, del);
+      tr.append(cell(sku));
+      const c1 = cell(credits); c1.className = "num"; tr.append(c1, cell(bonus), cell(tag));
+      const c2 = cell(sort); c2.className = "num"; tr.append(c2, cell(active), cell(actions));
+      tbody.appendChild(tr);
+    }
+  }
+
+  $("add-pack").addEventListener("click", async () => {
+    const sku = $("new-sku").value.trim();
+    if (!sku) return say($("packs-status"), "Indiquez l'ID produit (identique à Play Console).", false);
+    try {
+      await api("PUT", "/packs/" + encodeURIComponent(sku), {
+        credits: Number($("new-credits").value), bonus: $("new-bonus").value, tag: $("new-tag").value,
+        sort: Number($("new-sort").value), active: $("new-active").checked,
+      });
+      ["new-sku", "new-credits", "new-bonus", "new-tag"].forEach((id) => ($(id).value = ""));
+      say($("packs-status"), "Pack " + sku + " ajouté. Créez-le aussi dans Play Console.", true); loadPacks();
+    } catch (err) { say($("packs-status"), err.message === "Invalid product ID" ? "ID invalide : minuscules, chiffres, « _ » et « . »." : err.message, false); }
+  });
+
+  // ---------------- Messages ----------------
+  const KIND = { info: "Information", promo: "Promotion", warning: "Alerte" };
+  const fmt = (iso) => iso ? new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+  const toLocalInput = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso); const pad = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  };
+  const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null);
+
+  function state(m) {
+    const now = Date.now();
+    if (!m.active) return ["off", "Inactif"];
+    if (m.starts_at && new Date(m.starts_at) > now) return ["sched", "Programmé"];
+    if (m.ends_at && new Date(m.ends_at) <= now) return ["off", "Terminé"];
+    return ["live", "En ligne"];
+  }
+
+  function formPayload() {
+    return {
+      title: $("msg-title").value.trim(), body: $("msg-body").value.trim(), kind: $("msg-kind").value,
+      active: $("msg-active").checked, starts_at: fromLocalInput($("msg-start").value), ends_at: fromLocalInput($("msg-end").value),
+    };
+  }
+  function resetForm() {
+    editingId = null; $("msg-form").reset(); $("msg-active").checked = true;
+    $("msg-submit").textContent = "Publier"; $("msg-cancel").hidden = true;
+  }
+  $("msg-cancel").addEventListener("click", resetForm);
+
+  $("msg-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      if (editingId) await api("PUT", "/messages/" + editingId, formPayload());
+      else await api("POST", "/messages", formPayload());
+      say($("msg-status"), editingId ? "Message modifié." : "Message publié.", true);
+      resetForm(); loadMessages();
+    } catch (err) { say($("msg-status"), err.message === "ends_at must be after starts_at" ? "La fin doit être après le début." : err.message, false); }
+  });
+
+  async function loadMessages() {
+    const list = await api("GET", "/messages");
+    const box = $("messages"); box.replaceChildren();
+    if (!list.length) { const p = document.createElement("p"); p.className = "hint"; p.style.marginTop = "14px"; p.textContent = "Aucun message pour l'instant."; box.appendChild(p); return; }
+    for (const m of list) {
+      const el = document.createElement("article"); el.className = "msg kind-" + m.kind;
+      const h = document.createElement("h3"); h.textContent = m.title;
+      const meta = document.createElement("div"); meta.className = "meta";
+      const [cls, label] = state(m);
+      const pill = document.createElement("span"); pill.className = "pill " + cls; pill.textContent = label;
+      const info = document.createElement("span");
+      info.textContent = KIND[m.kind] + " · créé le " + fmt(m.created_at) + (m.starts_at ? " · début " + fmt(m.starts_at) : "") + (m.ends_at ? " · fin " + fmt(m.ends_at) : "");
+      meta.append(pill, info);
+      const body = document.createElement("div"); body.className = "body"; body.textContent = m.body;
+      const actions = document.createElement("div"); actions.className = "actions";
+      const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Modifier";
+      edit.onclick = () => {
+        editingId = m.id; $("msg-title").value = m.title; $("msg-body").value = m.body; $("msg-kind").value = m.kind;
+        $("msg-active").checked = m.active; $("msg-start").value = toLocalInput(m.starts_at); $("msg-end").value = toLocalInput(m.ends_at);
+        $("msg-submit").textContent = "Enregistrer"; $("msg-cancel").hidden = false; $("msg-title").focus();
+      };
+      const toggle = document.createElement("button"); toggle.type = "button"; toggle.textContent = m.active ? "Désactiver" : "Activer";
+      toggle.onclick = async () => {
+        try { await api("PUT", "/messages/" + m.id, { ...m, active: !m.active }); loadMessages(); }
+        catch (err) { say($("msg-status"), err.message, false); }
+      };
+      const del = document.createElement("button"); del.type = "button"; del.className = "danger"; del.textContent = "Supprimer";
+      del.onclick = async () => {
+        if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Confirmer ?"; return; }
+        try { await api("DELETE", "/messages/" + m.id); loadMessages(); } catch (err) { say($("msg-status"), err.message, false); }
+      };
+      actions.append(edit, toggle, del);
+      el.append(h, meta, body, actions);
+      box.appendChild(el);
+    }
+  }
+
+  if (token) {
+    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); }).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

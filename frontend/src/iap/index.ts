@@ -2,13 +2,16 @@
 // Only works in a native Android build (dev client or store build) — not in Expo Go or on web,
 // where the shop stays visible but purchases are disabled.
 //
-// Flow: buyPack() -> Play purchase sheet -> purchaseUpdatedListener -> credits granted ->
-// finishTransaction(isConsumable) so the pack can be bought again. Unfinished purchases (app
-// killed mid-flow, delayed cash payments) are picked up again at the next launch.
+// Flow: buyPack() -> Play purchase sheet -> purchaseUpdatedListener -> backend verifies the
+// token with Google Play -> credits granted -> finishTransaction(isConsumable) so the pack can
+// be bought again. A purchase is never granted or consumed before the server says it is valid:
+// unverified purchases stay unfinished and are retried (shop reopened, next launch). Google
+// refunds purchases left unfinished for 3 days, so a rejected purchase costs the player nothing.
 import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { storage } from "@/src/utils/storage";
-import { COIN_PACKS, PACK_BY_SKU } from "./catalog";
+import { verifyPurchaseOnServer } from "@/src/api/purchases";
+import { getPack, getPacks, onPacksChange } from "./catalog";
 import type { PurchaseOutcome, StoreStatus } from "./types";
 
 type ExpoIap = typeof import("expo-iap");
@@ -38,6 +41,7 @@ let onGrant: ((credits: number, sku: string) => void) | null = null;
 let granted: string[] = [];
 let inFlight: { sku: string; resolve: (o: PurchaseOutcome) => void } | null = null;
 let started = false;
+const PURCHASE_TIMEOUT_MS = 5 * 60 * 1000;
 
 function emit() {
   listeners.forEach((fn) => fn());
@@ -66,21 +70,42 @@ function settle(outcome: PurchaseOutcome) {
 
 async function handlePurchase(purchase: Purchase) {
   if (!iap) return;
-  const pack = PACK_BY_SKU[purchase.productId];
-  if (!pack) return;
+  const sku = purchase.productId;
+  const pack = getPack(sku);
   if (purchase.purchaseState === "pending") {
     // Paid later (e.g. cash at a store): Play sends the purchase again once it clears.
-    if (inFlight?.sku === pack.sku) settle({ kind: "pending", sku: pack.sku });
+    if (inFlight?.sku === sku) settle({ kind: "pending", sku });
     return;
   }
   if (purchase.purchaseState !== "purchased") return;
 
   const token = purchase.purchaseToken || purchase.id;
   if (!granted.includes(token)) {
-    onGrant?.(pack.credits, pack.sku);
+    const verdict = await verifyPurchaseOnServer(sku, token);
+    if (verdict.status === "pending") {
+      if (inFlight?.sku === sku) settle({ kind: "pending", sku });
+      return;
+    }
+    if (verdict.status === "invalid") {
+      if (inFlight?.sku === sku) settle({ kind: "error", message: "Achat non reconnu par Google Play." });
+      return;
+    }
+    if (verdict.status === "unreachable") {
+      if (inFlight?.sku === sku) {
+        settle({
+          kind: "error",
+          message: "Paiement reçu, vérification en cours. Tes crédits seront ajoutés automatiquement.",
+        });
+      }
+      return;
+    }
+    // The server decides the amount (admin page); the local catalog is only the offline fallback.
+    const credits = verdict.credits ?? pack?.credits;
+    if (!credits) return;
+    onGrant?.(credits, sku);
     granted = [...granted, token].slice(-200);
     await storage.setItem(GRANTED_KEY, JSON.stringify(granted));
-    if (inFlight?.sku === pack.sku) settle({ kind: "granted", sku: pack.sku, credits: pack.credits });
+    if (inFlight?.sku === sku) settle({ kind: "granted", sku, credits });
   }
   try {
     // Consumes the purchase: without this Google refunds it after 3 days.
@@ -114,19 +139,43 @@ export async function initStore(grant: (credits: number, sku: string) => void) {
 
   try {
     await lib.initConnection();
-    const products = await lib.fetchProducts({ skus: COIN_PACKS.map((p) => p.sku), type: "in-app" });
-    for (const p of (products ?? []) as { id: string; displayPrice: string }[]) prices[p.id] = p.displayPrice;
     status = "ready";
+    await refreshProducts();
   } catch {
     status = "error";
+    emit();
   }
-  emit();
+  // Packs edited on the server may add product IDs: fetch their Play prices too.
+  onPacksChange(() => {
+    refreshProducts();
+  });
 
   // Credit purchases left unfinished by a previous session.
+  await retryUnfinishedPurchases();
+}
+
+// Loads Google Play prices for the packs currently shown in the shop.
+async function refreshProducts() {
+  if (!iap || status !== "ready") return;
   try {
-    const pending = await lib.getAvailablePurchases();
-    for (const p of pending ?? []) await handlePurchase(p);
+    const products = await iap.fetchProducts({ skus: getPacks().map((p) => p.sku), type: "in-app" });
+    for (const p of (products ?? []) as { id: string; displayPrice: string }[]) prices[p.id] = p.displayPrice;
   } catch {}
+  emit();
+}
+
+// Re-processes purchases Google still holds (verification failed earlier, pending cash payments).
+let retrying = false;
+export async function retryUnfinishedPurchases() {
+  if (!iap || status !== "ready" || retrying) return;
+  retrying = true;
+  try {
+    const pending = await iap.getAvailablePurchases();
+    for (const p of pending ?? []) await handlePurchase(p);
+  } catch {
+  } finally {
+    retrying = false;
+  }
 }
 
 export async function buyPack(sku: string): Promise<PurchaseOutcome> {
@@ -138,6 +187,12 @@ export async function buyPack(sku: string): Promise<PurchaseOutcome> {
   const lib = iap;
   return new Promise<PurchaseOutcome>((resolve) => {
     inFlight = { sku, resolve };
+    // Safety net: never leave the shop locked if Play sends no result at all.
+    setTimeout(() => {
+      if (inFlight?.resolve === resolve) {
+        settle({ kind: "error", message: "Aucune réponse de Google Play. Si tu as payé, tes crédits arriveront automatiquement." });
+      }
+    }, PURCHASE_TIMEOUT_MS);
     Promise.resolve()
       .then(() => lib.requestPurchase({ request: { google: { skus: [sku] } }, type: "in-app" }))
       .catch((err) => {

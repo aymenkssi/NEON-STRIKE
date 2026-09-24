@@ -9,12 +9,18 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.gameneonstrike.com"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.gameneonstrike.com"
       }
     },
     "production": {
@@ -23,7 +29,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_AD_MODE": "production"
+        "EXPO_PUBLIC_AD_MODE": "production",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.gameneonstrike.com"
       }
     }
   },
