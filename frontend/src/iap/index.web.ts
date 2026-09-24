@@ -15,3 +15,4 @@ export async function initStore(_onGrant: (credits: number, sku: string) => void
 export async function buyPack(_sku: string): Promise<PurchaseOutcome> {
   return { kind: "error", message: "Les achats sont disponibles uniquement dans l’application Android." };
 }
+export async function retryUnfinishedPurchases() {}

@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { COIN_PACKS } from "../iap/catalog";
-import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange } from "../iap";
+import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange, retryUnfinishedPurchases } from "../iap";
 import Panel from "./Panel";
 
 type Props = {
@@ -20,6 +20,10 @@ export default function Shop({ credits, onClose }: Props) {
   const [notice, setNotice] = useState<Notice>(null);
 
   useEffect(() => onStoreChange(() => setStatus(getStoreStatus())), []);
+  // Opening the shop also retries purchases whose verification failed earlier.
+  useEffect(() => {
+    retryUnfinishedPurchases();
+  }, []);
 
   const buy = async (sku: string) => {
     if (buying) return;

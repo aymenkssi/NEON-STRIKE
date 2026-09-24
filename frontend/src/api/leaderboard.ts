@@ -1,39 +1,26 @@
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
-const API = `${BASE}/api`;
+import { authed, get } from "./client";
 
 export type LeaderboardRow = {
   id: string;
   rank: number;
   name: string;
   score: number;
-  wave: number;
+  level: number;
   kills: number;
   created_at: string;
 };
 
-export type SubmitResult = {
-  entry: { id: string; name: string; score: number; wave: number; kills: number; created_at: string };
-  rank: number;
-  is_high_score: boolean;
-};
+export type SubmitResult = { rank: number; best: number; is_high_score: boolean };
 
-export async function fetchLeaderboard(limit = 50): Promise<LeaderboardRow[]> {
-  const res = await fetch(`${API}/leaderboard?limit=${limit}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+export function fetchLeaderboard(limit = 50): Promise<LeaderboardRow[]> {
+  return get(`/leaderboard?limit=${limit}`);
 }
 
-export async function submitScore(payload: {
-  name: string;
-  score: number;
-  wave: number;
-  kills: number;
-}): Promise<SubmitResult> {
-  const res = await fetch(`${API}/scores`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+// The player's own row (rank among everyone), or null before their first score.
+export function fetchMyRank(name: string): Promise<LeaderboardRow | null> {
+  return authed("/leaderboard/me", {}, name);
+}
+
+export function submitScore(payload: { name: string; score: number; level: number; kills: number }): Promise<SubmitResult> {
+  return authed("/scores", { method: "POST", body: JSON.stringify(payload) }, payload.name);
 }

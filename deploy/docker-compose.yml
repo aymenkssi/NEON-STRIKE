@@ -1,0 +1,53 @@
+# Neon Strike backend on a VPS: API (FastAPI) + MongoDB + Caddy (automatic HTTPS).
+# Usage: cp .env.example .env && edit it, then `docker compose up -d --build`.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+      - ./backups:/backups
+    # No published port: MongoDB is only reachable from the API container.
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ../backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGO_URL: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin
+      DB_NAME: neon_strike
+      PURCHASE_VERIFICATION: ${PURCHASE_VERIFICATION:-google}
+      GOOGLE_PLAY_PACKAGE: ${GOOGLE_PLAY_PACKAGE:-com.aymenkssi.neonstrike}
+      GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/play-service-account.json
+    volumes:
+      - ./secrets/play-service-account.json:/run/secrets/play-service-account.json:ro
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  mongo-data:
+  caddy-data:
+  caddy-config:

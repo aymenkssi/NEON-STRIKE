@@ -32,7 +32,7 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
       const res = await submitScore({
         name: username,
         score: scoreValue,
-        wave: result.level, // the API's "wave" column now stores the campaign level
+        level: result.level,
         kills: result.kills,
       });
       setRank(res.rank);

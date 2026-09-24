@@ -32,11 +32,14 @@ uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 Vérification : <http://localhost:8001/api/> renvoie `{"message": "Neon Protocol API online"}`.
 
-Tests (ils appellent une API en HTTP) :
+Tests (en mémoire, sans MongoDB ni accès à Google) :
 
 ```bash
-EXPO_PUBLIC_BACKEND_URL=http://localhost:8001 pytest
+pip install -r requirements-dev.txt
+pytest
 ```
+
+En local, `PURCHASE_VERIFICATION=disabled` (dans `backend/.env`) accepte les achats sans interroger Google. Ne l'utilisez jamais en production.
 
 ## 2. Application mobile
 
@@ -87,7 +90,7 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **AdMob** : les unités NEON STRIKE (bannière, interstitiel, récompensée) sont dans `frontend/src/ads/index.ts`. Seul le profil EAS `production` affiche de vraies pubs ; les builds `development` et `preview` utilisent les pubs de test. L'`iosAppId` est encore l'ID de test Google.
 - **Consentement RGPD** : l'app affiche au démarrage le message configuré dans AdMob (**Privacy & messaging → GDPR**) et ne charge aucune pub avant la réponse. Le joueur peut modifier son choix dans Réglages → « Confidentialité des annonces ». Sans message publié dans AdMob, les joueurs européens ne verront pas de pubs.
 - **Interstitiel** : affiché toutes les 2 fins de niveau ou morts, en quittant l'écran de résultat, et jamais dans la minute qui suit une pub récompensée (`INTERSTITIAL_EVERY` dans `frontend/src/ads/index.ts`).
-- **Backend** : à héberger (Render, Railway, Fly.io…) avec une base MongoDB Atlas, puis `EXPO_PUBLIC_BACKEND_URL` doit pointer vers son URL publique.
+- **Backend** : à déployer sur votre VPS avec Docker Compose (API + MongoDB + HTTPS automatique), voir [`deploy/README.md`](deploy/README.md). Ensuite, `EXPO_PUBLIC_BACKEND_URL` dans `frontend/eas.json` doit pointer vers `https://votre-domaine`.
 
 ## Progression du jeu
 
@@ -102,6 +105,7 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - Boutique accessible via le « + » du compteur de crédits (menu et Arsenal). Code : `frontend/src/iap/`, packs dans `frontend/src/iap/catalog.ts`.
 - Produits **consommables** à créer dans Play Console → *Monétiser → Produits intégrés*, avec exactement ces ID : `coins_500`, `coins_1200`, `coins_3500`, `coins_8000`. Les prix se règlent dans Play Console ; l'app affiche le prix localisé renvoyé par Google.
 - Les achats ne fonctionnent que dans un build Android installé (pas dans Expo Go ni sur le web). Pour tester sans payer : ajouter votre compte Google dans Play Console → *Paramètres → Test des licences*, puis installer l'app depuis un canal de test (interne ou fermé).
+- Chaque achat est vérifié par le backend auprès de Google Play avant d'être crédité ; un reçu ne peut servir qu'à un seul joueur. Sans `EXPO_PUBLIC_BACKEND_URL` (développement), l'achat est crédité sans vérification.
 - Les crédits sont ajoutés dès la confirmation de Google, puis l'achat est « consommé ». Un achat interrompu (app fermée, paiement en espèces en attente) est crédité au lancement suivant.
 
 ## Pistes d'évolution
