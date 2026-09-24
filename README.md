@@ -84,7 +84,7 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 ## À prévoir avant une publication
 
 - **Identifiant d'application** : `android.package` vaut `com.emergent.mobileenhanceapp.j6pao7` (valeur générée par le template). Choisissez le vôtre (ex. `com.votrenom.neonstrike`) **avant** la première publication sur le Play Store : il ne pourra plus changer ensuite. Même remarque pour `slug` et `scheme` (`frontend`).
-- **AdMob** : `EXPO_PUBLIC_AD_MODE=production` + vos unités d'annonces dans `.env` ; l'`iosAppId` est encore l'ID de test Google.
+- **AdMob** : les unités NEON STRIKE (bannière, interstitiel, récompensée) sont dans `frontend/src/ads/index.ts`. Seul le profil EAS `production` affiche de vraies pubs ; les builds `development` et `preview` utilisent les pubs de test. L'`iosAppId` est encore l'ID de test Google.
 - **Backend** : à héberger (Render, Railway, Fly.io…) avec une base MongoDB Atlas, puis `EXPO_PUBLIC_BACKEND_URL` doit pointer vers son URL publique.
 
 ## Progression du jeu
