@@ -4,11 +4,12 @@ import { BlurView } from "expo-blur";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import type { RemoteMessage } from "../api/config";
+import { useLang, useT } from "@/src/i18n";
 
 const KIND = {
-  info: { icon: "information", color: colors.brandSecondary, label: "INFO" },
-  promo: { icon: "sale", color: colors.warning, label: "PROMO" },
-  warning: { icon: "alert", color: colors.error, label: "ALERTE" },
+  info: { icon: "information", color: colors.brandSecondary, label: "msg.info" },
+  promo: { icon: "sale", color: colors.warning, label: "msg.promo" },
+  warning: { icon: "alert", color: colors.error, label: "msg.warning" },
 } as const;
 
 type Props = { message: RemoteMessage; onClose: () => void; onOpenShop?: () => void };
@@ -16,16 +17,18 @@ type Props = { message: RemoteMessage; onClose: () => void; onOpenShop?: () => v
 // A message published from the admin page, shown once to each player.
 export default function PlayerMessage({ message, onClose, onOpenShop }: Props) {
   const kind = KIND[message.kind] ?? KIND.info;
+  const t = useT();
+  const lang = useLang();
   return (
     <BlurView intensity={50} tint="dark" style={styles.overlay} testID="player-message">
       <View style={[styles.card, { borderColor: kind.color }]}>
         <View style={styles.head}>
           <MaterialCommunityIcons name={kind.icon} size={22} color={kind.color} />
-          <Text style={[styles.kind, { color: kind.color }]}>{kind.label}</Text>
+          <Text style={[styles.kind, { color: kind.color }]}>{t(kind.label)}</Text>
         </View>
-        <Text style={styles.title}>{message.title}</Text>
+        <Text style={styles.title}>{(lang === "en" && message.title_en) || message.title}</Text>
         <ScrollView style={styles.bodyWrap}>
-          <Text style={styles.body}>{message.body}</Text>
+          <Text style={styles.body}>{(lang === "en" && message.body_en) || message.body}</Text>
         </ScrollView>
         <View style={styles.actions}>
           {message.kind === "promo" && onOpenShop && (
@@ -38,7 +41,7 @@ export default function PlayerMessage({ message, onClose, onOpenShop }: Props) {
               }}
             >
               <MaterialCommunityIcons name="cart" size={18} color={colors.onWarning} />
-              <Text style={[styles.btnText, { color: colors.onWarning }]}>BOUTIQUE</Text>
+              <Text style={[styles.btnText, { color: colors.onWarning }]}>{t("shop.title")}</Text>
             </Pressable>
           )}
           <Pressable testID="message-close" style={[styles.btn, styles.okBtn]} onPress={onClose}>

@@ -8,6 +8,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { accountsAvailable } from "../api/account";
 import AuthForm, { type AuthMode } from "./AuthForm";
+import { LANGS, setLang, useLang, useT } from "@/src/i18n";
 
 type Props = {
   onGuest: () => void;
@@ -20,6 +21,8 @@ const COVER = require("../../assets/images/neon-cover.png");
 export default function Welcome({ onGuest, onSignedIn }: Props) {
   const insets = useSafeAreaInsets();
   const [form, setForm] = useState<AuthMode | null>(null);
+  const t = useT();
+  const lang = useLang();
 
   return (
     <View style={styles.root} testID="welcome">
@@ -31,6 +34,13 @@ export default function Welcome({ onGuest, onSignedIn }: Props) {
         locations={[0.25, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
+      <View style={[styles.langs, { top: Math.max(insets.top, 12), left: Math.max(insets.left, 16) }]}>
+        {LANGS.map((l) => (
+          <Pressable key={l} onPress={() => setLang(l)} style={[styles.lang, lang === l && styles.langActive]} testID={`welcome-lang-${l}`}>
+            <Text style={[styles.langText, lang === l && { color: colors.onBrand }]}>{l.toUpperCase()}</Text>
+          </Pressable>
+        ))}
+      </View>
       <KeyboardAvoidingView behavior="padding" style={styles.fill}>
         <ScrollView
           contentContainerStyle={[styles.side, { paddingRight: Math.max(insets.right, 24), paddingTop: Math.max(insets.top, 16) }]}
@@ -38,17 +48,17 @@ export default function Welcome({ onGuest, onSignedIn }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
-            <Text style={styles.kicker}>BIENVENUE, SURVIVANT</Text>
+            <Text style={styles.kicker}>{t("welcome.kicker")}</Text>
             {form ? (
               <AuthForm initialMode={form} onDone={onSignedIn} onCancel={() => setForm(null)} />
             ) : (
               <>
-                <Text style={styles.title}>Comment veux-tu jouer ?</Text>
+                <Text style={styles.title}>{t("welcome.title")}</Text>
                 <Choice
                   testID="welcome-register"
                   icon="account-plus"
-                  title="CRÉER UN COMPTE"
-                  text="Nom unique, progression sauvegardée en ligne et place au classement mondial."
+                  title={t("auth.register")}
+                  text={t("welcome.registerText")}
                   primary
                   disabled={!accountsAvailable}
                   onPress={() => setForm("register")}
@@ -56,16 +66,16 @@ export default function Welcome({ onGuest, onSignedIn }: Props) {
                 <Choice
                   testID="welcome-login"
                   icon="login"
-                  title="J’AI DÉJÀ UN COMPTE"
-                  text="Retrouve ta progression sur ce téléphone."
+                  title={t("welcome.login")}
+                  text={t("welcome.loginText")}
                   disabled={!accountsAvailable}
                   onPress={() => setForm("login")}
                 />
                 <Choice
                   testID="welcome-guest"
                   icon="incognito"
-                  title="JOUER EN INVITÉ"
-                  text="Sans inscription : progression uniquement sur ce téléphone, pas de classement. Tu pourras créer un compte plus tard."
+                  title={t("welcome.guest")}
+                  text={t("welcome.guestText")}
                   onPress={onGuest}
                 />
               </>
@@ -96,6 +106,20 @@ function Choice(p: { icon: string; title: string; text: string; primary?: boolea
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
+  langs: { position: "absolute", zIndex: 5, flexDirection: "row", gap: 6 },
+  lang: {
+    height: 30,
+    minWidth: 40,
+    paddingHorizontal: 8,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: "rgba(13,15,18,0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  langActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  langText: { color: colors.onSurfaceSecondary, fontFamily: fonts.display, fontSize: 13, letterSpacing: 1 },
   fill: { flex: 1 },
   side: { flexGrow: 1, alignItems: "flex-end", justifyContent: "center", paddingVertical: spacing.md, paddingLeft: spacing.md },
   card: {

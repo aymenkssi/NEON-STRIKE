@@ -1,5 +1,6 @@
 // Campaign progression rules: level difficulty, stars, credit rewards, upgrades, daily reward.
 // Pure functions only — persistence lives in src/hooks/use-progress.ts.
+import type { Key } from "../i18n/fr";
 
 export const MAX_LEVEL = 30;
 
@@ -72,10 +73,12 @@ export function levelReward(r: LevelResult) {
 // ---------------- Upgrades (Arsenal) ----------------
 export type UpgradeKey = "damage" | "health" | "ammo" | "reload";
 
+// name / desc: translation keys; desc receives {v} = value(level).
 export type UpgradeDef = {
   key: UpgradeKey;
-  name: string;
-  description: (lvl: number) => string;
+  name: Key;
+  desc: Key;
+  value: (lvl: number) => number;
   icon: string;
 };
 
@@ -83,10 +86,10 @@ export const UPGRADE_MAX = 5;
 export const UPGRADE_COSTS = [100, 200, 350, 550, 800];
 
 export const UPGRADES: UpgradeDef[] = [
-  { key: "damage", name: "DÉGÂTS", icon: "sword", description: (l) => `+${l * 20}% de dégâts` },
-  { key: "health", name: "BLINDAGE", icon: "shield-plus", description: (l) => `+${l * 20} PV max` },
-  { key: "ammo", name: "CHARGEUR", icon: "ammunition", description: (l) => `+${l * 20}% de munitions` },
-  { key: "reload", name: "RECHARGEMENT", icon: "reload", description: (l) => `-${l * 10}% de temps` },
+  { key: "damage", name: "upgrade.damage", desc: "upgrade.damage.desc", icon: "sword", value: (l) => l * 20 },
+  { key: "health", name: "upgrade.health", desc: "upgrade.health.desc", icon: "shield-plus", value: (l) => l * 20 },
+  { key: "ammo", name: "upgrade.ammo", desc: "upgrade.ammo.desc", icon: "ammunition", value: (l) => l * 20 },
+  { key: "reload", name: "upgrade.reload", desc: "upgrade.reload.desc", icon: "reload", value: (l) => l * 10 },
 ];
 
 export type UpgradeLevels = Record<UpgradeKey, number>;

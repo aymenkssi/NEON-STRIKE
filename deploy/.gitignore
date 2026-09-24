@@ -2,3 +2,5 @@
 secrets/*
 !secrets/.gitkeep
 backups/
+geoip/*
+!geoip/.gitkeep

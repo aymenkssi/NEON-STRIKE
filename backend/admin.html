@@ -55,6 +55,27 @@
   .kind-promo { border-left: 4px solid var(--amber); }
   .kind-warning { border-left: 4px solid var(--red); }
   #login { max-width: 420px; margin: 12vh auto 0; }
+  nav.tabs { display: flex; gap: 8px; margin-top: 20px; border-bottom: 1px solid var(--line); }
+  nav.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 4px; margin-right: 12px; }
+  nav.tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--green); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .kpi .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .kpi .l { color: var(--muted); font-size: 13px; }
+  .kpi .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kpi.wide { grid-column: span 2; }
+  .kpi .money { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.35; overflow-wrap: anywhere; }
+  @media (max-width: 420px) { .kpi.wide { grid-column: auto; } }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+  .chart { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; position: relative; }
+  .chart h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .chart h3 span { color: var(--muted); font-weight: 400; }
+  .chart svg { display: block; width: 100%; height: 120px; overflow: visible; }
+  .chart .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .tip { position: absolute; pointer-events: none; background: #0b0d10; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -110%); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  table.compact { min-width: 560px; }
+  .muted { color: var(--muted); }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -75,13 +96,47 @@
       <h1>NEON <span>STRIKE</span> · Admin</h1>
       <button id="logout" type="button">Se déconnecter</button>
     </header>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="stats" aria-selected="true">Statistiques</button>
+      <button type="button" role="tab" data-tab="liveops" aria-selected="false">Packs et messages</button>
+    </nav>
+
+    <div id="tab-stats">
+      <div class="row" style="justify-content:space-between;margin-top:18px">
+        <p class="hint" id="stats-note" style="margin:0"></p>
+        <div class="row">
+          <label for="stats-days" style="flex:0 0 auto">Période
+            <select id="stats-days"><option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option></select>
+          </label>
+          <button type="button" id="stats-refresh">Actualiser</button>
+        </div>
+      </div>
+      <h2>Joueurs</h2>
+      <div class="kpis" id="kpi-players"></div>
+      <h2>Achats</h2>
+      <p class="hint">Hors achats de test (comptes testeurs Play Console). Le chiffre d'affaires est le prix payé TTC, par devise, avant la commission de Google.</p>
+      <div class="kpis" id="kpi-purchases"></div>
+      <h2>Évolution</h2>
+      <div class="charts" id="charts"></div>
+      <h2>Pays</h2>
+      <section class="panel"><div class="table-wrap"><table class="compact" id="t-countries"></table></div></section>
+      <h2>Packs vendus</h2>
+      <section class="panel"><div class="table-wrap"><table class="compact" id="t-products"></table></div></section>
+      <h2>Derniers achats</h2>
+      <section class="panel"><div class="table-wrap"><table class="compact" id="t-recent"></table></div></section>
+      <h2>Langue, version et plateforme</h2>
+      <div class="charts" id="shares"></div>
+      <p class="hint" style="margin-top:18px">Pays : base <a href="https://db-ip.com" style="color:var(--cyan)">IP Geolocation by DB-IP</a> (CC BY 4.0) quand elle est installée, sinon la région du téléphone.</p>
+    </div>
+
+    <div id="tab-liveops" hidden>
 
     <h2>Packs de crédits</h2>
     <p class="hint">Les crédits, étiquettes et l'ordre s'appliquent au prochain lancement du jeu. Le <strong>prix en euros</strong> se règle dans Play Console (Monétiser → Produits intégrés) : l'app affiche toujours le prix de Google. Un nouveau pack doit aussi être créé dans Play Console avec le même ID produit.</p>
     <section class="panel">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>ID produit (Play)</th><th>Crédits</th><th>Bonus affiché</th><th>Étiquette</th><th>Ordre</th><th>Visible</th><th></th></tr></thead>
+          <thead><tr><th>ID produit (Play)</th><th>Crédits</th><th>Bonus affiché</th><th>Étiquette</th><th>Étiquette (anglais)</th><th>Ordre</th><th>Visible</th><th></th></tr></thead>
           <tbody id="packs"></tbody>
           <tfoot>
             <tr>
@@ -89,6 +144,7 @@
               <td class="num"><input id="new-credits" type="number" min="1" placeholder="20000" aria-label="Crédits"></td>
               <td><input id="new-bonus" maxlength="24" placeholder="+80 %" aria-label="Bonus"></td>
               <td><input id="new-tag" maxlength="24" placeholder="NOUVEAU" aria-label="Étiquette"></td>
+              <td><input id="new-tag-en" maxlength="24" placeholder="NEW" aria-label="Étiquette en anglais"></td>
               <td class="num"><input id="new-sort" type="number" min="0" value="50" aria-label="Ordre"></td>
               <td><input id="new-active" type="checkbox" checked aria-label="Visible"></td>
               <td><button id="add-pack" class="primary" type="button">Ajouter</button></td>
@@ -116,6 +172,13 @@
         <div class="row" style="margin-top:10px">
           <label for="msg-body">Message<textarea id="msg-body" maxlength="1000" required placeholder="Tous les packs de la boutique donnent 50 % de crédits en plus jusqu'à dimanche soir."></textarea></label>
         </div>
+        <p class="hint" style="margin:12px 0 0">Version anglaise (optionnelle) : affichée aux joueurs qui jouent en anglais. Sans elle, ils voient le texte français.</p>
+        <div class="row" style="margin-top:6px">
+          <label for="msg-title-en" style="flex:2 1 280px">Titre (anglais)<input id="msg-title-en" maxlength="80" placeholder="Double credits weekend!"></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label for="msg-body-en">Message (anglais)<textarea id="msg-body-en" maxlength="1000" placeholder="Every pack in the shop gives 50% more credits until Sunday night."></textarea></label>
+        </div>
         <div class="row" style="margin-top:10px">
           <label for="msg-start">Début (optionnel)<input id="msg-start" type="datetime-local"></label>
           <label for="msg-end">Fin (optionnelle)<input id="msg-end" type="datetime-local"></label>
@@ -127,6 +190,7 @@
       <div id="msg-status" class="status"></div>
       <div id="messages"></div>
     </section>
+    </div>
   </div>
 </main>
 
@@ -164,7 +228,7 @@
       await loadPacks();
       try { sessionStorage.setItem(KEY, token); } catch (e2) {}
       $("login").hidden = true; $("app").hidden = false;
-      loadMessages();
+      loadMessages(); loadStats();
     } catch (err) {
       if (err.message !== "401") say($("login-status"), err.message, false);
     }
@@ -188,15 +252,16 @@
       const credits = input("number", p.credits, { min: 1 });
       const bonus = input("text", p.bonus, { maxLength: 24 });
       const tag = input("text", p.tag, { maxLength: 24 });
+      const tagEn = input("text", p.tag_en, { maxLength: 24 });
       const sort = input("number", p.sort, { min: 0 });
       const active = input("checkbox", p.active);
       const save = document.createElement("button"); save.textContent = "Enregistrer"; save.className = "primary"; save.type = "button";
       const del = document.createElement("button"); del.textContent = "Supprimer"; del.className = "danger"; del.type = "button";
-      [credits, bonus, tag, sort].forEach((el) => el.setAttribute("aria-label", p.sku));
+      [credits, bonus, tag, tagEn, sort].forEach((el) => el.setAttribute("aria-label", p.sku));
       save.onclick = async () => {
         try {
           await api("PUT", "/packs/" + encodeURIComponent(p.sku), {
-            credits: Number(credits.value), bonus: bonus.value, tag: tag.value, sort: Number(sort.value), active: active.checked,
+            credits: Number(credits.value), bonus: bonus.value, tag: tag.value, tag_en: tagEn.value, sort: Number(sort.value), active: active.checked,
           });
           say($("packs-status"), "Pack " + p.sku + " enregistré.", true); loadPacks();
         } catch (err) { say($("packs-status"), err.message, false); }
@@ -208,7 +273,7 @@
       };
       const actions = document.createElement("div"); actions.style.display = "flex"; actions.style.gap = "6px"; actions.append(save, del);
       tr.append(cell(sku));
-      const c1 = cell(credits); c1.className = "num"; tr.append(c1, cell(bonus), cell(tag));
+      const c1 = cell(credits); c1.className = "num"; tr.append(c1, cell(bonus), cell(tag), cell(tagEn));
       const c2 = cell(sort); c2.className = "num"; tr.append(c2, cell(active), cell(actions));
       tbody.appendChild(tr);
     }
@@ -219,10 +284,10 @@
     if (!sku) return say($("packs-status"), "Indiquez l'ID produit (identique à Play Console).", false);
     try {
       await api("PUT", "/packs/" + encodeURIComponent(sku), {
-        credits: Number($("new-credits").value), bonus: $("new-bonus").value, tag: $("new-tag").value,
+        credits: Number($("new-credits").value), bonus: $("new-bonus").value, tag: $("new-tag").value, tag_en: $("new-tag-en").value,
         sort: Number($("new-sort").value), active: $("new-active").checked,
       });
-      ["new-sku", "new-credits", "new-bonus", "new-tag"].forEach((id) => ($(id).value = ""));
+      ["new-sku", "new-credits", "new-bonus", "new-tag", "new-tag-en"].forEach((id) => ($(id).value = ""));
       say($("packs-status"), "Pack " + sku + " ajouté. Créez-le aussi dans Play Console.", true); loadPacks();
     } catch (err) { say($("packs-status"), err.message === "Invalid product ID" ? "ID invalide : minuscules, chiffres, « _ » et « . »." : err.message, false); }
   });
@@ -248,6 +313,7 @@
   function formPayload() {
     return {
       title: $("msg-title").value.trim(), body: $("msg-body").value.trim(), kind: $("msg-kind").value,
+      title_en: $("msg-title-en").value.trim() || null, body_en: $("msg-body-en").value.trim() || null,
       active: $("msg-active").checked, starts_at: fromLocalInput($("msg-start").value), ends_at: fromLocalInput($("msg-end").value),
     };
   }
@@ -281,10 +347,13 @@
       info.textContent = KIND[m.kind] + " · créé le " + fmt(m.created_at) + (m.starts_at ? " · début " + fmt(m.starts_at) : "") + (m.ends_at ? " · fin " + fmt(m.ends_at) : "");
       meta.append(pill, info);
       const body = document.createElement("div"); body.className = "body"; body.textContent = m.body;
+      const en = document.createElement("div"); en.className = "body"; en.style.color = "var(--muted)";
+      en.textContent = m.title_en || m.body_en ? "EN : " + [m.title_en, m.body_en].filter(Boolean).join(" · ") : "";
       const actions = document.createElement("div"); actions.className = "actions";
       const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Modifier";
       edit.onclick = () => {
         editingId = m.id; $("msg-title").value = m.title; $("msg-body").value = m.body; $("msg-kind").value = m.kind;
+        $("msg-title-en").value = m.title_en || ""; $("msg-body-en").value = m.body_en || "";
         $("msg-active").checked = m.active; $("msg-start").value = toLocalInput(m.starts_at); $("msg-end").value = toLocalInput(m.ends_at);
         $("msg-submit").textContent = "Enregistrer"; $("msg-cancel").hidden = false; $("msg-title").focus();
       };
@@ -299,13 +368,127 @@
         try { await api("DELETE", "/messages/" + m.id); loadMessages(); } catch (err) { say($("msg-status"), err.message, false); }
       };
       actions.append(edit, toggle, del);
-      el.append(h, meta, body, actions);
+      el.append(h, meta, body, ...(en.textContent ? [en] : []), actions);
       box.appendChild(el);
     }
   }
 
+  // ---------------- Statistiques ----------------
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("nav.tabs button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
+    $("tab-stats").hidden = b.dataset.tab !== "stats"; $("tab-liveops").hidden = b.dataset.tab !== "liveops";
+  }));
+  $("stats-refresh").addEventListener("click", () => loadStats());
+  $("stats-days").addEventListener("change", () => loadStats());
+
+  const nf = new Intl.NumberFormat("fr-FR");
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const money = (list) => list && list.length ? list.map((r) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: r.currency }).format(r.amount)).join(" · ") : "—";
+  let regionNames = null; try { regionNames = new Intl.DisplayNames(["fr"], { type: "region" }); } catch (e) {}
+  const countryName = (c) => c === "??" || !c ? "Inconnu" : ((regionNames && regionNames.of(c)) || c) + " (" + c + ")";
+  const flag = (c) => c && /^[A-Z]{2}$/.test(c) ? String.fromCodePoint(...[...c].map((ch) => 0x1f1a5 + ch.charCodeAt(0))) + " " : "";
+
+  // value: a string, or a list of amounts (one line per currency, in a wider tile).
+  function kpis(box, items) {
+    box.replaceChildren(...items.map(([label, value, sub]) => {
+      const k = el("div", "kpi");
+      if (Array.isArray(value)) {
+        k.classList.add("wide");
+        const lines = value.length ? value.map((r) => el("div", "money", money([r]))) : [el("div", "v", "—")];
+        k.append(...lines);
+      } else k.append(el("div", "v", value));
+      k.append(el("div", "l", label)); if (sub) k.append(el("div", "s", sub)); return k;
+    }));
+  }
+
+  // One measure per chart (no dual axis): daily bars, rounded at the top, value on hover.
+  // summary "avg": daily average (players active on different days are not additive); else total.
+  function barChart(title, unit, rows, key, color, summary) {
+    const box = el("div", "chart"); const h = el("h3", null, title + " ");
+    const total = rows.reduce((a, r) => a + r[key], 0);
+    h.append(el("span", null, summary === "avg"
+      ? "· " + nf.format(Math.round(total / rows.length)) + " par jour en moyenne"
+      : "· " + nf.format(total) + " sur la période")); box.append(h);
+    const W = 600, H = 120, gap = 2, bw = Math.max(1, (W - gap * (rows.length - 1)) / rows.length);
+    const max = Math.max(1, ...rows.map((r) => r[key]));
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("role", "img"); svg.setAttribute("aria-label", title + " par jour");
+    const base = document.createElementNS(ns, "line"); base.setAttribute("x1", 0); base.setAttribute("x2", W); base.setAttribute("y1", H); base.setAttribute("y2", H); base.setAttribute("stroke", "#2a303b"); svg.append(base);
+    const tip = el("div", "tip"); tip.hidden = true; box.append(tip);
+    rows.forEach((r, i) => {
+      const x = i * (bw + gap), v = r[key], bh = v ? Math.max(3, (v / max) * (H - 6)) : 0;
+      const hit = document.createElementNS(ns, "rect"); hit.setAttribute("x", x); hit.setAttribute("y", 0); hit.setAttribute("width", bw + gap); hit.setAttribute("height", H); hit.setAttribute("fill", "transparent");
+      if (bh) {
+        const bar = document.createElementNS(ns, "path"); const rr = Math.min(4, bw / 2, bh);
+        bar.setAttribute("d", `M${x},${H} V${H - bh + rr} Q${x},${H - bh} ${x + rr},${H - bh} H${x + bw - rr} Q${x + bw},${H - bh} ${x + bw},${H - bh + rr} V${H} Z`);
+        bar.setAttribute("fill", color); svg.append(bar);
+      }
+      hit.addEventListener("mouseenter", () => {
+        tip.hidden = false; tip.textContent = new Date(r.day + "T12:00:00Z").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) + " : " + nf.format(v) + " " + unit;
+        const b = svg.getBoundingClientRect(), bb = box.getBoundingClientRect();
+        const cx = b.left - bb.left + ((x + bw / 2) / W) * b.width, half = tip.offsetWidth / 2 + 6;
+        tip.style.left = Math.min(Math.max(cx, half), bb.width - half) + "px"; tip.style.top = (b.top - bb.top + (1 - bh / H) * b.height) + "px";
+      });
+      hit.addEventListener("mouseleave", () => { tip.hidden = true; });
+      svg.append(hit);
+    });
+    const axis = el("div", "axis"); const d = (s) => new Date(s + "T12:00:00Z").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    axis.append(el("span", null, d(rows[0].day)), el("span", null, d(rows[rows.length - 1].day)));
+    box.append(svg, axis); return box;
+  }
+
+  function table(t, headers, rows) {
+    const head = el("tr"); headers.forEach(([h, n]) => head.append(el("th", n ? "n" : null, h)));
+    const thead = el("thead"); thead.append(head); const tbody = el("tbody");
+    if (!rows.length) { const tr = el("tr"); const td = el("td", "muted", "Aucune donnée pour l'instant."); td.colSpan = headers.length; tr.append(td); tbody.append(tr); }
+    rows.forEach((cells) => { const tr = el("tr"); cells.forEach((c, i) => tr.append(el("td", headers[i][1] ? "n" : null, c))); tbody.append(tr); });
+    t.replaceChildren(thead, tbody);
+  }
+
+  function shareBox(title, list, total) {
+    const box = el("div", "chart"); box.append(el("h3", null, title));
+    const t = el("table", "compact"); t.style.minWidth = "0";
+    table(t, [["Valeur"], ["Joueurs", 1], ["Part", 1]], list.slice(0, 8).map((r) => [r.value === "?" ? "Inconnu" : r.value.toUpperCase(), nf.format(r.players), total ? Math.round(100 * r.players / total) + " %" : "—"]));
+    box.append(t); return box;
+  }
+
+  async function loadStats() {
+    const s = await api("GET", "/stats?days=" + $("stats-days").value);
+    const P = s.players, B = s.purchases;
+    $("stats-note").textContent = "Mis à jour le " + new Date(s.generated_at).toLocaleString("fr-FR") + (s.geoip ? "" : " · Base GeoIP absente : pays d'après la région du téléphone (voir deploy/README.md).");
+    kpis($("kpi-players"), [
+      ["Joueurs au total", nf.format(P.total), nf.format(P.accounts) + " comptes · " + nf.format(P.guests) + " invités"],
+      ["Actifs aujourd'hui", nf.format(P.active_today)],
+      ["Actifs sur 7 jours", nf.format(P.active_7d)],
+      ["Actifs sur 30 jours", nf.format(P.active_30d)],
+      ["Nouveaux aujourd'hui", nf.format(P.new_today)],
+      ["Nouveaux sur 30 jours", nf.format(P.new_30d), nf.format(P.new_7d) + " sur 7 jours"],
+    ]);
+    kpis($("kpi-purchases"), [
+      ["Achats au total", nf.format(B.count), B.test_count ? nf.format(B.test_count) + " achats de test en plus" : null],
+      ["Chiffre d'affaires total", B.revenue, B.without_price ? nf.format(B.without_price) + " achats sans prix connu" : null],
+      ["Acheteurs", nf.format(B.buyers)],
+      ["Conversion", String(B.conversion).replace(".", ",") + " %", "joueurs ayant acheté"],
+      ["Crédits vendus", nf.format(B.credits)],
+    ]);
+    $("charts").replaceChildren(
+      barChart("Joueurs actifs", "joueurs actifs", s.daily, "active", "#00e5e5", "avg"),
+      barChart("Nouveaux joueurs", "nouveaux joueurs", s.daily, "new", "#00e5e5"),
+      barChart("Achats", "achats", s.daily, "purchases", "#00e5e5"),
+    );
+    table($("t-countries"), [["Pays"], ["Joueurs", 1], ["Comptes", 1], ["Actifs 30 j", 1], ["Acheteurs", 1], ["Achats", 1], ["Chiffre d'affaires", 1]],
+      s.countries.map((c) => [flag(c.country) + countryName(c.country), nf.format(c.players), nf.format(c.accounts), nf.format(c.active_30d), nf.format(c.buyers), nf.format(c.purchases), money(c.revenue)]));
+    table($("t-products"), [["Pack"], ["Ventes", 1], ["Crédits", 1], ["Chiffre d'affaires", 1]],
+      s.products.map((p) => [p.sku, nf.format(p.count), nf.format(p.credits), money(p.revenue)]));
+    table($("t-recent"), [["Date"], ["Pack"], ["Joueur"], ["Pays"], ["Prix", 1], ["Type"]],
+      s.recent_purchases.map((r) => [new Date(r.created_at).toLocaleString("fr-FR"), r.sku, r.player, r.country ? flag(r.country) + r.country : "—",
+        r.price != null ? money([{ currency: r.currency, amount: r.price }]) : "—", r.is_test ? "Test" : "Réel"]));
+    $("shares").replaceChildren(shareBox("Langue", s.languages, P.total), shareBox("Version de l'app", s.versions, P.total), shareBox("Plateforme", s.platforms, P.total));
+  }
+
   if (token) {
-    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); }).catch(() => {});
+    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); }).catch(() => {});
   }
 })();
 </script>

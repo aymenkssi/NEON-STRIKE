@@ -7,6 +7,7 @@ import { achievementView, missionView, missionsForDay } from "../game/meta";
 import { dayKey } from "../game/progression";
 import type { Progress } from "../hooks/use-progress";
 import Panel from "./Panel";
+import { formatNumber, useT } from "@/src/i18n";
 
 type Props = {
   progress: Progress;
@@ -24,17 +25,18 @@ export function claimableGoals(p: Progress): number {
   return [...missions, ...achievements].filter((x) => x.done && !x.claimed).length;
 }
 
-function hoursToMidnight() {
+function hoursToMidnight(t: ReturnType<typeof useT>) {
   const now = new Date();
   const next = new Date(now);
   next.setHours(24, 0, 0, 0);
   const h = Math.floor((next.getTime() - now.getTime()) / 3600000);
   const m = Math.floor(((next.getTime() - now.getTime()) % 3600000) / 60000);
-  return h > 0 ? `${h} h ${m} min` : `${m} min`;
+  return h > 0 ? t("goals.hm", { h, m }) : t("goals.m", { m });
 }
 
 export default function Goals({ progress, onClaimMission, onClaimAchievement, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("missions");
+  const t = useT();
   const missions = missionView(missionsForDay(progress.missions, dayKey(), progress.unlockedLevel));
   const achievements = achievementView(progress, progress.achievementsClaimed).sort(
     (a, b) => rank(a) - rank(b) || b.value / b.target - a.value / a.target
@@ -46,11 +48,11 @@ export default function Goals({ progress, onClaimMission, onClaimAchievement, on
   };
 
   return (
-    <Panel title="OBJECTIFS" icon="flag-checkered" credits={progress.credits} onClose={onClose} testID="goals">
+    <Panel title={t("menu.goals")} icon="flag-checkered" credits={progress.credits} onClose={onClose} testID="goals">
       <View style={styles.tabs}>
-        <TabButton label="MISSIONS DU JOUR" active={tab === "missions"} count={badge(missions)} onPress={() => setTab("missions")} testID="tab-missions" />
-        <TabButton label="SUCCÈS" active={tab === "achievements"} count={badge(achievements)} onPress={() => setTab("achievements")} testID="tab-achievements" />
-        <TabButton label="STATS" active={tab === "stats"} onPress={() => setTab("stats")} testID="tab-stats" />
+        <TabButton label={t("goals.missions")} active={tab === "missions"} count={badge(missions)} onPress={() => setTab("missions")} testID="tab-missions" />
+        <TabButton label={t("goals.achievements")} active={tab === "achievements"} count={badge(achievements)} onPress={() => setTab("achievements")} testID="tab-achievements" />
+        <TabButton label={t("goals.stats")} active={tab === "stats"} onPress={() => setTab("stats")} testID="tab-stats" />
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.sm }} showsVerticalScrollIndicator={false}>
@@ -60,7 +62,7 @@ export default function Goals({ progress, onClaimMission, onClaimAchievement, on
               <GoalRow
                 key={m.id}
                 icon="flag-variant"
-                title={m.text}
+                title={t(m.text)}
                 value={m.value}
                 target={m.target}
                 reward={m.reward}
@@ -70,7 +72,7 @@ export default function Goals({ progress, onClaimMission, onClaimAchievement, on
                 testID={`mission-${m.id}`}
               />
             ))}
-            <Text style={styles.hint}>Nouvelles missions dans {hoursToMidnight()}.</Text>
+            <Text style={styles.hint}>{t("goals.renew", { time: hoursToMidnight(t) })}</Text>
           </>
         )}
 
@@ -79,8 +81,8 @@ export default function Goals({ progress, onClaimMission, onClaimAchievement, on
             <GoalRow
               key={a.id}
               icon={a.icon}
-              title={a.title}
-              subtitle={a.text}
+              title={t(a.title)}
+              subtitle={t(a.text)}
               value={a.value}
               target={a.target}
               reward={a.reward}
@@ -136,7 +138,7 @@ function GoalRow(p: {
           <View style={[styles.barFill, { width: `${pct * 100}%`, backgroundColor: p.done ? colors.brand : colors.brandSecondary }]} />
         </View>
         <Text style={styles.rowSub}>
-          {p.value.toLocaleString()} / {p.target.toLocaleString()}
+          {formatNumber(p.value)} / {formatNumber(p.target)}
         </Text>
       </View>
       {p.claimed ? (
@@ -152,22 +154,23 @@ function GoalRow(p: {
 }
 
 function StatsGrid({ progress }: { progress: Progress }) {
+  const t = useT();
   const s = progress.stats;
   const stars = Object.values(progress.stars).reduce((a, b) => a + b, 0);
   const hsRate = s.kills ? Math.round((s.headshots / s.kills) * 100) : 0;
   const tiles: [string, string, string][] = [
-    ["skull", "Zombies éliminés", s.kills.toLocaleString()],
-    ["target", "Tirs à la tête", `${s.headshots.toLocaleString()} (${hsRate} %)`],
-    ["crown", "Boss vaincus", String(s.bosses)],
-    ["flag-checkered", "Niveaux terminés", String(s.levels)],
-    ["star", "Étoiles", `${stars} / 90`],
-    ["lightning-bolt", "Meilleur combo", `×${s.bestCombo}`],
-    ["bomb", "Victimes d'explosions", String(s.explosionKills)],
-    ["flash", "Bonus ramassés", String(s.powerups)],
-    ["run-fast", "Coureurs", String(s.byKind.runner)],
-    ["shield", "Blindés", String(s.byKind.tank)],
-    ["grave-stone", "Morts", String(s.deaths)],
-    ["map-marker", "Niveau atteint", `${progress.unlockedLevel} / 30`],
+    ["skull", t("stats.kills"), formatNumber(s.kills)],
+    ["target", t("stats.headshots"), `${formatNumber(s.headshots)} (${hsRate} %)`],
+    ["crown", t("stats.bosses"), String(s.bosses)],
+    ["flag-checkered", t("stats.levels"), String(s.levels)],
+    ["star", t("stats.stars"), `${stars} / 90`],
+    ["lightning-bolt", t("stats.combo"), `×${s.bestCombo}`],
+    ["bomb", t("stats.explosions"), String(s.explosionKills)],
+    ["flash", t("stats.powerups"), String(s.powerups)],
+    ["run-fast", t("stats.runners"), String(s.byKind.runner)],
+    ["shield", t("stats.tanks"), String(s.byKind.tank)],
+    ["grave-stone", t("stats.deaths"), String(s.deaths)],
+    ["map-marker", t("stats.reached"), `${progress.unlockedLevel} / 30`],
   ];
   return (
     <View style={styles.grid} testID="stats-grid">

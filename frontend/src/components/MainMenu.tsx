@@ -23,6 +23,7 @@ import { dailyStatus, type UpgradeKey } from "../game/progression";
 import type { CloudStatus, Progress } from "../hooks/use-progress";
 import type { AccountState } from "../hooks/use-account";
 import type { AuthMode } from "./AuthForm";
+import { useT } from "@/src/i18n";
 
 type Props = {
   username: string;
@@ -56,6 +57,7 @@ export default function MainMenu(props: Props) {
   const { username, account, onPlay } = props;
   const guest = account.mode !== "account";
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLevels, setShowLevels] = useState(false);
@@ -100,7 +102,7 @@ export default function MainMenu(props: Props) {
         </Pressable>
         <Pressable testID="open-goals" style={[styles.topBtn, styles.goalsBtn]} onPress={() => setShowGoals(true)}>
           <MaterialCommunityIcons name="flag-checkered" size={18} color={colors.brand} />
-          <Text style={styles.goalsText}>OBJECTIFS</Text>
+          <Text style={styles.goalsText}>{t("menu.goals")}</Text>
           {goalsReady > 0 && (
             <View style={styles.countBadge}>
               <Text style={styles.countText}>{goalsReady}</Text>
@@ -109,7 +111,7 @@ export default function MainMenu(props: Props) {
         </Pressable>
         <Pressable testID="open-arsenal" style={[styles.topBtn, styles.arsenalBtn]} onPress={() => setShowArsenal(true)}>
           <MaterialCommunityIcons name="store" size={18} color={colors.brandSecondary} />
-          <Text style={styles.arsenalText}>ARSENAL</Text>
+          <Text style={styles.arsenalText}>{t("menu.arsenal")}</Text>
         </Pressable>
       </View>
 
@@ -122,7 +124,7 @@ export default function MainMenu(props: Props) {
         >
           <View style={styles.actionRow}>
             <Pressable testID="profile-chip" style={styles.inputWrap} onPress={() => setShowSettings(true)}>
-              <Text style={styles.inputLabel}>{guest ? "MODE INVITÉ" : "SURVIVANT"}</Text>
+              <Text style={styles.inputLabel}>{guest ? t("menu.guestMode") : t("menu.survivor")}</Text>
               <View style={[styles.input, styles.profile, guest && { borderColor: colors.border }]}>
                 <MaterialCommunityIcons
                   name={guest ? "incognito" : "account-circle"}
@@ -132,15 +134,15 @@ export default function MainMenu(props: Props) {
                 <Text style={styles.profileName} numberOfLines={1}>
                   {username}
                 </Text>
-                {guest && <Text style={styles.profileHint}>CRÉER UN COMPTE</Text>}
+                {guest && <Text style={styles.profileHint}>{t("auth.register")}</Text>}
               </View>
             </Pressable>
 
             <Pressable testID="play-button" style={styles.playBtn} onPress={play}>
               <MaterialCommunityIcons name="play" size={26} color={colors.onBrand} />
               <View>
-                <Text style={styles.playText}>JOUER</Text>
-                <Text style={styles.playSub}>NIVEAU {progress.unlockedLevel}</Text>
+                <Text style={styles.playText}>{t("menu.play")}</Text>
+                <Text style={styles.playSub}>{t("menu.levelN", { n: progress.unlockedLevel })}</Text>
               </View>
             </Pressable>
 

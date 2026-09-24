@@ -1,5 +1,6 @@
 // Player accounts (unique username + password), see backend/accounts.py.
 import { ApiError, backendConfigured, clearSession, get, post, setSession } from "./client";
+import type { Key } from "@/src/i18n";
 
 export type AuthError = "taken" | "invalid" | "credentials" | "rate" | "network" | "offline";
 export type AuthResult = { username: string } | { error: AuthError };
@@ -56,11 +57,11 @@ export async function logoutAccount() {
   await clearSession();
 }
 
-export const AUTH_ERRORS: Record<AuthError, string> = {
-  taken: "Ce nom d’utilisateur est déjà pris.",
-  invalid: "Nom : 3 à 16 lettres, chiffres ou _. Mot de passe : 6 caractères minimum.",
-  credentials: "Nom d’utilisateur ou mot de passe incorrect.",
-  rate: "Trop d’essais. Réessaie dans 10 minutes.",
-  network: "Connexion impossible. Vérifie ta connexion Internet.",
-  offline: "Les comptes ne sont pas disponibles dans cette version.",
+export const AUTH_ERRORS: Record<AuthError, Key> = {
+  taken: "auth.err.taken",
+  invalid: "auth.err.invalid",
+  credentials: "auth.err.credentials",
+  rate: "auth.err.rate",
+  network: "auth.err.network",
+  offline: "auth.err.offline",
 };

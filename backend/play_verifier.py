@@ -24,6 +24,7 @@ class PlayPurchase:
     order_id: Optional[str] = None
     is_test: bool = False
     consumed: bool = False
+    region_code: Optional[str] = None  # billing country (ISO 3166-1 alpha-2)
 
 
 class PlayVerifier:
@@ -67,4 +68,5 @@ class PlayVerifier:
             order_id=data.get("orderId"),
             is_test=data.get("purchaseType") == 0,  # license tester purchase
             consumed=data.get("consumptionState") == 1,
+            region_code=(data.get("regionCode") or None),
         )

@@ -9,6 +9,7 @@ import AccountSection from "./AccountSection";
 import type { AuthMode } from "./AuthForm";
 import type { CloudStatus } from "../hooks/use-progress";
 import type { AccountState } from "../hooks/use-account";
+import { LANGS, LANG_NAMES, setLang, useLang, useT } from "@/src/i18n";
 
 type Props = {
   lookSensitivity: number;
@@ -45,6 +46,8 @@ export default function Settings({
   onClose,
 }: Props) {
   const pct = Math.round(((lookSensitivity - MIN) / (MAX - MIN)) * 100);
+  const t = useT();
+  const lang = useLang();
 
   return (
     <BlurView intensity={50} tint="dark" style={styles.overlay} testID="settings-modal">
@@ -52,7 +55,7 @@ export default function Settings({
         <View style={styles.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <MaterialCommunityIcons name="cog" size={22} color={colors.brand} />
-            <Text style={styles.title}>RÉGLAGES</Text>
+            <Text style={styles.title}>{t("settings.title")}</Text>
           </View>
           <Pressable testID="settings-close" onPress={onClose} style={styles.closeBtn} hitSlop={10}>
             <MaterialCommunityIcons name="close" size={22} color={colors.onSurface} />
@@ -61,9 +64,24 @@ export default function Settings({
 
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <AccountSection account={account} cloudStatus={cloudStatus} onSignedIn={onSignedIn} onLogout={onLogout} />
+        <View style={[styles.row, styles.toggleRow]}>
+          <Text style={styles.label}>{t("settings.language")}</Text>
+          <View style={styles.langs}>
+            {LANGS.map((l) => (
+              <Pressable
+                key={l}
+                testID={`lang-${l}`}
+                onPress={() => setLang(l)}
+                style={[styles.langBtn, lang === l && styles.langActive]}
+              >
+                <Text style={[styles.langText, lang === l && { color: colors.onBrand }]}>{LANG_NAMES[l]}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         <View style={styles.row}>
           <View style={styles.rowLabel}>
-            <Text style={styles.label}>Sensibilité de visée</Text>
+            <Text style={styles.label}>{t("settings.sensitivity")}</Text>
             <Text style={styles.value}>{pct}%</Text>
           </View>
           <Slider
@@ -80,7 +98,7 @@ export default function Settings({
         </View>
 
         <View style={[styles.row, styles.toggleRow]}>
-          <Text style={styles.label}>Effets sonores</Text>
+          <Text style={styles.label}>{t("settings.sound")}</Text>
           <Switch
             testID="sound-toggle"
             value={soundEnabled}
@@ -91,7 +109,7 @@ export default function Settings({
         </View>
 
         <View style={[styles.row, styles.toggleRow]}>
-          <Text style={styles.label}>Musique</Text>
+          <Text style={styles.label}>{t("settings.music")}</Text>
           <Switch
             testID="music-toggle"
             value={musicEnabled}
@@ -104,7 +122,7 @@ export default function Settings({
         {musicEnabled && (
           <View style={styles.row}>
             <View style={styles.rowLabel}>
-              <Text style={styles.label}>Volume de la musique</Text>
+              <Text style={styles.label}>{t("settings.musicVolume")}</Text>
               <Text style={styles.value}>{Math.round(musicVolume * 100)}%</Text>
             </View>
             <Slider
@@ -125,7 +143,7 @@ export default function Settings({
 
         {isPrivacyOptionsRequired() && (
           <Pressable testID="privacy-options" onPress={showPrivacyOptions} style={[styles.row, styles.toggleRow]}>
-            <Text style={styles.label}>Confidentialité des annonces</Text>
+            <Text style={styles.label}>{t("settings.adPrivacy")}</Text>
             <MaterialCommunityIcons name="chevron-right" size={22} color={colors.onSurfaceSecondary} />
           </Pressable>
         )}
@@ -141,6 +159,18 @@ export default function Settings({
 }
 
 const styles = StyleSheet.create({
+  langs: { flexDirection: "row", gap: 6 },
+  langBtn: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  langActive: { backgroundColor: colors.brand, borderColor: colors.brand },
+  langText: { color: colors.onSurfaceSecondary, fontFamily: fonts.displaySemi, fontSize: 13, letterSpacing: 0.5 },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", zIndex: 30 },
   modal: {
     width: "62%",

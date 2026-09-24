@@ -3,8 +3,16 @@
 import { storage } from "@/src/utils/storage";
 import { backendConfigured, get } from "./client";
 
-export type RemotePack = { sku: string; credits: number; bonus: string | null; tag: string | null; sort: number };
-export type RemoteMessage = { id: string; title: string; body: string; kind: "info" | "promo" | "warning" };
+export type RemotePack = { sku: string; credits: number; bonus: string | null; tag: string | null; tag_en?: string | null; sort: number };
+// title_en / body_en: optional English version written in the admin page.
+export type RemoteMessage = {
+  id: string;
+  title: string;
+  body: string;
+  title_en?: string | null;
+  body_en?: string | null;
+  kind: "info" | "promo" | "warning";
+};
 export type RemoteConfig = { packs: RemotePack[]; messages: RemoteMessage[] };
 
 const CACHE_KEY = "np_remote_config";

@@ -103,6 +103,7 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Zombies** (`frontend/src/game/content.ts`) : rôdeur, coureur (dès le niveau 3), blindé (niveau 5) et explosif (niveau 7, explose au contact et en chaîne), plus un boss par niveau.
 - **Combos** (DOUBLE KILL, TRIPLE KILL… en moins de 2,5 s) avec bonus de score et de crédits ; **bonus temporaires** lâchés par les zombies : dégâts ×2, vitesse, munitions infinies.
 - **6 secteurs** de 5 niveaux, chacun avec ses couleurs et son nom ; secousses d'écran et explosions.
+- **Décor** (`frontend/src/game/scenery.ts`) : ciel en dégradé et étoiles, skyline néon à l'horizon, arêtes lumineuses sur les caisses, lampadaires et particules propres à chaque secteur (poussière néon, pluie, braises, neige). Les armes sont éclairées par une petite lumière qui ne coûte rien de plus (c'est aussi celle du tir).
 - **Objectifs** (`frontend/src/game/meta.ts`) : 3 missions du jour (les mêmes pour tous, renouvelées à minuit), 17 succès récompensés en crédits et des statistiques de joueur.
 - **Armes** : fusil à pompe, SMG (niveau 2), fusil d'assaut (4), railgun perforant (10), minigun (15), lance-grenades (20).
 - **Commandes** : joystick visible en bas à gauche (il suit le pouce, sprint en poussant à fond), visée à droite.
@@ -111,6 +112,12 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Au premier lancement**, le joueur choisit : **créer un compte** (nom d'utilisateur unique, 3 à 16 lettres, chiffres ou `_`, sans distinction de casse, et mot de passe de 6 caractères minimum), **se connecter**, ou **jouer en invité**.
   - **Invité** : progression uniquement sur le téléphone, pas de classement. Il peut créer un compte plus tard (Réglages → Compte) et garde alors sa progression et ses achats.
   - **Compte** : progression synchronisée en ligne (`frontend/src/hooks/use-progress.ts`), retrouvée en se connectant sur un autre téléphone, et nom affiché au classement mondial.
+
+## Langues
+
+- Français et anglais (`frontend/src/i18n/`). Au premier lancement, le jeu suit la langue du téléphone (français si le téléphone est en français, anglais sinon). Le joueur peut changer sur l'écran d'accueil ou dans Réglages → Langue.
+- Tous les textes passent par `t("clé")`. `fr.ts` est le dictionnaire de référence : `en.ts` doit avoir exactement les mêmes clés, sinon `yarn typecheck` échoue.
+- Les messages de la page d'administration et les étiquettes des packs ont un champ anglais facultatif ; sans lui, les joueurs anglophones voient le texte français.
 
 ## Achat de crédits (Google Play Billing)
 

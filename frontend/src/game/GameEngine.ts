@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Renderer } from "expo-three";
 import type { ExpoWebGLRenderingContext } from "expo-gl";
+import { buildScenery, type Scenery } from "./scenery";
 import {
   CREDITS_PER_BOSS,
   CREDITS_PER_HEADSHOT,
@@ -28,6 +29,7 @@ import {
   type Sector,
   type ZombieKind,
 } from "./content";
+import { t, type Key } from "../i18n";
 
 const CONFIG = {
   fov: 78,
@@ -47,7 +49,7 @@ const CONFIG = {
 
 // SINGLE: one round per tap. BURST: 3 rounds per tap. AUTO: fires while the trigger is held.
 export type FireMode = "single" | "burst" | "auto";
-export const FIRE_MODE_LABEL: Record<FireMode, string> = { single: "COUP PAR COUP", burst: "RAFALE ×3", auto: "AUTO" };
+export const FIRE_MODE_LABEL: Record<FireMode, Key> = { single: "fire.single", burst: "fire.burst", auto: "fire.auto" };
 const BURST_ROUNDS = 3;
 
 type WeaponConfig = {
@@ -210,6 +212,7 @@ export class GameEngine {
 
   private sector: Sector = sectorOf(1);
   private world: THREE.Group | null = null;
+  private scenery: Scenery | null = null;
   private fillLight!: THREE.DirectionalLight;
   private combo = 0;
   private lastKillAt = 0;
@@ -299,7 +302,7 @@ export class GameEngine {
   private announceLevel() {
     const l = this.levelCfg.level;
     // First level of a sector: show the sector name instead of the level number.
-    this.cb.onNotify((l - 1) % 5 === 0 ? `SECTEUR ${this.sector.index} · ${this.sector.name}` : `NIVEAU ${l}`);
+    this.cb.onNotify((l - 1) % 5 === 0 ? t("game.sector", { n: this.sector.index, name: this.sector.name }) : t("menu.levelN", { n: l }));
   }
 
   // Builds the arena in the colours of a sector; called again when the sector changes.
@@ -316,9 +319,10 @@ export class GameEngine {
     const world = new THREE.Group();
     this.world = world;
     this.scene.add(world);
-    this.scene.background = new THREE.Color(sector.background);
-    this.scene.fog = new THREE.FogExp2(sector.background, sector.fogDensity);
-    this.renderer.setClearColor(sector.background, 1);
+    // Fog in the horizon colour: far buildings fade into the glow of the sky.
+    this.scene.background = new THREE.Color(sector.horizon);
+    this.scene.fog = new THREE.FogExp2(sector.horizon, sector.fogDensity);
+    this.renderer.setClearColor(sector.horizon, 1);
     this.fillLight.color.setHex(sector.neonB);
 
     const floorGeo = new THREE.PlaneGeometry(220, 220);
@@ -352,6 +356,8 @@ export class GameEngine {
       box.userData.aabb = new THREE.Box3().setFromObject(box);
       this.objects.push(box);
     }
+    this.scenery = buildScenery(world, sector, this.objects, this.camera);
+    if (this.muzzleLight) this.weaponLight();
   }
 
   // Spawns the current wave of the current level; the last wave brings the boss.
@@ -361,7 +367,7 @@ export class GameEngine {
     for (let i = 0; i < count; i++) this.spawnZombie(pickZombieKind(cfg.level));
     if (this.wave === cfg.waves) {
       this.boss = this.spawnZombie("boss");
-      this.cb.onNotify("⚠ BOSS EN APPROCHE");
+      this.cb.onNotify(t("game.bossIncoming"));
     }
   }
 
@@ -643,8 +649,10 @@ export class GameEngine {
     this.muzzleFlash.add(f2);
     this.weaponGroup.add(this.muzzleFlash);
 
+    // One light for two jobs: a short-range key light on the weapon, and the muzzle flash when firing.
     this.muzzleLight = new THREE.PointLight(0xffaa00, 0, 8);
     this.weaponGroup.add(this.muzzleLight);
+    this.weaponLight();
 
     this.weaponGroup.position.set(0.2, -0.25, -0.3);
     this.camera.add(this.weaponGroup);
@@ -663,10 +671,25 @@ export class GameEngine {
     else if (key === "minigun") model = this.buildMinigun();
     else if (key === "launcher") model = this.buildLauncher();
     else model = this.buildShotgun();
+    // Very metallic parts render black without an environment to reflect: keep them readable.
+    model.traverse((o: any) => {
+      const m = o.material;
+      if (m?.isMeshStandardMaterial && m.metalness > 0.45) {
+        m.metalness = 0.45;
+        m.roughness = Math.max(m.roughness, 0.35);
+      }
+    });
     this.modelHolder.add(model);
     const z = this.weapon.flashZ;
     this.muzzleFlash.position.set(0, 0.01, z);
-    this.muzzleLight.position.set(0, 0.1, z - 0.05);
+  }
+
+  // Idle: dim light just above the weapon, tinted by the sector, too short to reach the arena.
+  private weaponLight() {
+    this.muzzleLight.color.set(0xffffff).lerp(new THREE.Color(this.sector.neonB), 0.35);
+    this.muzzleLight.intensity = 2.2;
+    this.muzzleLight.distance = 1.6;
+    this.muzzleLight.position.set(0.05, 0.3, 0.05);
   }
 
   switchWeapon(index: number) {
@@ -678,7 +701,7 @@ export class GameEngine {
     this.cancelTrigger();
     this.equipModel();
     this.cb.playSound("switch");
-    this.cb.onNotify(cfg.name);
+    this.cb.onNotify(t(`weapon.${cfg.key}` as Key));
     this.emitStats();
   }
 
@@ -701,7 +724,7 @@ export class GameEngine {
     this.fireModeByWeapon[this.weaponIndex] = i;
     this.cancelTrigger();
     this.cb.playSound("switch");
-    this.cb.onNotify(FIRE_MODE_LABEL[modes[i]]);
+    this.cb.onNotify(t(FIRE_MODE_LABEL[modes[i]]));
     this.emitStats();
   }
 
@@ -800,12 +823,15 @@ export class GameEngine {
     const fs = 0.35 + Math.random() * 0.2;
     this.muzzleFlash.scale.set(fs, fs, fs);
     this.muzzleFlash.children.forEach((c: any) => (c.material.opacity = 1));
+    this.muzzleLight.color.set(0xffaa00);
+    this.muzzleLight.distance = 8;
+    this.muzzleLight.position.set(0, 0.1, wpn.flashZ - 0.05);
     this.muzzleLight.intensity = 1.5 + Math.random() * 0.5;
     if (this.muzzleTimer) clearTimeout(this.muzzleTimer);
     this.muzzleTimer = setTimeout(() => {
       if (this.disposed) return;
       this.muzzleFlash.children.forEach((c: any) => (c.material.opacity = 0));
-      this.muzzleLight.intensity = 0;
+      this.weaponLight();
     }, 55);
 
     const base = new THREE.Raycaster();
@@ -930,7 +956,7 @@ export class GameEngine {
     if (isBoss) {
       this.boss = null;
       this.addShake(0.5);
-      this.cb.onNotify("BOSS ÉLIMINÉ !");
+      this.cb.onNotify(t("game.bossDown"));
     } else if (label) {
       this.cb.onNotify(`${label}  +${bonus.score}`);
     }
@@ -1037,7 +1063,7 @@ export class GameEngine {
           return;
         }
         this.wave++;
-        this.cb.onNotify(`VAGUE ${this.wave}/${this.levelCfg.waves}`);
+        this.cb.onNotify(t("game.wave", { n: this.wave, max: this.levelCfg.waves }));
         this.spawnWave();
         this.emitStats();
       }, 1200);
@@ -1185,7 +1211,7 @@ export class GameEngine {
       this.ammo = this.maxAmmoOf(this.weaponIndex);
     }
     this.cb.playSound("powerup");
-    this.cb.onNotify(POWERUPS[kind].name);
+    this.cb.onNotify(t(`power.${kind}` as Key));
     this.cb.onEvent?.({ type: "powerup", kind });
     this.emitStats();
   }
@@ -1401,6 +1427,7 @@ export class GameEngine {
       }
     }
 
+    this.scenery?.update(delta, time);
     this.shake = Math.max(0, this.shake - delta * 1.8);
     const amp = this.shake * this.shake * 0.35;
     this.shakeOffset.set((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp);
@@ -1435,11 +1462,11 @@ export class GameEngine {
           this.activatePower(pk.userData.type as PowerUpKind);
         } else if (pk.userData.type === "health") {
           this.health = Math.min(this.mods.maxHealth, this.health + 25);
-          this.cb.onNotify("+25 SANTÉ");
+          this.cb.onNotify(t("game.health", { n: 25 }));
         } else {
           this.ammo = this.maxAmmoOf(this.weaponIndex);
           this.reloading = false;
-          this.cb.onNotify("MUNITIONS +");
+          this.cb.onNotify(t("game.ammo"));
         }
         if (!(pk.userData.type in POWERUPS)) this.cb.playSound("pickup");
         this.scene.remove(pk);

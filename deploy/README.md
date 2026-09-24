@@ -123,9 +123,27 @@ Page : **https://api.gameneonstrike.com/admin**. Connectez-vous avec le `ADMIN_T
 - **Un pack déjà vendu** ne peut pas être supprimé, seulement masqué : les achats en cours restent honorés.
 - **Exemple de promo** : passez `coins_1200` de 1 200 à 2 000 crédits avec l'étiquette « PROMO WEEK-END », publiez un message « Promotion », puis remettez 1 200 lundi.
 
-**Messages** : titre, texte, type (Information, Promotion avec un bouton vers la boutique, Alerte), dates de début et de fin optionnelles. Chaque joueur voit un message une seule fois, à l'ouverture du menu. Au plus 5 messages sont en ligne à la fois.
+**Messages** : titre, texte (avec une version anglaise facultative pour les joueurs qui jouent en anglais), type (Information, Promotion avec un bouton vers la boutique, Alerte), dates de début et de fin optionnelles. Chaque joueur voit un message une seule fois, à l'ouverture du menu. Au plus 5 messages sont en ligne à la fois.
 
-## 8. Sauvegardes
+## 8. Statistiques et pays des joueurs
+
+L'onglet **Statistiques** de la page d'administration montre :
+- les joueurs : total, comptes et invités, actifs sur 1, 7 et 30 jours, nouveaux joueurs ;
+- les achats : nombre, acheteurs, taux de conversion, crédits vendus et **chiffre d'affaires par devise** (prix TTC payé par le joueur, avant la commission de Google ; les achats des testeurs Play Console sont comptés à part) ;
+- l'évolution jour par jour, un tableau **par pays** (joueurs, actifs, acheteurs, chiffre d'affaires), les ventes par pack, les 25 derniers achats, et la répartition par langue, version de l'app et plateforme.
+
+**Pays** : l'API le déduit de l'adresse IP avec la base gratuite DB-IP « IP to Country Lite », sans jamais enregistrer l'adresse. Sans cette base, elle utilise la région réglée sur le téléphone, moins fiable. Pour installer la base, puis la mettre à jour chaque mois :
+
+```bash
+cd /opt/apps/neon-strike/deploy
+./geoip-update.sh                     # télécharge geoip/country.mmdb et redémarre l'API
+crontab -e                            # puis ajouter :
+0 5 3 * * cd /opt/apps/neon-strike/deploy && ./geoip-update.sh >> geoip/update.log 2>&1
+```
+
+La licence de DB-IP (CC BY 4.0) demande de la citer : c'est fait dans la page d'administration et dans la politique de confidentialité.
+
+## 9. Sauvegardes
 
 ```bash
 ./backup.sh     # crée backups/neon-AAAA-MM-JJ_HHMM.gz
@@ -151,6 +169,8 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `GET /api/leaderboard` | Top 100 maximum. |
 | `GET /api/leaderboard/me` | Rang du joueur. |
 | `GET/PUT /api/save` | Sauvegarde en ligne de la progression (la plus récente l'emporte). |
+| `POST /api/players/session` | Appelé à chaque lancement du jeu : activité du jour, pays, langue, version (statistiques). |
+| `GET /api/admin/stats` | Statistiques de la page d'administration. |
 | `GET /api/config` | Packs visibles et messages en ligne, lus par l'app au démarrage. |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
 | `POST /api/purchases/verify` | Interroge Google Play. Répond `valid` uniquement si l'achat est payé. Un même reçu ne peut servir qu'à un seul joueur et un seul produit. |

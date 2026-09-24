@@ -23,8 +23,8 @@ from database import db
 DEFAULT_PACKS = [
     {"sku": "coins_500", "credits": 500, "bonus": None, "tag": None, "sort": 10, "active": True},
     {"sku": "coins_1200", "credits": 1200, "bonus": "+20 %", "tag": None, "sort": 20, "active": True},
-    {"sku": "coins_3500", "credits": 3500, "bonus": "+40 %", "tag": "POPULAIRE", "sort": 30, "active": True},
-    {"sku": "coins_8000", "credits": 8000, "bonus": "+60 %", "tag": "MEILLEURE OFFRE", "sort": 40, "active": True},
+    {"sku": "coins_3500", "credits": 3500, "bonus": "+40 %", "tag": "POPULAIRE", "tag_en": "POPULAR", "sort": 30, "active": True},
+    {"sku": "coins_8000", "credits": 8000, "bonus": "+60 %", "tag": "MEILLEURE OFFRE", "tag_en": "BEST VALUE", "sort": 40, "active": True},
 ]
 
 # Play Console product ID rules: lowercase letters, digits, "_" and ".", starting with a letter or digit.
@@ -56,6 +56,7 @@ class PackIn(BaseModel):
     credits: int = Field(..., ge=1, le=1_000_000)
     bonus: Optional[str] = Field(default=None, max_length=24)
     tag: Optional[str] = Field(default=None, max_length=24)
+    tag_en: Optional[str] = Field(default=None, max_length=24)  # shown to English players (else tag)
     sort: int = Field(default=100, ge=0, le=10_000)
     active: bool = True
 
@@ -68,6 +69,9 @@ class MessageIn(BaseModel):
     title: str = Field(..., min_length=1, max_length=80)
     body: str = Field(..., min_length=1, max_length=1000)
     kind: Literal["info", "promo", "warning"] = "info"
+    # Optional English version, shown to players who play in English (else the French text).
+    title_en: Optional[str] = Field(default=None, max_length=80)
+    body_en: Optional[str] = Field(default=None, max_length=1000)
     active: bool = True
     starts_at: Optional[datetime] = None
     ends_at: Optional[datetime] = None
@@ -82,6 +86,8 @@ class PublicMessage(BaseModel):
     id: str
     title: str
     body: str
+    title_en: Optional[str] = None
+    body_en: Optional[str] = None
     kind: str
 
 
@@ -140,7 +146,7 @@ async def list_packs():
 @admin.put("/packs/{sku}", response_model=Pack)
 async def upsert_pack(payload: PackIn, sku: str = PathParam(..., pattern=SKU_PATTERN)):
     data = payload.model_dump()
-    data["bonus"], data["tag"] = clean_label(data["bonus"]), clean_label(data["tag"])
+    data["bonus"], data["tag"], data["tag_en"] = clean_label(data["bonus"]), clean_label(data["tag"]), clean_label(data["tag_en"])
     await db.packs.update_one({"sku": sku}, {"$set": data}, upsert=True)
     return Pack(sku=sku, **data)
 

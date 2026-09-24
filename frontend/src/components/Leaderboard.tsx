@@ -4,6 +4,7 @@ import { BlurView } from "expo-blur";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { fetchLeaderboard, fetchMyRank, type LeaderboardRow } from "../api/leaderboard";
+import { useT } from "@/src/i18n";
 
 type Props = { username: string; guest: boolean; onClose: () => void };
 
@@ -11,6 +12,7 @@ export default function Leaderboard({ username, guest, onClose }: Props) {
   const [state, setState] = useState<"loading" | "done" | "error">("loading");
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [me, setMe] = useState<LeaderboardRow | null>(null);
+  const t = useT();
 
   const load = async () => {
     setState("loading");
@@ -38,7 +40,7 @@ export default function Leaderboard({ username, guest, onClose }: Props) {
         <View style={styles.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <MaterialCommunityIcons name="trophy" size={22} color={colors.brand} />
-            <Text style={styles.title}>TOP SURVIVORS</Text>
+            <Text style={styles.title}>{t("board.title")}</Text>
           </View>
           <Pressable testID="leaderboard-close" onPress={onClose} style={styles.closeBtn} hitSlop={10}>
             <MaterialCommunityIcons name="close" size={22} color={colors.onSurface} />
@@ -52,15 +54,15 @@ export default function Leaderboard({ username, guest, onClose }: Props) {
         )}
         {state === "error" && (
           <View style={styles.centerBox}>
-            <Text style={styles.dim}>Impossible de charger le classement.</Text>
+            <Text style={styles.dim}>{t("board.error")}</Text>
             <Pressable onPress={load} style={styles.retry} testID="leaderboard-retry">
-              <Text style={styles.retryText}>RÉESSAYER</Text>
+              <Text style={styles.retryText}>{t("common.retry")}</Text>
             </Pressable>
           </View>
         )}
         {state === "done" && rows.length === 0 && (
           <View style={styles.centerBox}>
-            <Text style={styles.dim}>Aucun survivant. Soyez le premier.</Text>
+            <Text style={styles.dim}>{t("board.empty")}</Text>
           </View>
         )}
         {state === "done" && rows.length > 0 && (
@@ -88,14 +90,14 @@ export default function Leaderboard({ username, guest, onClose }: Props) {
         )}
         {guest && (
           <Text style={styles.guestNote} testID="leaderboard-guest">
-            Mode invité : crée un compte (Réglages) pour apparaître dans ce classement.
+            {t("board.guest")}
           </Text>
         )}
         {state === "done" && me && !rows.some((r) => r.id === me.id) && (
           <View style={[styles.row, styles.meRow]} testID="leaderboard-me">
             <Text style={[styles.rank, { color: colors.onSurfaceSecondary }]}>#{me.rank}</Text>
             <Text style={[styles.name, { color: colors.brand }]} numberOfLines={1}>
-              {me.name} (toi)
+              {me.name} {t("board.you")}
             </Text>
             <Text style={styles.wave}>N{me.level}</Text>
             <Text style={[styles.score, { color: colors.brand }]}>{me.score.toLocaleString()}</Text>

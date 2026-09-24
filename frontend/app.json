@@ -46,7 +46,8 @@
         }
       ],
       "expo-asset",
-      "expo-iap"
+      "expo-iap",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

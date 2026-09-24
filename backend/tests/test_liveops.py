@@ -37,7 +37,7 @@ class TestPacks:
 
     def test_update_and_add_pack(self, api):
         r = api.put("/api/admin/packs/coins_1200", json={"credits": 2000, "bonus": " PROMO ", "tag": "", "sort": 5}, headers=ADMIN)
-        assert r.json() == {"sku": "coins_1200", "credits": 2000, "bonus": "PROMO", "tag": None, "sort": 5, "active": True}
+        assert r.json() == {"sku": "coins_1200", "credits": 2000, "bonus": "PROMO", "tag": None, "tag_en": None, "sort": 5, "active": True}
         api.put("/api/admin/packs/coins_20000", json={"credits": 20000, "sort": 99}, headers=ADMIN)
         packs = api.get("/api/config").json()["packs"]
         assert [p["sku"] for p in packs][0] == "coins_1200" and packs[-1]["sku"] == "coins_20000"
@@ -88,7 +88,7 @@ class TestMessages:
     def test_publish_and_receive(self, api):
         m = self.post(api, title="Promo", kind="promo").json()
         cfg = api.get("/api/config").json()["messages"]
-        assert cfg == [{"id": m["id"], "title": "Promo", "body": "Bienvenue", "kind": "promo"}]
+        assert cfg == [{"id": m["id"], "title": "Promo", "body": "Bienvenue", "title_en": None, "body_en": None, "kind": "promo"}]
 
     def test_schedule_window(self, api):
         self.post(api, title="future", starts_at=iso(2))
@@ -123,3 +123,23 @@ class TestMessages:
         for i in range(7):
             self.post(api, title=f"m{i}")
         assert len(self.live_titles(api)) == 5
+
+
+class TestEnglish:
+    def test_message_english_version_is_public(self, api):
+        body = {"title": "Promo", "body": "Crédits x2", "title_en": "Sale", "body_en": "Credits x2", "kind": "promo"}
+        assert api.post("/api/admin/messages", json=body, headers=ADMIN).status_code == 200
+        msg = api.get("/api/config").json()["messages"][0]
+        assert (msg["title_en"], msg["body_en"]) == ("Sale", "Credits x2")
+
+    def test_message_without_english(self, api):
+        api.post("/api/admin/messages", json={"title": "Info", "body": "Bonjour"}, headers=ADMIN)
+        msg = api.get("/api/config").json()["messages"][0]
+        assert msg["title_en"] is None and msg["body_en"] is None
+
+    def test_pack_english_tag(self, api):
+        r = api.put("/api/admin/packs/coins_500", json={"credits": 500, "tag": "NOUVEAU", "tag_en": " NEW "}, headers=ADMIN)
+        assert r.json()["tag_en"] == "NEW"
+        packs = {p["sku"]: p for p in api.get("/api/config").json()["packs"]}
+        assert packs["coins_500"]["tag_en"] == "NEW"
+        assert packs["coins_3500"]["tag_en"] == "POPULAR"

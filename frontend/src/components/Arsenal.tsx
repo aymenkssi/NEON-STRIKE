@@ -5,6 +5,7 @@ import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { UPGRADES, UPGRADE_MAX, upgradeCost, type UpgradeKey, type UpgradeLevels } from "../game/progression";
 import Panel from "./Panel";
+import { useT } from "@/src/i18n";
 
 type Props = {
   credits: number;
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export default function Arsenal({ credits, upgrades, onBuy, onOpenShop, onClose }: Props) {
+  const t = useT();
   const buy = (key: UpgradeKey) => {
     const ok = onBuy(key);
     Haptics.notificationAsync(
@@ -34,15 +36,15 @@ export default function Arsenal({ credits, upgrades, onBuy, onOpenShop, onClose 
             <View key={u.key} style={styles.card} testID={`upgrade-${u.key}`}>
               <View style={styles.cardHead}>
                 <MaterialCommunityIcons name={u.icon as any} size={24} color={colors.brandSecondary} />
-                <Text style={styles.name} numberOfLines={1}>{u.name}</Text>
+                <Text style={styles.name} numberOfLines={1}>{t(u.name)}</Text>
               </View>
               <View style={styles.pips}>
                 {Array.from({ length: UPGRADE_MAX }, (_, i) => (
                   <View key={i} style={[styles.pip, i < lvl && styles.pipOn]} />
                 ))}
               </View>
-              <Text style={styles.desc}>{lvl > 0 ? u.description(lvl) : "Aucun bonus"}</Text>
-              <Text style={styles.next}>{maxed ? "Niveau max" : `Suivant : ${u.description(lvl + 1)}`}</Text>
+              <Text style={styles.desc}>{lvl > 0 ? t(u.desc, { v: u.value(lvl) }) : t("arsenal.noBonus")}</Text>
+              <Text style={styles.next}>{maxed ? t("arsenal.maxed") : t("arsenal.next", { desc: t(u.desc, { v: u.value(lvl + 1) }) })}</Text>
               <Pressable
                 testID={`buy-${u.key}`}
                 disabled={!affordable}

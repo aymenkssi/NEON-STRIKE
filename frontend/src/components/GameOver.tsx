@@ -7,6 +7,7 @@ import { submitScore } from "../api/leaderboard";
 import { showRewarded } from "../ads";
 import AdBanner from "../ads/AdBanner";
 import type { RunResult } from "../game/GameEngine";
+import { formatNumber, useT } from "@/src/i18n";
 
 type Props = {
   username: string;
@@ -20,6 +21,7 @@ type Props = {
 
 export default function GameOver({ username, guest, result, canRevive, onRevive, onRestart, onExit }: Props) {
   const insets = useSafeAreaInsets();
+  const t = useT();
   const [state, setState] = useState<"submitting" | "done" | "error" | "guest">(guest ? "guest" : "submitting");
   const [rank, setRank] = useState<number | null>(null);
   const [isHigh, setIsHigh] = useState(false);
@@ -68,18 +70,18 @@ export default function GameOver({ username, guest, result, canRevive, onRevive,
   return (
     <View style={[styles.overlay, { paddingTop: insets.top }]} testID="game-over-screen">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.dead}>YOU DIED</Text>
+        <Text style={styles.dead}>{t("over.title")}</Text>
 
         <View style={styles.statsRow}>
-          <Stat label="SCORE" value={displayScore.toLocaleString()} big />
-          <Stat label="NIVEAU" value={String(result.level)} />
-          <Stat label="KILLS" value={String(result.kills)} />
+          <Stat label={t("stat.score")} value={formatNumber(displayScore)} big />
+          <Stat label={t("stat.level")} value={String(result.level)} />
+          <Stat label={t("stat.kills")} value={String(result.kills)} />
         </View>
-        {doubled && <Text style={styles.doubledTag}>SCORE DOUBLÉ ×2 🎉</Text>}
+        {doubled && <Text style={styles.doubledTag}>{t("over.doubled")}</Text>}
         {result.credits > 0 && (
           <View style={styles.creditsRow}>
             <MaterialCommunityIcons name="circle-multiple" size={16} color={colors.warning} />
-            <Text style={styles.creditsText}>+{result.credits} crédits récupérés</Text>
+            <Text style={styles.creditsText}>{t("over.credits", { n: result.credits })}</Text>
           </View>
         )}
 
@@ -87,23 +89,23 @@ export default function GameOver({ username, guest, result, canRevive, onRevive,
           {state === "submitting" && (
             <View style={styles.rankRow}>
               <ActivityIndicator color={colors.brand} />
-              <Text style={styles.rankInfo}>Envoi du score…</Text>
+              <Text style={styles.rankInfo}>{t("over.sending")}</Text>
             </View>
           )}
           {state === "done" && (
             <Text style={styles.rankInfo}>
-              {isHigh ? "🏆 NOUVEAU RECORD !  " : ""}
-              Classement mondial : <Text style={styles.rankNum}>#{rank}</Text>
+              {isHigh ? t("over.record") + "  " : ""}
+              {t("over.rank")} <Text style={styles.rankNum}>#{rank}</Text>
             </Text>
           )}
           {state === "guest" && (
             <Text style={styles.rankInfo} testID="guest-no-rank">
-              Mode invité : crée un compte dans Réglages pour entrer au classement mondial.
+              {t("over.guest")}
             </Text>
           )}
           {state === "error" && (
             <Pressable onPress={() => doSubmit(displayScore)} testID="retry-submit">
-              <Text style={styles.errorText}>Échec de l’envoi. Réessayer</Text>
+              <Text style={styles.errorText}>{t("over.sendFailed")}</Text>
             </Pressable>
           )}
         </View>
@@ -113,23 +115,23 @@ export default function GameOver({ username, guest, result, canRevive, onRevive,
             <Pressable testID="double-score-button" style={[styles.btn, styles.doubleBtn]} onPress={doubleScore}>
               <MaterialCommunityIcons name="star-four-points" size={20} color={colors.onWarning} />
               <Text style={[styles.btnText, { color: colors.onWarning }]}>
-                {doubling ? "…" : "SCORE ×2 (PUB)"}
+                {doubling ? "…" : t("over.double")}
               </Text>
             </Pressable>
           )}
           {canRevive && (
             <Pressable testID="revive-button" style={[styles.btn, styles.reviveBtn]} onPress={onRevive}>
               <MaterialCommunityIcons name="heart-plus" size={20} color={colors.onBrand} />
-              <Text style={[styles.btnText, { color: colors.onBrand }]}>REVIVRE (PUB)</Text>
+              <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("over.revive")}</Text>
             </Pressable>
           )}
           <Pressable testID="restart-button" style={[styles.btn, styles.restartBtn]} onPress={onRestart}>
             <MaterialCommunityIcons name="restart" size={20} color={colors.brand} />
-            <Text style={[styles.btnText, { color: colors.brand }]}>RÉESSAYER LE NIVEAU</Text>
+            <Text style={[styles.btnText, { color: colors.brand }]}>{t("over.retry")}</Text>
           </Pressable>
           <Pressable testID="menu-button" style={[styles.btn, styles.menuBtn]} onPress={onExit}>
             <MaterialCommunityIcons name="home" size={20} color={colors.onSurfaceSecondary} />
-            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>MENU</Text>
+            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("common.menu")}</Text>
           </Pressable>
         </View>
 

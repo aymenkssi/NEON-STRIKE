@@ -6,6 +6,7 @@ import { accountsAvailable } from "../api/account";
 import type { AccountState } from "../hooks/use-account";
 import type { CloudStatus } from "../hooks/use-progress";
 import AuthForm, { type AuthMode } from "./AuthForm";
+import { useT, type Key } from "@/src/i18n";
 
 type Props = {
   account: AccountState;
@@ -14,17 +15,18 @@ type Props = {
   onLogout: () => Promise<void>;
 };
 
-const SYNC: Record<CloudStatus, { text: string; icon: string; color: string }> = {
-  off: { text: "Sauvegarde en ligne indisponible", icon: "cloud-off-outline", color: colors.onSurfaceTertiary },
-  syncing: { text: "Synchronisation…", icon: "cloud-sync-outline", color: colors.brandSecondary },
-  synced: { text: "Progression sauvegardée en ligne", icon: "cloud-check-outline", color: colors.brand },
-  offline: { text: "Hors connexion : sauvegarde à la prochaine connexion", icon: "cloud-alert", color: colors.warning },
+const SYNC: Record<CloudStatus, { text: Key; icon: string; color: string }> = {
+  off: { text: "account.sync.off", icon: "cloud-off-outline", color: colors.onSurfaceTertiary },
+  syncing: { text: "account.sync.syncing", icon: "cloud-sync-outline", color: colors.brandSecondary },
+  synced: { text: "account.sync.synced", icon: "cloud-check-outline", color: colors.brand },
+  offline: { text: "account.sync.offline", icon: "cloud-alert", color: colors.warning },
 };
 
 export default function AccountSection({ account, cloudStatus, onSignedIn, onLogout }: Props) {
   const [form, setForm] = useState<AuthMode | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   if (account.mode === "account") {
     const sync = SYNC[cloudStatus];
@@ -32,28 +34,28 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
       <View style={styles.box} testID="account-section">
         <View style={styles.head}>
           <MaterialCommunityIcons name="account-check" size={20} color={colors.brand} />
-          <Text style={styles.title}>Compte</Text>
+          <Text style={styles.title}>{t("account.title")}</Text>
         </View>
         <Text style={styles.name} testID="account-name">
           {account.username}
         </Text>
         <View style={styles.row}>
           <MaterialCommunityIcons name={sync.icon as any} size={16} color={sync.color} />
-          <Text style={[styles.hint, { color: sync.color }]}>{sync.text}</Text>
+          <Text style={[styles.hint, { color: sync.color }]}>{t(sync.text)}</Text>
         </View>
         {!confirmLogout ? (
           <Pressable onPress={() => setConfirmLogout(true)} style={styles.btn} testID="logout">
             <MaterialCommunityIcons name="logout" size={16} color={colors.onSurfaceSecondary} />
-            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>SE DÉCONNECTER</Text>
+            <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("account.logout")}</Text>
           </Pressable>
         ) : (
           <>
             <Text style={[styles.hint, { color: colors.warning }]}>
-              Ta progression reste sauvegardée sur ton compte. Ce téléphone repartira de zéro jusqu’à ta prochaine connexion.
+              {t("account.logoutWarning")}
             </Text>
             <View style={styles.row}>
               <Pressable onPress={() => setConfirmLogout(false)} style={styles.btn}>
-                <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>ANNULER</Text>
+                <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("common.cancel")}</Text>
               </Pressable>
               <Pressable
                 onPress={async () => {
@@ -64,7 +66,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
                 style={[styles.btn, styles.warn]}
                 testID="logout-confirm"
               >
-                {busy ? <ActivityIndicator color={colors.onWarning} /> : <Text style={[styles.btnText, { color: colors.onWarning }]}>CONFIRMER</Text>}
+                {busy ? <ActivityIndicator color={colors.onWarning} /> : <Text style={[styles.btnText, { color: colors.onWarning }]}>{t("common.confirm")}</Text>}
               </Pressable>
             </View>
           </>
@@ -77,7 +79,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
     <View style={styles.box} testID="account-section">
       <View style={styles.head}>
         <MaterialCommunityIcons name="incognito" size={20} color={colors.brandSecondary} />
-        <Text style={styles.title}>Mode invité</Text>
+        <Text style={styles.title}>{t("account.guestTitle")}</Text>
       </View>
       {form ? (
         <AuthForm
@@ -91,8 +93,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
       ) : (
         <>
           <Text style={styles.hint}>
-            Ta progression est enregistrée uniquement sur ce téléphone et tes scores ne vont pas au classement. Crée un compte pour
-            les sauvegarder en ligne : tu gardes tout ce que tu as déjà gagné.
+            {t("account.guestText")}
           </Text>
           <View style={styles.row}>
             <Pressable
@@ -101,7 +102,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
               style={[styles.btn, styles.primary, !accountsAvailable && { opacity: 0.4 }]}
               testID="guest-register"
             >
-              <Text style={[styles.btnText, { color: colors.onBrand }]}>CRÉER UN COMPTE</Text>
+              <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("auth.register")}</Text>
             </Pressable>
             <Pressable
               onPress={() => setForm("login")}
@@ -109,7 +110,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
               style={[styles.btn, !accountsAvailable && { opacity: 0.4 }]}
               testID="guest-login"
             >
-              <Text style={styles.btnText}>SE CONNECTER</Text>
+              <Text style={styles.btnText}>{t("auth.login")}</Text>
             </Pressable>
           </View>
         </>

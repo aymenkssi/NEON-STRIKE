@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { BlurView } from "expo-blur";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
+import { useT } from "@/src/i18n";
 
 type Props = {
   onResume: () => void;
@@ -11,21 +12,22 @@ type Props = {
 };
 
 export default function PauseMenu({ onResume, onRestart, onExit }: Props) {
+  const t = useT();
   return (
     <BlurView intensity={40} tint="dark" style={styles.overlay} testID="pause-menu">
       <View style={styles.panel}>
-        <Text style={styles.title}>PAUSE</Text>
+        <Text style={styles.title}>{t("pause.title")}</Text>
         <Pressable testID="resume-button" style={[styles.btn, styles.primary]} onPress={onResume}>
           <MaterialCommunityIcons name="play" size={22} color={colors.onBrand} />
-          <Text style={[styles.btnText, { color: colors.onBrand }]}>REPRENDRE</Text>
+          <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("pause.resume")}</Text>
         </Pressable>
         <Pressable testID="pause-restart-button" style={[styles.btn, styles.secondary]} onPress={onRestart}>
           <MaterialCommunityIcons name="restart" size={22} color={colors.brand} />
-          <Text style={[styles.btnText, { color: colors.brand }]}>RECOMMENCER</Text>
+          <Text style={[styles.btnText, { color: colors.brand }]}>{t("pause.restart")}</Text>
         </Pressable>
         <Pressable testID="pause-exit-button" style={[styles.btn, styles.ghost]} onPress={onExit}>
           <MaterialCommunityIcons name="home" size={22} color={colors.onSurfaceSecondary} />
-          <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>MENU PRINCIPAL</Text>
+          <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("pause.mainMenu")}</Text>
         </Pressable>
       </View>
     </BlurView>

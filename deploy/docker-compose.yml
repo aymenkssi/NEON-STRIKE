@@ -36,6 +36,8 @@ services:
     volumes:
       # Whole folder, not the file: works before the Google key is added.
       - ./secrets:/run/secrets:ro
+      # Optional GeoIP database (./geoip-update.sh): country of players from their IP address.
+      - ./geoip:/app/geoip:ro
 
   caddy:
     image: caddy:2

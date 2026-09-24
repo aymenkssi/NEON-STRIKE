@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from auth import find_player_by_token, hash_token
 from cloudsave import MAX_DEVICES, _rate_limited
 from database import db
+from stats import client_ip, record_visit
 
 logger = logging.getLogger("neon.accounts")
 router = APIRouter(prefix="/api/accounts")
@@ -83,7 +84,7 @@ async def available(username: str):
 
 @router.post("/register", response_model=AccountSession)
 async def register(payload: Credentials, request: Request, authorization: Optional[str] = Header(default=None)):
-    ip = request.client.host if request.client else "?"
+    ip = client_ip(request)
     if _rate_limited(f"register:{ip}"):
         raise HTTPException(429, "Too many attempts, try again later")
     username = validate_username(payload.username)
@@ -118,13 +119,14 @@ async def register(payload: Credentials, request: Request, authorization: Option
             raise HTTPException(409, "Username already taken")
         raise
     await db.scores.update_many({"player_id": player_id}, {"$set": {"name": username}})
+    await record_visit({**(current or {}), "id": player_id}, request)
     logger.info("Account %s registered", username)
     return AccountSession(id=player_id, token=token, username=username)
 
 
 @router.post("/login", response_model=AccountSession)
 async def login(payload: Credentials, request: Request):
-    ip = request.client.host if request.client else "?"
+    ip = client_ip(request)
     if _rate_limited(f"login:{ip}"):
         raise HTTPException(429, "Too many attempts, try again later")
     player = await db.players.find_one({"username_lower": payload.username.strip().lower()})
@@ -134,6 +136,7 @@ async def login(payload: Credentials, request: Request):
     token = secrets.token_urlsafe(32)
     devices = (player.get("device_token_hashes") or [])[-(MAX_DEVICES - 1):] + [hash_token(token)]
     await db.players.update_one({"id": player["id"]}, {"$set": {"device_token_hashes": devices}})
+    await record_visit(player, request)
     return AccountSession(id=player["id"], token=token, username=player["username"])
 
 

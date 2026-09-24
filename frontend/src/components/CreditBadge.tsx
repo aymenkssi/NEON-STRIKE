@@ -2,13 +2,15 @@ import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts } from "../theme";
+import { formatNumber, useLang } from "@/src/i18n";
 
 // With onPress the badge shows a "+" and opens the coin shop.
 export default function CreditBadge({ amount, testID, onPress }: { amount: number; testID?: string; onPress?: () => void }) {
+  useLang(); // number format follows the language
   const content = (
     <>
       <MaterialCommunityIcons name="circle-multiple" size={16} color={colors.warning} />
-      <Text style={styles.text}>{amount.toLocaleString()}</Text>
+      <Text style={styles.text}>{formatNumber(amount)}</Text>
       {onPress && (
         <View style={styles.plus}>
           <MaterialCommunityIcons name="plus" size={14} color={colors.onWarning} />

@@ -5,6 +5,7 @@ import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { MAX_LEVEL, WEAPON_UNLOCK_LEVEL } from "../game/progression";
 import Panel from "./Panel";
+import { useT } from "@/src/i18n";
 
 type Props = {
   unlockedLevel: number;
@@ -18,6 +19,7 @@ const WEAPON_AT = Object.fromEntries(Object.entries(WEAPON_UNLOCK_LEVEL).map(([k
 
 export default function LevelSelect({ unlockedLevel, stars, credits, onSelect, onClose }: Props) {
   const totalStars = Object.values(stars).reduce((a, b) => a + b, 0);
+  const t = useT();
   const levels = Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
 
   const pick = (level: number) => {
@@ -26,10 +28,10 @@ export default function LevelSelect({ unlockedLevel, stars, credits, onSelect, o
   };
 
   return (
-    <Panel title="CAMPAGNE" icon="map-marker-path" credits={credits} onClose={onClose} testID="level-select">
+    <Panel title={t("levels.title")} icon="map-marker-path" credits={credits} onClose={onClose} testID="level-select">
       <View style={styles.summary}>
         <Text style={styles.summaryText}>
-          Niveau {unlockedLevel}/{MAX_LEVEL} débloqué
+          {t("levels.unlocked", { n: unlockedLevel, max: MAX_LEVEL })}
         </Text>
         <View style={styles.summaryStars}>
           <MaterialCommunityIcons name="star" size={16} color={colors.warning} />
