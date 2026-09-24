@@ -4,7 +4,6 @@ import type { ExpoWebGLRenderingContext } from "expo-gl";
 import {
   CREDITS_PER_BOSS,
   CREDITS_PER_HEADSHOT,
-  CREDITS_PER_KILL,
   WEAPON_UNLOCK_LEVEL,
   getLevelConfig,
   modifiersFrom,
@@ -13,6 +12,22 @@ import {
   type LevelResult,
   type PlayerModifiers,
 } from "./progression";
+import {
+  COMBO_WINDOW_MS,
+  EXPLOSION,
+  HASTE_MULT,
+  POWERUPS,
+  POWERUP_DROP_CHANCE,
+  RAGE_MULT,
+  ZOMBIES,
+  comboBonus,
+  comboLabel,
+  pickZombieKind,
+  sectorOf,
+  type PowerUpKind,
+  type Sector,
+  type ZombieKind,
+} from "./content";
 
 const CONFIG = {
   fov: 78,
@@ -44,6 +59,9 @@ type WeaponConfig = {
   fireRate: number;
   auto: boolean;
   flashZ: number;
+  sound?: string; // defaults to key
+  pierce?: number; // railgun: zombies hit by one shot
+  projectile?: boolean; // grenade launcher
 };
 
 const WEAPONS: WeaponConfig[] = [
@@ -62,7 +80,24 @@ const WEAPONS: WeaponConfig[] = [
     pellets: 1, spread: 0.004, maxAmmo: 10, reloadMs: 1500,
     bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, auto: false, flashZ: -0.78,
   },
+  {
+    key: "railgun", name: "RAILGUN", short: "RG",
+    pellets: 1, spread: 0, maxAmmo: 4, reloadMs: 1800,
+    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, auto: false, flashZ: -0.85, pierce: 5,
+  },
+  {
+    key: "minigun", name: "MINIGUN", short: "MG", sound: "smg",
+    pellets: 1, spread: 0.035, maxAmmo: 120, reloadMs: 2800,
+    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, auto: true, flashZ: -0.7,
+  },
+  {
+    key: "launcher", name: "LANCE-GRENADES", short: "GL",
+    pellets: 1, spread: 0, maxAmmo: 3, reloadMs: 2200,
+    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, auto: false, flashZ: -0.7, projectile: true,
+  },
 ];
+
+const GRENADE = { speed: 32, lift: 6, gravity: 22, damage: 14, fuseMs: 3000 };
 
 const unlockLevelOf = (w: WeaponConfig) => WEAPON_UNLOCK_LEVEL[w.key] ?? 1;
 
@@ -83,9 +118,17 @@ export type GameStats = {
   boss: { health: number; max: number } | null;
   weaponIndex: number;
   weapons: WeaponInfo[];
+  sector: { index: number; name: string };
+  powerups: { kind: PowerUpKind; remaining: number }[]; // seconds left, active ones only
 };
 
 export type RunResult = { score: number; level: number; kills: number; credits: number };
+
+// Gameplay facts consumed by missions, achievements and player stats.
+export type GameEvent =
+  | { type: "kill"; kind: ZombieKind | "boss"; headshot: boolean; combo: number; byExplosion: boolean }
+  | { type: "powerup"; kind: PowerUpKind }
+  | { type: "death" };
 
 export type EngineCallbacks = {
   onStats: (s: GameStats) => void;
@@ -95,6 +138,7 @@ export type EngineCallbacks = {
   onLevelComplete: (r: LevelResult) => void;
   onNotify: (msg: string) => void;
   playSound: (name: string) => void;
+  onEvent?: (e: GameEvent) => void;
 };
 
 export class GameEngine {
@@ -149,6 +193,19 @@ export class GameEngine {
   private spawningNextWave = false;
   levelComplete = false;
 
+  private sector: Sector = sectorOf(1);
+  private world: THREE.Group | null = null;
+  private fillLight!: THREE.DirectionalLight;
+  private combo = 0;
+  private lastKillAt = 0;
+  private powerUntil: Partial<Record<PowerUpKind, number>> = {};
+  private lastPowerEmit = 0;
+  private shake = 0;
+  private shakeOffset = new THREE.Vector3();
+  private flashes: { light: THREE.PointLight; ring: THREE.Mesh; life: number }[] = [];
+  private grenades: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number }[] = [];
+  private beams: { line: THREE.Line; life: number }[] = [];
+
   private prevTime = 0;
   private rafId: any = null;
   private disposed = false;
@@ -201,8 +258,6 @@ export class GameEngine {
     const { drawingBufferWidth: w, drawingBufferHeight: h } = this.gl;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a2740);
-    this.scene.fog = new THREE.FogExp2(0x1a2740, 0.006);
 
     this.camera = new THREE.PerspectiveCamera(CONFIG.fov, w / h, 0.1, 1000);
     this.camera.rotation.order = "YXZ";
@@ -210,40 +265,63 @@ export class GameEngine {
 
     this.renderer = new Renderer({ gl: this.gl });
     this.renderer.setSize(w, h);
-    this.renderer.setClearColor(0x1a2740, 1);
 
     const hemi = new THREE.HemisphereLight(0xafc4ee, 0x2a3a58, 1.5);
     this.scene.add(hemi);
     const moon = new THREE.DirectionalLight(0xffffff, 1.9);
     moon.position.set(10, 24, 8);
     this.scene.add(moon);
-    const fill = new THREE.DirectionalLight(0x00ffff, 0.5);
-    fill.position.set(-12, 8, -10);
-    this.scene.add(fill);
+    this.fillLight = new THREE.DirectionalLight(0x00ffff, 0.5);
+    this.fillLight.position.set(-12, 8, -10);
+    this.scene.add(this.fillLight);
     const ambient = new THREE.AmbientLight(0x3a4c70, 1.5);
     this.scene.add(ambient);
 
-    this.buildWorld();
+    this.buildWorld(sectorOf(this.levelCfg.level));
     this.createWeapon();
     this.spawnWave();
-    this.cb.onNotify(`NIVEAU ${this.levelCfg.level}`);
+    this.announceLevel();
     this.emitStats();
   }
 
-  private buildWorld() {
+  private announceLevel() {
+    const l = this.levelCfg.level;
+    // First level of a sector: show the sector name instead of the level number.
+    this.cb.onNotify((l - 1) % 5 === 0 ? `SECTEUR ${this.sector.index} · ${this.sector.name}` : `NIVEAU ${l}`);
+  }
+
+  // Builds the arena in the colours of a sector; called again when the sector changes.
+  private buildWorld(sector: Sector) {
+    if (this.world) {
+      this.scene.remove(this.world);
+      this.world.traverse((o: any) => {
+        o.geometry?.dispose?.();
+        o.material?.dispose?.();
+      });
+    }
+    this.sector = sector;
+    this.objects = [];
+    const world = new THREE.Group();
+    this.world = world;
+    this.scene.add(world);
+    this.scene.background = new THREE.Color(sector.background);
+    this.scene.fog = new THREE.FogExp2(sector.background, sector.fogDensity);
+    this.renderer.setClearColor(sector.background, 1);
+    this.fillLight.color.setHex(sector.neonB);
+
     const floorGeo = new THREE.PlaneGeometry(220, 220);
     floorGeo.rotateX(-Math.PI / 2);
-    const floor = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({ color: 0x233350 }));
-    this.scene.add(floor);
+    const floor = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({ color: sector.floor }));
+    world.add(floor);
 
-    const grid = new THREE.GridHelper(220, 110, 0x2affff, 0x2a6a9a);
+    const grid = new THREE.GridHelper(220, 110, sector.gridMain, sector.gridSub);
     (grid.material as THREE.Material).transparent = true;
     (grid.material as any).opacity = 0.8;
-    this.scene.add(grid);
+    world.add(grid);
 
-    const boxMat = new THREE.MeshPhongMaterial({ color: 0x46587a, specular: 0x1a222f, shininess: 25 });
-    const neonGreen = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
-    const neonCyan = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const boxMat = new THREE.MeshPhongMaterial({ color: sector.box, specular: 0x1a222f, shininess: 25 });
+    const neonGreen = new THREE.MeshBasicMaterial({ color: sector.neonA });
+    const neonCyan = new THREE.MeshBasicMaterial({ color: sector.neonB });
 
     for (let i = 0; i < 30; i++) {
       const size = 2 + Math.random() * 6;
@@ -258,7 +336,7 @@ export class GameEngine {
       let z = (Math.random() - 0.5) * 150;
       if (Math.abs(x) < 12 && Math.abs(z) < 12) x += 22;
       box.position.set(x, height / 2, z);
-      this.scene.add(box);
+      world.add(box);
       box.userData.aabb = new THREE.Box3().setFromObject(box);
       this.objects.push(box);
     }
@@ -268,18 +346,22 @@ export class GameEngine {
   private spawnWave() {
     const cfg = this.levelCfg;
     const count = cfg.zombiesPerWave(this.wave);
-    for (let i = 0; i < count; i++) this.spawnZombie(false);
+    for (let i = 0; i < count; i++) this.spawnZombie(pickZombieKind(cfg.level));
     if (this.wave === cfg.waves) {
-      this.boss = this.spawnZombie(true);
+      this.boss = this.spawnZombie("boss");
       this.cb.onNotify("⚠ BOSS EN APPROCHE");
     }
   }
 
-  private spawnZombie(isBoss: boolean) {
+  private spawnZombie(kind: ZombieKind | "boss") {
     const cfg = this.levelCfg;
+    const isBoss = kind === "boss";
+    const def = ZOMBIES[isBoss ? "walker" : kind];
     const g = new THREE.Group();
-    const skin = new THREE.MeshStandardMaterial({ color: isBoss ? 0x7a2c4a : 0x4a7a2c });
-    const shirt = new THREE.MeshStandardMaterial({ color: isBoss ? 0x1a1a1a : 0x223a66 });
+    const skin = new THREE.MeshStandardMaterial({ color: isBoss ? 0x7a2c4a : def.skin });
+    const shirt = new THREE.MeshStandardMaterial(
+      def.glow ? { color: def.shirt, emissive: def.glow, emissiveIntensity: 0.55 } : { color: isBoss ? 0x1a1a1a : def.shirt }
+    );
     const pants = new THREE.MeshStandardMaterial({ color: 0x1a1f4a });
     const faceZ = 0.5 / 2 + 0.05 / 2;
 
@@ -288,7 +370,7 @@ export class GameEngine {
     head.name = "Head";
     g.add(head);
 
-    const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0x39ff14 : 0xff2a2a });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0x39ff14 : def.eyes });
     const mouthMat = new THREE.MeshBasicMaterial({ color: 0x162a0c });
     const le = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
     le.position.set(0.12, 1.85, faceZ);
@@ -330,17 +412,20 @@ export class GameEngine {
     const angle = Math.random() * Math.PI * 2;
     const dist = 30 + Math.random() * 25;
     g.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
-    if (isBoss) g.scale.set(2.2, 2.2, 2.2);
+    const scale = isBoss ? 2.2 : def.scale;
+    g.scale.set(scale, scale, scale);
 
     const speed = 1.6 + Math.random() * 1.2 + cfg.zombieSpeedBonus;
+    const hp = isBoss ? cfg.bossHealth : Math.max(1, Math.round(cfg.zombieHealth * def.hpMult));
     g.userData = {
       type: "zombie",
+      kind,
       boss: isBoss,
-      health: isBoss ? cfg.bossHealth : cfg.zombieHealth,
-      maxHealth: isBoss ? cfg.bossHealth : cfg.zombieHealth,
-      speed: isBoss ? speed * 0.7 : speed,
-      bite: isBoss ? cfg.biteDamage * 2 : cfg.biteDamage,
-      reach: isBoss ? 2.6 : 1.5,
+      health: hp,
+      maxHealth: hp,
+      speed: isBoss ? speed * 0.7 : speed * def.speedMult,
+      bite: isBoss ? cfg.biteDamage * 2 : Math.round(cfg.biteDamage * def.biteMult),
+      reach: isBoss ? 2.6 : kind === "exploder" ? 1.8 : 1.5 * Math.max(1, scale),
       walkProgress: Math.random() * 100,
       bias: Math.random() < 0.5 ? 1 : -1,
       lastBite: 0,
@@ -454,6 +539,80 @@ export class GameEngine {
     return model;
   }
 
+  private buildRailgun(): THREE.Group {
+    const dark = new THREE.MeshStandardMaterial({ color: 0x1a1d24, metalness: 0.8, roughness: 0.35 });
+    const glow = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const model = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.8), dark);
+    body.position.z = -0.1;
+    model.add(body);
+    for (const x of [-0.05, 0.05]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.7), dark);
+      rail.position.set(x, 0.02, -0.72);
+      model.add(rail);
+    }
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.62), glow);
+    core.position.set(0, 0.02, -0.7);
+    model.add(core);
+    const coil = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 12), glow);
+    coil.rotation.x = Math.PI / 2;
+    coil.position.set(0, -0.02, 0.12);
+    model.add(coil);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
+    grip.position.set(0, -0.13, 0.22);
+    grip.rotation.x = 0.25;
+    model.add(grip);
+    return model;
+  }
+
+  private buildMinigun(): THREE.Group {
+    const dark = new THREE.MeshStandardMaterial({ color: 0x22262e, metalness: 0.85, roughness: 0.35 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0xffb000 });
+    const model = new THREE.Group();
+    const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.35, 12), dark);
+    housing.rotation.x = Math.PI / 2;
+    model.add(housing);
+    const barrels = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 8), dark);
+      b.rotation.x = Math.PI / 2;
+      b.position.set(Math.cos(a) * 0.05, Math.sin(a) * 0.05, -0.4);
+      barrels.add(b);
+    }
+    barrels.name = "barrels";
+    model.add(barrels);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.012, 6, 16), accent);
+    band.position.z = -0.5;
+    model.add(band);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), dark);
+    handle.position.set(0, -0.14, 0.12);
+    model.add(handle);
+    return model;
+  }
+
+  private buildLauncher(): THREE.Group {
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.6, roughness: 0.5 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
+    const model = new THREE.Group();
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.75, 14), dark);
+    tube.rotation.x = Math.PI / 2;
+    tube.position.z = -0.25;
+    model.add(tube);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 8), dark);
+    drum.rotation.x = Math.PI / 2;
+    drum.position.z = 0.05;
+    model.add(drum);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 6, 16), accent);
+    ring.position.z = -0.62;
+    model.add(ring);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
+    grip.position.set(0, -0.14, 0.18);
+    grip.rotation.x = 0.2;
+    model.add(grip);
+    return model;
+  }
+
   private createWeapon() {
     this.weaponGroup = new THREE.Group();
     this.modelHolder = new THREE.Group();
@@ -485,8 +644,12 @@ export class GameEngine {
   private equipModel() {
     this.modelHolder.clear();
     let model: THREE.Group;
-    if (this.weapon.key === "smg") model = this.buildSMG();
-    else if (this.weapon.key === "rifle") model = this.buildRifle();
+    const key = this.weapon.key;
+    if (key === "smg") model = this.buildSMG();
+    else if (key === "rifle") model = this.buildRifle();
+    else if (key === "railgun") model = this.buildRailgun();
+    else if (key === "minigun") model = this.buildMinigun();
+    else if (key === "launcher") model = this.buildLauncher();
     else model = this.buildShotgun();
     this.modelHolder.add(model);
     const z = this.weapon.flashZ;
@@ -538,6 +701,7 @@ export class GameEngine {
 
   reload() {
     if (this.reloading || this.ammo === this.maxAmmoOf(this.weaponIndex) || this.gameOver) return;
+    if (this.powerActive("infinite")) return;
     this.reloading = true;
     this.reloadStart = Date.now();
     this.cb.playSound("reload");
@@ -554,9 +718,12 @@ export class GameEngine {
     }
 
     const wpn = this.weapon;
-    this.ammo = this.ammo - 1;
-    this.cb.playSound(wpn.key);
+    if (!this.powerActive("infinite")) this.ammo = this.ammo - 1;
+    this.cb.playSound(wpn.sound ?? wpn.key);
     this.emitStats();
+    this.addShake(wpn.recoil * 0.25);
+    const barrels = this.modelHolder.getObjectByName("barrels");
+    if (barrels) barrels.rotation.z += 0.9;
 
     this.currentRecoil = wpn.recoil;
     this.currentRecoilX = (Math.random() - 0.5) * 0.05;
@@ -582,6 +749,46 @@ export class GameEngine {
     const up = new THREE.Vector3().crossVectors(right, baseDir).normalize();
     const candidates = [...this.objects, ...this.enemies];
     let hitZombie = false;
+    const rage = this.powerActive("rage") ? RAGE_MULT : 1;
+
+    if (wpn.projectile) {
+      this.launchGrenade(origin, baseDir);
+      if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
+      return;
+    }
+
+    if (wpn.pierce) {
+      // Railgun: one straight beam that goes through up to `pierce` zombies, stopped by walls.
+      const hits = new THREE.Raycaster(origin, baseDir).intersectObjects(candidates, true);
+      const done = new Set<THREE.Object3D>();
+      let end = origin.clone().addScaledVector(baseDir, 70);
+      for (const hit of hits) {
+        let target: any = hit.object;
+        while (target.parent && target.parent !== this.scene && target.parent !== this.world) target = target.parent;
+        if (target.userData?.type !== "zombie") {
+          end = hit.point.clone();
+          break; // wall
+        }
+        if (done.has(target) || target.userData.dead) continue;
+        done.add(target);
+        const headshot = hit.object.name === "Head";
+        target.userData.health -= (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult * rage;
+        hitZombie = true;
+        this.createImpact(hit.point, (hit.face as any)?.normal ?? new THREE.Vector3(0, 1, 0));
+        if (target.userData.health <= 0) this.killZombie(target, headshot, false);
+        if (done.size >= wpn.pierce) {
+          end = hit.point.clone();
+          break;
+        }
+      }
+      this.createBeam(this.muzzleWorldPosition(), end);
+      if (hitZombie) {
+        this.cb.onHitMarker();
+        if (this.boss) this.emitStats();
+      }
+      if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
+      return;
+    }
 
     for (let i = 0; i < wpn.pellets; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -597,7 +804,7 @@ export class GameEngine {
         this.createImpact(hit.point, (hit.face as any).normal);
         let target: any = hit.object;
         const headshot = hit.object.name === "Head";
-        const dmg = (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult;
+        const dmg = (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult * rage;
         while (target.parent && target.parent !== this.scene) target = target.parent;
         if (target.userData?.type === "zombie") {
           target.userData.health -= dmg;
@@ -610,7 +817,7 @@ export class GameEngine {
             }, 90);
           }
           if (target.userData.health <= 0 && target.parent === this.scene) {
-            this.killZombie(target, headshot);
+            this.killZombie(target, headshot, false);
           }
         }
       }
@@ -623,25 +830,135 @@ export class GameEngine {
     if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
   }
 
-  private killZombie(target: THREE.Group, headshot: boolean) {
-    this.createDeath(target.position);
-    this.maybeDropPickup(target.position);
+  private removeZombie(target: THREE.Group) {
     this.scene.remove(target);
     const idx = this.enemies.indexOf(target);
     if (idx > -1) this.enemies.splice(idx, 1);
+  }
+
+  private killZombie(target: THREE.Group, headshot: boolean, byExplosion: boolean) {
+    if (target.userData.dead) return;
+    target.userData.dead = true;
+    const kind = target.userData.kind as ZombieKind | "boss";
+    const def = ZOMBIES[kind === "boss" ? "walker" : kind];
+    this.createDeath(target.position, kind === "boss" ? 0xaa0000 : def.glow ?? def.eyes);
+    this.maybeDropPickup(target.position);
+    this.removeZombie(target);
     const isBoss = target === this.boss;
+
+    // Combo: kills chained within COMBO_WINDOW_MS.
+    const now = Date.now();
+    this.combo = now - this.lastKillAt <= COMBO_WINDOW_MS ? this.combo + 1 : 1;
+    this.lastKillAt = now;
+    const bonus = comboBonus(this.combo);
+    const label = comboLabel(this.combo);
+
     this.kills++;
     this.levelKills++;
     if (headshot) this.levelHeadshots++;
-    this.score += isBoss ? 1000 : 100 + (headshot ? 50 : 0);
-    this.levelCredits += isBoss ? CREDITS_PER_BOSS : CREDITS_PER_KILL + (headshot ? CREDITS_PER_HEADSHOT : 0);
+    this.score += (isBoss ? 1000 : def.score + (headshot ? 50 : 0)) + bonus.score;
+    this.levelCredits += (isBoss ? CREDITS_PER_BOSS : def.credits + (headshot ? CREDITS_PER_HEADSHOT : 0)) + bonus.credits;
+    this.cb.onEvent?.({ type: "kill", kind, headshot, combo: this.combo, byExplosion });
     if (isBoss) {
       this.boss = null;
+      this.addShake(0.5);
       this.cb.onNotify("BOSS ÉLIMINÉ !");
+    } else if (label) {
+      this.cb.onNotify(`${label}  +${bonus.score}`);
     }
+    if (kind === "exploder") this.explode(target.position.clone(), "shot");
     this.emitStats();
+    this.checkWaveCleared();
+  }
 
-    if (this.enemies.length === 0 && !this.spawningNextWave) {
+  // An exploder that reached the player blows up: no score for the player.
+  private detonate(z: THREE.Group) {
+    if (z.userData.dead) return;
+    z.userData.dead = true;
+    this.removeZombie(z);
+    this.explode(z.position.clone(), "contact");
+    this.checkWaveCleared();
+  }
+
+  // cause: "contact" (exploder reached the player), "shot" (exploder killed), "grenade" (player's own).
+  private explode(center: THREE.Vector3, cause: "contact" | "shot" | "grenade") {
+    const triggeredByContact = cause === "contact";
+    this.createExplosion(center);
+    this.cb.playSound("explosion");
+    const dPlayer = Math.hypot(this.camera.position.x - center.x, this.camera.position.z - center.z);
+    this.addShake(Math.max(0.15, 0.7 - dPlayer * 0.06));
+    // The player is hurt by contact explosions, and by shot exploders that were too close.
+    if (cause !== "grenade" && dPlayer < EXPLOSION.radius && !this.gameOver) {
+      const full = EXPLOSION.playerDamage(this.levelCfg.level);
+      this.health -= triggeredByContact ? full : Math.round(full * (1 - dPlayer / EXPLOSION.radius));
+      this.cb.onDamage();
+      if (this.health <= 0) {
+        this.triggerGameOver();
+        return;
+      }
+    }
+    // Chain reaction on nearby zombies (a copy: kills mutate the list).
+    for (const z of [...this.enemies]) {
+      if (z.userData.dead) continue;
+      if (z.position.distanceTo(center) < EXPLOSION.radius) {
+        const base = cause === "grenade" ? GRENADE.damage * this.mods.damageMult * (this.powerActive("rage") ? RAGE_MULT : 1) : EXPLOSION.zombieDamage;
+        z.userData.health -= base * (z.userData.boss ? 0.5 : 1);
+        if (z.userData.health <= 0) this.killZombie(z, false, true);
+      }
+    }
+    if (this.boss) this.emitStats();
+  }
+
+  private muzzleWorldPosition() {
+    const p = new THREE.Vector3();
+    this.muzzleFlash.getWorldPosition(p);
+    return p;
+  }
+
+  private launchGrenade(origin: THREE.Vector3, dir: THREE.Vector3) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.8 })
+    );
+    mesh.position.copy(this.muzzleWorldPosition());
+    const vel = dir.clone().multiplyScalar(GRENADE.speed);
+    vel.y += GRENADE.lift;
+    this.scene.add(mesh);
+    this.grenades.push({ mesh, vel, born: Date.now() });
+  }
+
+  private updateGrenades(delta: number, time: number) {
+    for (let i = this.grenades.length - 1; i >= 0; i--) {
+      const g = this.grenades[i];
+      g.vel.y -= GRENADE.gravity * delta;
+      g.mesh.position.addScaledVector(g.vel, delta);
+      const p = g.mesh.position;
+      let hit = p.y <= 0.15 || time - g.born > GRENADE.fuseMs;
+      if (!hit) hit = this.enemies.some((z) => !z.userData.dead && Math.hypot(z.position.x - p.x, z.position.z - p.z) < 0.9 * z.scale.x && p.y < 2.2 * z.scale.y);
+      if (!hit) hit = this.objects.some((o) => (o.userData.aabb as THREE.Box3).containsPoint(p));
+      if (hit) {
+        this.scene.remove(g.mesh);
+        g.mesh.geometry.dispose();
+        (g.mesh.material as THREE.Material).dispose();
+        this.grenades.splice(i, 1);
+        this.explode(new THREE.Vector3(p.x, 0, p.z), "grenade");
+        if (this.gameOver) return;
+      }
+    }
+  }
+
+  private createBeam(from: THREE.Vector3, to: THREE.Vector3) {
+    const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const line = new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    this.scene.add(line);
+    this.beams.push({ line, life: 1 });
+  }
+
+  private checkWaveCleared() {
+    if (this.enemies.length === 0 && !this.spawningNextWave && !this.gameOver) {
       this.spawningNextWave = true;
       setTimeout(() => {
         if (this.disposed || this.gameOver) return;
@@ -676,13 +993,26 @@ export class GameEngine {
 
   private maybeDropPickup(position: THREE.Vector3) {
     const r = Math.random();
-    let type: "health" | "ammo" | null = null;
-    if (r < 0.18) type = "health";
-    else if (r < 0.45) type = "ammo";
+    let type: "health" | "ammo" | PowerUpKind | null = null;
+    if (r < POWERUP_DROP_CHANCE) {
+      const kinds = Object.keys(POWERUPS) as PowerUpKind[];
+      type = kinds[Math.floor(Math.random() * kinds.length)];
+    } else if (r < POWERUP_DROP_CHANCE + 0.16) type = "health";
+    else if (r < POWERUP_DROP_CHANCE + 0.41) type = "ammo";
     if (!type) return;
 
     const group = new THREE.Group();
-    if (type === "health") {
+    if (type in POWERUPS) {
+      const color = POWERUPS[type as PowerUpKind].color;
+      const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.9 });
+      group.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.35), mat));
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.5, 0.04, 8, 24),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7 })
+      );
+      halo.rotation.x = Math.PI / 2;
+      group.add(halo);
+    } else if (type === "health") {
       const mat = new THREE.MeshStandardMaterial({ color: 0xff003c, emissive: 0xff003c, emissiveIntensity: 0.6 });
       const v = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.15), mat);
       const h = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), mat);
@@ -739,6 +1069,13 @@ export class GameEngine {
     this.pickups = [];
     if (opts.modifiers) this.mods = opts.modifiers;
     this.levelCfg = getLevelConfig(level);
+    const sector = sectorOf(this.levelCfg.level);
+    if (sector.index !== this.sector.index) this.buildWorld(sector);
+    this.combo = 0;
+    this.powerUntil = {};
+    this.shake = 0;
+    this.grenades.forEach((g) => this.scene.remove(g.mesh));
+    this.grenades = [];
     this.unlockedLevel = Math.max(opts.unlockedLevel ?? this.unlockedLevel, this.levelCfg.level);
     this.health = this.mods.maxHealth;
     if (unlockLevelOf(this.weapon) > this.unlockedLevel) this.weaponIndex = 0;
@@ -761,9 +1098,30 @@ export class GameEngine {
     this.camera.rotation.set(0, 0, 0);
     this.equipModel();
     this.spawnWave();
-    this.cb.onNotify(`NIVEAU ${this.levelCfg.level}`);
+    this.announceLevel();
     this.prevTime = Date.now();
     this.emitStats();
+  }
+
+  // ---------------- Power-ups ----------------
+  private powerActive(kind: PowerUpKind) {
+    return (this.powerUntil[kind] ?? 0) > Date.now();
+  }
+
+  private activatePower(kind: PowerUpKind) {
+    this.powerUntil[kind] = Date.now() + POWERUPS[kind].seconds * 1000;
+    if (kind === "infinite") {
+      this.reloading = false;
+      this.ammo = this.maxAmmoOf(this.weaponIndex);
+    }
+    this.cb.playSound("powerup");
+    this.cb.onNotify(POWERUPS[kind].name);
+    this.cb.onEvent?.({ type: "powerup", kind });
+    this.emitStats();
+  }
+
+  private addShake(amount: number) {
+    this.shake = Math.min(0.8, this.shake + amount);
   }
 
   pause() {
@@ -797,17 +1155,59 @@ export class GameEngine {
         unlocked: unlockLevelOf(w) <= this.unlockedLevel,
         unlockLevel: unlockLevelOf(w),
       })),
+      sector: { index: this.sector.index, name: this.sector.name },
+      powerups: (Object.keys(this.powerUntil) as PowerUpKind[])
+        .map((kind) => ({ kind, remaining: Math.ceil(((this.powerUntil[kind] ?? 0) - Date.now()) / 1000) }))
+        .filter((p) => p.remaining > 0),
     });
   }
 
-  private createDeath(position: THREE.Vector3) {
+  private createExplosion(center: THREE.Vector3) {
+    const count = 36;
+    const geometry = new THREE.BufferGeometry();
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const c = new THREE.Color();
+    const velocities = [];
+    for (let i = 0; i < count; i++) {
+      positions.push(center.x, 1, center.z);
+      c.setHex([0xffd000, 0xff7a1a, 0xb6ff00][i % 3]);
+      colors.push(c.r, c.g, c.b);
+      const a = Math.random() * Math.PI * 2;
+      const sp = 6 + Math.random() * 10;
+      velocities.push({ x: Math.cos(a) * sp, y: 4 + Math.random() * 10, z: Math.sin(a) * sp });
+    }
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    const material = new THREE.PointsMaterial({
+      size: 0.35, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const ps = new THREE.Points(geometry, material);
+    this.scene.add(ps);
+    this.particles.push({ mesh: ps, velocities, life: 1.0 });
+
+    // Flash of light + expanding shockwave ring, faded out in update().
+    const light = new THREE.PointLight(0xffaa33, 6, 16);
+    light.position.set(center.x, 1.5, center.z);
+    this.scene.add(light);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, 0.6, 40),
+      new THREE.MeshBasicMaterial({ color: 0xffd000, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(center.x, 0.12, center.z);
+    this.scene.add(ring);
+    this.flashes.push({ light, ring, life: 1 });
+  }
+
+  private createDeath(position: THREE.Vector3, color = 0xaa0000) {
     const count = 15;
     const geometry = new THREE.BufferGeometry();
     const positions: number[] = [];
     for (let i = 0; i < count; i++)
       positions.push(position.x + (Math.random() - 0.5), position.y + 1 + (Math.random() - 0.5), position.z + (Math.random() - 0.5));
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({ size: 0.18, color: 0xaa0000, transparent: true, depthWrite: false });
+    const material = new THREE.PointsMaterial({ size: 0.18, color, transparent: true, depthWrite: false });
     const ps = new THREE.Points(geometry, material);
     this.scene.add(ps);
     const velocities = [];
@@ -849,6 +1249,7 @@ export class GameEngine {
     this.gameOver = true;
     this.health = 0;
     this.cb.playSound("gameover");
+    this.cb.onEvent?.({ type: "death" });
     this.emitStats();
     this.cb.onGameOver({ score: this.score, level: this.levelCfg.level, kills: this.kills, credits: this.levelCredits });
   }
@@ -857,7 +1258,10 @@ export class GameEngine {
     if (this.disposed) return;
     this.rafId = requestAnimationFrame(this.loop);
     this.update();
+    // Screen shake: offset the camera only for rendering, never for physics.
+    this.camera.position.add(this.shakeOffset);
     this.renderer.render(this.scene, this.camera);
+    this.camera.position.sub(this.shakeOffset);
     this.gl.endFrameEXP();
   };
 
@@ -894,7 +1298,55 @@ export class GameEngine {
       }
     }
 
-    if (this.paused || this.gameOver || this.levelComplete) return;
+    for (let i = this.flashes.length - 1; i >= 0; i--) {
+      const f = this.flashes[i];
+      f.life -= delta * 2.5;
+      f.light.intensity = Math.max(0, f.life) * 6;
+      // Ring grows up to the blast radius (outer radius 0.6 * scale).
+      const sc = 1 + (1 - f.life) * (EXPLOSION.radius / 0.6 - 1);
+      f.ring.scale.set(sc, sc, sc);
+      (f.ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, f.life) * 0.55;
+      if (f.life <= 0) {
+        this.scene.remove(f.light);
+        this.scene.remove(f.ring);
+        f.ring.geometry.dispose();
+        (f.ring.material as THREE.Material).dispose();
+        this.flashes.splice(i, 1);
+      }
+    }
+
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      const b = this.beams[i];
+      b.life -= delta * 4;
+      (b.line.material as THREE.LineBasicMaterial).opacity = Math.max(0, b.life);
+      if (b.life <= 0) {
+        this.scene.remove(b.line);
+        b.line.geometry.dispose();
+        (b.line.material as THREE.Material).dispose();
+        this.beams.splice(i, 1);
+      }
+    }
+
+    this.shake = Math.max(0, this.shake - delta * 1.8);
+    const amp = this.shake * this.shake * 0.35;
+    this.shakeOffset.set((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp);
+
+    if (this.paused || this.gameOver || this.levelComplete) {
+      this.shakeOffset.set(0, 0, 0);
+      return;
+    }
+
+    this.updateGrenades(delta, time);
+    if (this.gameOver) return;
+
+    // Refresh power-up timers in the HUD a few times per second while one is active.
+    if (Object.keys(this.powerUntil).length && time - this.lastPowerEmit > 250) {
+      this.lastPowerEmit = time;
+      for (const k of Object.keys(this.powerUntil) as PowerUpKind[]) {
+        if ((this.powerUntil[k] ?? 0) <= time) delete this.powerUntil[k];
+      }
+      this.emitStats();
+    }
 
     // pickups: spin, bob, collect
     for (let i = this.pickups.length - 1; i >= 0; i--) {
@@ -904,7 +1356,9 @@ export class GameEngine {
       const dx = pk.position.x - this.camera.position.x;
       const dz = pk.position.z - this.camera.position.z;
       if (Math.sqrt(dx * dx + dz * dz) < 1.8) {
-        if (pk.userData.type === "health") {
+        if (pk.userData.type in POWERUPS) {
+          this.activatePower(pk.userData.type as PowerUpKind);
+        } else if (pk.userData.type === "health") {
           this.health = Math.min(this.mods.maxHealth, this.health + 25);
           this.cb.onNotify("+25 SANTÉ");
         } else {
@@ -912,7 +1366,7 @@ export class GameEngine {
           this.reloading = false;
           this.cb.onNotify("MUNITIONS +");
         }
-        this.cb.playSound("pickup");
+        if (!(pk.userData.type in POWERUPS)) this.cb.playSound("pickup");
         this.scene.remove(pk);
         this.pickups.splice(i, 1);
         this.emitStats();
@@ -957,7 +1411,7 @@ export class GameEngine {
     let speedMult = 1.0;
     if (jetpack) speedMult = CONFIG.jetpackMult;
     else if (this.sprint) speedMult = CONFIG.sprintMult;
-    const speed = CONFIG.speed * speedMult;
+    const speed = CONFIG.speed * speedMult * (this.powerActive("haste") ? HASTE_MULT : 1);
     if (hasInput) {
       this.playerVelocity.x += inputDir.x * speed * delta;
       this.playerVelocity.z += inputDir.z * speed * delta;
@@ -1010,7 +1464,8 @@ export class GameEngine {
     }
 
     let damagedThisFrame = false;
-    this.enemies.forEach((z) => {
+    for (const z of [...this.enemies]) {
+      if (z.userData.dead) continue;
       const target = new THREE.Vector3(this.camera.position.x, z.position.y, this.camera.position.z);
       z.lookAt(target);
       // Horizontal distance: the camera sits at eye height, so a 3D distance never drops below ~2m.
@@ -1060,6 +1515,9 @@ export class GameEngine {
         const armBounce = Math.abs(Math.cos(wlk)) * 0.03;
         leftArm.rotation.x = -Math.PI / 2 + armBounce;
         rightArm.rotation.x = -Math.PI / 2 + armBounce;
+      } else if (ud.kind === "exploder") {
+        this.detonate(z);
+        if (this.gameOver) return;
       } else {
         z.position.y = 0;
         if (time - ud.lastBite > 800) {
@@ -1068,9 +1526,10 @@ export class GameEngine {
           damagedThisFrame = true;
         }
       }
-    });
+    }
 
     if (damagedThisFrame) {
+      this.addShake(0.25);
       this.cb.onDamage();
       this.emitStats();
       if (this.health <= 0) {

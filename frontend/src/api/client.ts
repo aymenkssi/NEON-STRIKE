@@ -62,9 +62,20 @@ async function loadOrCreateSession(name: string, forceNew = false): Promise<Sess
   return creating;
 }
 
+// Adopts another player's session (recovery code used on this phone).
+export async function setSession(id: string, token: string) {
+  session = { id, token };
+  await storage.secureSet(SESSION_KEY, JSON.stringify(session));
+}
+
 // Public endpoint, no session needed.
 export function get<T>(path: string): Promise<T> {
   return request(path);
+}
+
+// Public POST (no session), e.g. recovering an account.
+export function post<T>(path: string, body: unknown): Promise<T> {
+  return request(path, { method: "POST", body: JSON.stringify(body) });
 }
 
 // Authenticated call; re-registers once if the server no longer knows this player.

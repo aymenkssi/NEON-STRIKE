@@ -4,6 +4,7 @@ import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import * as Haptics from "expo-haptics";
 import { GameEngine, type GameStats, type RunResult } from "../game/GameEngine";
 import { levelReward, type LevelResult, type PlayerModifiers } from "../game/progression";
+import { applyEvent, emptyStats, type MetaEvent, type PlayerStats } from "../game/meta";
 import { sound } from "../audio/sound";
 import { showInterstitialAtBreak, showRewarded } from "../ads";
 import { colors, fonts } from "../theme";
@@ -23,6 +24,8 @@ type Props = {
   // Persists a finished level (stars + credits) and unlocks the next one.
   onLevelDone: (level: number, stars: number, credits: number) => void;
   onAddCredits: (credits: number) => void;
+  // Stats of the play session (kills, levels…) for missions and achievements.
+  onSession: (session: PlayerStats) => void;
   onExit: () => void;
 };
 
@@ -41,6 +44,8 @@ const INITIAL: GameStats = {
   boss: null,
   weaponIndex: 0,
   weapons: [],
+  sector: { index: 1, name: "NEON DISTRICT" },
+  powerups: [],
 };
 
 export default function GameScreen({
@@ -52,6 +57,7 @@ export default function GameScreen({
   modifiers,
   onLevelDone,
   onAddCredits,
+  onSession,
   onExit,
 }: Props) {
   const engineRef = useRef<GameEngine | null>(null);
@@ -62,8 +68,19 @@ export default function GameScreen({
   // Credits picked up before dying are paid out when the player leaves the game-over screen
   // (not on revive, which continues the level and pays through the level reward instead).
   const pendingRunCredits = useRef(0);
-  const latest = useRef({ unlockedLevel, modifiers, onLevelDone });
-  latest.current = { unlockedLevel, modifiers, onLevelDone };
+  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession });
+  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession };
+
+  // Events are batched and saved at natural breaks (level end, death, exit).
+  const session = useRef<PlayerStats>(emptyStats());
+  const track = useCallback((e: MetaEvent) => {
+    session.current = applyEvent(session.current, e);
+  }, []);
+  const flushSession = useCallback(() => {
+    const s = session.current;
+    if (s.kills || s.levels || s.deaths || s.powerups) latest.current.onSession(s);
+    session.current = emptyStats();
+  }, []);
   const [hitSignal, setHitSignal] = useState(0);
   const [damageSignal, setDamageSignal] = useState(0);
   const [canRevive, setCanRevive] = useState(true);
@@ -79,6 +96,7 @@ export default function GameScreen({
   useEffect(() => {
     sound.init().then(() => sound.setEnabled(soundEnabled));
     return () => {
+      flushSession();
       engineRef.current?.dispose();
       engineRef.current = null;
     };
@@ -107,18 +125,22 @@ export default function GameScreen({
           onGameOver: (r) => {
             setResult(r);
             pendingRunCredits.current = r.credits;
+            flushSession();
             setStatus("gameover");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
           },
           onLevelComplete: (r) => {
             const reward = levelReward(r);
             latest.current.onLevelDone(r.level, reward.stars, reward.total);
+            track({ type: "level", stars: reward.stars });
+            flushSession();
             setLevelResult(r);
             setStatus("complete");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           },
           onNotify: notify,
           playSound: (n) => sound.play(n),
+          onEvent: track,
         },
         { lookSensitivity, level: startLevel, unlockedLevel, modifiers }
       );

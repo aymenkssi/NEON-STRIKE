@@ -16,10 +16,11 @@ import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
 import PlayerMessage from "./PlayerMessage";
+import Goals, { claimableGoals } from "./Goals";
 import { useMessageQueue } from "../hooks/use-message-queue";
 import type { RemoteMessage } from "../api/config";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
-import type { Progress } from "../hooks/use-progress";
+import type { CloudStatus, Progress } from "../hooks/use-progress";
 
 type Props = {
   username: string;
@@ -28,9 +29,17 @@ type Props = {
   setLookSensitivity: (v: number) => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
+  musicEnabled: boolean;
+  setMusicEnabled: (v: boolean) => void;
+  musicVolume: number;
+  setMusicVolume: (v: number) => void;
+  cloudStatus: CloudStatus;
+  onRecovered: (name: string) => Promise<void>;
   progress: Progress;
   onBuyUpgrade: (key: UpgradeKey) => boolean;
   onClaimDaily: () => number;
+  onClaimMission: (id: string) => number;
+  onClaimAchievement: (id: string) => number;
   onPlay: (level: number) => void;
   messages: RemoteMessage[];
 };
@@ -48,6 +57,7 @@ export default function MainMenu(props: Props) {
   const [showLevels, setShowLevels] = useState(false);
   const [showArsenal, setShowArsenal] = useState(false);
   const [showShop, setShowShop] = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
   const { progress } = props;
   const dailyReady = dailyStatus(progress.dailyLast, progress.dailyStreak).canClaim;
   const [showDaily, setShowDaily] = useState(() => {
@@ -58,7 +68,8 @@ export default function MainMenu(props: Props) {
 
   const { next: message, dismiss } = useMessageQueue(props.messages);
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
-  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings;
+  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals;
+  const goalsReady = claimableGoals(progress);
 
   const play = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -82,6 +93,15 @@ export default function MainMenu(props: Props) {
         <Pressable testID="open-daily" style={styles.topBtn} onPress={() => setShowDaily(true)}>
           <MaterialCommunityIcons name="gift" size={20} color={colors.warning} />
           {dailyReady && <View style={styles.dot} />}
+        </Pressable>
+        <Pressable testID="open-goals" style={[styles.topBtn, styles.goalsBtn]} onPress={() => setShowGoals(true)}>
+          <MaterialCommunityIcons name="flag-checkered" size={18} color={colors.brand} />
+          <Text style={styles.goalsText}>OBJECTIFS</Text>
+          {goalsReady > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{goalsReady}</Text>
+            </View>
+          )}
         </Pressable>
         <Pressable testID="open-arsenal" style={[styles.topBtn, styles.arsenalBtn]} onPress={() => setShowArsenal(true)}>
           <MaterialCommunityIcons name="store" size={18} color={colors.brandSecondary} />
@@ -156,6 +176,14 @@ export default function MainMenu(props: Props) {
         />
       )}
       {showShop && <Shop credits={progress.credits} onClose={() => setShowShop(false)} />}
+      {showGoals && (
+        <Goals
+          progress={progress}
+          onClaimMission={props.onClaimMission}
+          onClaimAchievement={props.onClaimAchievement}
+          onClose={() => setShowGoals(false)}
+        />
+      )}
       {message && !overlayOpen && (
         <PlayerMessage message={message} onClose={() => dismiss(message.id)} onOpenShop={() => setShowShop(true)} />
       )}
@@ -175,6 +203,12 @@ export default function MainMenu(props: Props) {
           setLookSensitivity={props.setLookSensitivity}
           soundEnabled={props.soundEnabled}
           setSoundEnabled={props.setSoundEnabled}
+          musicEnabled={props.musicEnabled}
+          setMusicEnabled={props.setMusicEnabled}
+          musicVolume={props.musicVolume}
+          setMusicVolume={props.setMusicVolume}
+          cloudStatus={props.cloudStatus}
+          onRecovered={props.onRecovered}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -226,6 +260,21 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
   },
+  goalsBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(57,255,20,0.45)" },
+  goalsText: { color: colors.brand, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
+  countBadge: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.error,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countText: { color: "#fff", fontFamily: fonts.display, fontSize: 11 },
   arsenalBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(0,255,255,0.45)" },
   arsenalText: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
   dot: { position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },

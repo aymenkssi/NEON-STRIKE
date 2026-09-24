@@ -1,5 +1,4 @@
 """Neon Strike API: anonymous players, online leaderboard, Google Play purchase verification."""
-import hashlib
 import logging
 import os
 import secrets
@@ -8,13 +7,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
+import cloudsave
 import liveops
+from auth import current_player, hash_token
 from database import client, db
 from play_verifier import PlayVerifier
 
@@ -41,22 +42,8 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
 def clean_name(name: str) -> str:
     return "".join(ch for ch in name.strip() if ch.isprintable())[:16] or "PLAYER"
-
-
-# ------------------------ Auth ------------------------
-async def current_player(authorization: Optional[str] = Header(default=None)) -> dict:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(401, "Missing player token")
-    player = await db.players.find_one({"token_hash": hash_token(authorization[7:].strip())})
-    if not player:
-        raise HTTPException(401, "Unknown player token")
-    return player
 
 
 # ------------------------ Models ------------------------
@@ -230,6 +217,7 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
 
 
 app.include_router(api)
+app.include_router(cloudsave.router)
 app.include_router(liveops.public)
 app.include_router(liveops.admin)
 app.include_router(liveops.admin_page)
@@ -249,6 +237,7 @@ async def create_indexes():
     await db.scores.create_index("player_id", unique=True)
     await db.scores.create_index([("score", -1)])
     await db.purchases.create_index("token_hash", unique=True)
+    await cloudsave.setup()
     await liveops.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
