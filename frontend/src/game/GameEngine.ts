@@ -1,6 +1,18 @@
 import * as THREE from "three";
 import { Renderer } from "expo-three";
 import type { ExpoWebGLRenderingContext } from "expo-gl";
+import {
+  CREDITS_PER_BOSS,
+  CREDITS_PER_HEADSHOT,
+  CREDITS_PER_KILL,
+  WEAPON_UNLOCK_LEVEL,
+  getLevelConfig,
+  modifiersFrom,
+  NO_UPGRADES,
+  type LevelConfig,
+  type LevelResult,
+  type PlayerModifiers,
+} from "./progression";
 
 const CONFIG = {
   fov: 78,
@@ -22,7 +34,6 @@ type WeaponConfig = {
   key: string;
   name: string;
   short: string;
-  unlockWave: number;
   pellets: number;
   spread: number;
   maxAmmo: number;
@@ -37,41 +48,51 @@ type WeaponConfig = {
 
 const WEAPONS: WeaponConfig[] = [
   {
-    key: "shotgun", name: "SHOTGUN", short: "SG", unlockWave: 1,
+    key: "shotgun", name: "SHOTGUN", short: "SG",
     pellets: 8, spread: 0.06, maxAmmo: 5, reloadMs: 1500,
     bodyDmg: 1, headDmg: 2, recoil: 0.18, fireRate: 400, auto: false, flashZ: -0.4,
   },
   {
-    key: "smg", name: "SMG", short: "SMG", unlockWave: 2,
+    key: "smg", name: "SMG", short: "SMG",
     pellets: 1, spread: 0.02, maxAmmo: 30, reloadMs: 1200,
     bodyDmg: 1, headDmg: 2, recoil: 0.09, fireRate: 95, auto: true, flashZ: -0.5,
   },
   {
-    key: "rifle", name: "ASSAULT RIFLE", short: "AR", unlockWave: 4,
+    key: "rifle", name: "ASSAULT RIFLE", short: "AR",
     pellets: 1, spread: 0.004, maxAmmo: 10, reloadMs: 1500,
     bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, auto: false, flashZ: -0.78,
   },
 ];
 
-export type WeaponInfo = { short: string; name: string; unlocked: boolean; unlockWave: number };
+const unlockLevelOf = (w: WeaponConfig) => WEAPON_UNLOCK_LEVEL[w.key] ?? 1;
+
+export type WeaponInfo = { short: string; name: string; unlocked: boolean; unlockLevel: number };
 
 export type GameStats = {
   health: number;
+  maxHealth: number;
   ammo: number;
   maxAmmo: number;
   reloading: boolean;
   score: number;
-  wave: number;
+  level: number;
+  wave: number; // wave inside the current level (1-based)
+  totalWaves: number;
   kills: number;
+  credits: number; // credits picked up during the current level
+  boss: { health: number; max: number } | null;
   weaponIndex: number;
   weapons: WeaponInfo[];
 };
+
+export type RunResult = { score: number; level: number; kills: number; credits: number };
 
 export type EngineCallbacks = {
   onStats: (s: GameStats) => void;
   onHitMarker: () => void;
   onDamage: () => void;
-  onGameOver: (r: { score: number; wave: number; kills: number }) => void;
+  onGameOver: (r: RunResult) => void;
+  onLevelComplete: (r: LevelResult) => void;
   onNotify: (msg: string) => void;
   playSound: (name: string) => void;
 };
@@ -110,6 +131,9 @@ export class GameEngine {
 
   lookSensitivity = 0.008;
 
+  private mods: PlayerModifiers = modifiersFrom(NO_UPGRADES);
+  private unlockedLevel = 1;
+  private levelCfg: LevelConfig = getLevelConfig(1);
   private health = 100;
   private weaponIndex = 0;
   private ammoByWeapon: number[] = WEAPONS.map((w) => w.maxAmmo);
@@ -118,7 +142,12 @@ export class GameEngine {
   private score = 0;
   private wave = 1;
   private kills = 0;
+  private levelKills = 0;
+  private levelHeadshots = 0;
+  private levelCredits = 0;
+  private boss: THREE.Group | null = null;
   private spawningNextWave = false;
+  levelComplete = false;
 
   private prevTime = 0;
   private rafId: any = null;
@@ -127,10 +156,19 @@ export class GameEngine {
   gameOver = false;
   private muzzleTimer: any = null;
 
-  constructor(gl: ExpoWebGLRenderingContext, cb: EngineCallbacks, opts?: { lookSensitivity?: number }) {
+  constructor(
+    gl: ExpoWebGLRenderingContext,
+    cb: EngineCallbacks,
+    opts?: { lookSensitivity?: number; level?: number; unlockedLevel?: number; modifiers?: PlayerModifiers }
+  ) {
     this.gl = gl;
     this.cb = cb;
     if (opts?.lookSensitivity) this.lookSensitivity = opts.lookSensitivity;
+    if (opts?.modifiers) this.mods = opts.modifiers;
+    this.levelCfg = getLevelConfig(opts?.level ?? 1);
+    this.unlockedLevel = Math.max(opts?.unlockedLevel ?? 1, this.levelCfg.level);
+    this.health = this.mods.maxHealth;
+    this.ammoByWeapon = WEAPONS.map((_, i) => this.maxAmmoOf(i));
     this.init();
     this.prevTime = Date.now();
     this.loop();
@@ -138,6 +176,12 @@ export class GameEngine {
 
   private get weapon() {
     return WEAPONS[this.weaponIndex];
+  }
+  private maxAmmoOf(i: number) {
+    return Math.round(WEAPONS[i].maxAmmo * this.mods.ammoMult);
+  }
+  private get reloadMs() {
+    return this.weapon.reloadMs * this.mods.reloadMult;
   }
   private get ammo() {
     return this.ammoByWeapon[this.weaponIndex];
@@ -181,7 +225,8 @@ export class GameEngine {
 
     this.buildWorld();
     this.createWeapon();
-    this.spawnWave(5, 1);
+    this.spawnWave();
+    this.cb.onNotify(`NIVEAU ${this.levelCfg.level}`);
     this.emitStats();
   }
 
@@ -219,14 +264,22 @@ export class GameEngine {
     }
   }
 
-  private spawnWave(count: number, wave: number) {
-    for (let i = 0; i < count; i++) this.spawnZombie(wave);
+  // Spawns the current wave of the current level; the last wave brings the boss.
+  private spawnWave() {
+    const cfg = this.levelCfg;
+    const count = cfg.zombiesPerWave(this.wave);
+    for (let i = 0; i < count; i++) this.spawnZombie(false);
+    if (this.wave === cfg.waves) {
+      this.boss = this.spawnZombie(true);
+      this.cb.onNotify("⚠ BOSS EN APPROCHE");
+    }
   }
 
-  private spawnZombie(wave: number) {
+  private spawnZombie(isBoss: boolean) {
+    const cfg = this.levelCfg;
     const g = new THREE.Group();
-    const skin = new THREE.MeshStandardMaterial({ color: 0x4a7a2c });
-    const shirt = new THREE.MeshStandardMaterial({ color: 0x223a66 });
+    const skin = new THREE.MeshStandardMaterial({ color: isBoss ? 0x7a2c4a : 0x4a7a2c });
+    const shirt = new THREE.MeshStandardMaterial({ color: isBoss ? 0x1a1a1a : 0x223a66 });
     const pants = new THREE.MeshStandardMaterial({ color: 0x1a1f4a });
     const faceZ = 0.5 / 2 + 0.05 / 2;
 
@@ -235,7 +288,7 @@ export class GameEngine {
     head.name = "Head";
     g.add(head);
 
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0x39ff14 : 0xff2a2a });
     const mouthMat = new THREE.MeshBasicMaterial({ color: 0x162a0c });
     const le = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
     le.position.set(0.12, 1.85, faceZ);
@@ -277,11 +330,17 @@ export class GameEngine {
     const angle = Math.random() * Math.PI * 2;
     const dist = 30 + Math.random() * 25;
     g.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    if (isBoss) g.scale.set(2.2, 2.2, 2.2);
 
+    const speed = 1.6 + Math.random() * 1.2 + cfg.zombieSpeedBonus;
     g.userData = {
       type: "zombie",
-      health: 3 + Math.floor(wave / 2),
-      speed: 1.6 + Math.random() * 1.2 + wave * 0.15,
+      boss: isBoss,
+      health: isBoss ? cfg.bossHealth : cfg.zombieHealth,
+      maxHealth: isBoss ? cfg.bossHealth : cfg.zombieHealth,
+      speed: isBoss ? speed * 0.7 : speed,
+      bite: isBoss ? cfg.biteDamage * 2 : cfg.biteDamage,
+      reach: isBoss ? 2.6 : 1.5,
       walkProgress: Math.random() * 100,
       bias: Math.random() < 0.5 ? 1 : -1,
       lastBite: 0,
@@ -290,6 +349,7 @@ export class GameEngine {
 
     this.scene.add(g);
     this.enemies.push(g);
+    return g;
   }
 
   // ---------------- Weapon models ----------------
@@ -437,7 +497,7 @@ export class GameEngine {
   switchWeapon(index: number) {
     if (index === this.weaponIndex) return;
     const cfg = WEAPONS[index];
-    if (!cfg || cfg.unlockWave > this.wave) return;
+    if (!cfg || unlockLevelOf(cfg) > this.unlockedLevel) return;
     this.weaponIndex = index;
     this.reloading = false;
     this.equipModel();
@@ -454,7 +514,7 @@ export class GameEngine {
   }
 
   applyLook(dx: number, dy: number) {
-    if (this.paused || this.gameOver) return;
+    if (this.paused || this.gameOver || this.levelComplete) return;
     this.camera.rotation.y -= dx * this.lookSensitivity;
     this.camera.rotation.x -= dy * this.lookSensitivity;
     this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
@@ -477,7 +537,7 @@ export class GameEngine {
   }
 
   reload() {
-    if (this.reloading || this.ammo === this.weapon.maxAmmo || this.gameOver) return;
+    if (this.reloading || this.ammo === this.maxAmmoOf(this.weaponIndex) || this.gameOver) return;
     this.reloading = true;
     this.reloadStart = Date.now();
     this.cb.playSound("reload");
@@ -485,7 +545,7 @@ export class GameEngine {
   }
 
   shoot() {
-    if (this.paused || this.gameOver || !this.weaponGroup) return;
+    if (this.paused || this.gameOver || this.levelComplete || !this.weaponGroup) return;
     if (this.reloading) return;
     if (this.ammo <= 0) {
       this.cb.playSound("empty");
@@ -537,7 +597,7 @@ export class GameEngine {
         this.createImpact(hit.point, (hit.face as any).normal);
         let target: any = hit.object;
         const headshot = hit.object.name === "Head";
-        const dmg = headshot ? wpn.headDmg : wpn.bodyDmg;
+        const dmg = (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult;
         while (target.parent && target.parent !== this.scene) target = target.parent;
         if (target.userData?.type === "zombie") {
           target.userData.health -= dmg;
@@ -556,7 +616,10 @@ export class GameEngine {
       }
     }
 
-    if (hitZombie) this.cb.onHitMarker();
+    if (hitZombie) {
+      this.cb.onHitMarker();
+      if (this.boss) this.emitStats();
+    }
     if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
   }
 
@@ -566,29 +629,49 @@ export class GameEngine {
     this.scene.remove(target);
     const idx = this.enemies.indexOf(target);
     if (idx > -1) this.enemies.splice(idx, 1);
+    const isBoss = target === this.boss;
     this.kills++;
-    this.score += 100 + (headshot ? 50 : 0);
+    this.levelKills++;
+    if (headshot) this.levelHeadshots++;
+    this.score += isBoss ? 1000 : 100 + (headshot ? 50 : 0);
+    this.levelCredits += isBoss ? CREDITS_PER_BOSS : CREDITS_PER_KILL + (headshot ? CREDITS_PER_HEADSHOT : 0);
+    if (isBoss) {
+      this.boss = null;
+      this.cb.onNotify("BOSS ÉLIMINÉ !");
+    }
     this.emitStats();
 
     if (this.enemies.length === 0 && !this.spawningNextWave) {
       this.spawningNextWave = true;
       setTimeout(() => {
         if (this.disposed || this.gameOver) return;
-        const prevWave = this.wave;
-        this.wave++;
-        const count = Math.min(4 + this.wave * 2, 18);
-        this.cb.playSound("wave");
-        this.spawnWave(count, this.wave);
         this.spawningNextWave = false;
-        // Weapon unlock notifications
-        WEAPONS.forEach((wcfg) => {
-          if (wcfg.unlockWave > prevWave && wcfg.unlockWave <= this.wave) {
-            this.cb.onNotify(`ARME DÉBLOQUÉE: ${wcfg.name}`);
-          }
-        });
+        this.cb.playSound("wave");
+        if (this.wave >= this.levelCfg.waves) {
+          this.finishLevel();
+          return;
+        }
+        this.wave++;
+        this.cb.onNotify(`VAGUE ${this.wave}/${this.levelCfg.waves}`);
+        this.spawnWave();
         this.emitStats();
       }, 1200);
     }
+  }
+
+  private finishLevel() {
+    this.levelComplete = true;
+    this.setMove(0, 0, false);
+    this.isSpaceHeld = false;
+    this.cb.onLevelComplete({
+      level: this.levelCfg.level,
+      score: this.score,
+      kills: this.levelKills,
+      headshots: this.levelHeadshots,
+      health: Math.max(0, Math.round(this.health)),
+      maxHealth: this.mods.maxHealth,
+      credits: this.levelCredits,
+    });
   }
 
   private maybeDropPickup(position: THREE.Vector3) {
@@ -622,10 +705,10 @@ export class GameEngine {
   }
 
   revive() {
-    this.health = 100;
+    this.health = this.mods.maxHealth;
     this.gameOver = false;
     this.paused = false;
-    this.ammo = this.weapon.maxAmmo;
+    this.ammo = this.maxAmmoOf(this.weaponIndex);
     this.reloading = false;
     this.enemies.forEach((z) => {
       const dir = new THREE.Vector3().subVectors(z.position, this.camera.position);
@@ -640,28 +723,45 @@ export class GameEngine {
     this.emitStats();
   }
 
+  // Restarts the current level from scratch (score and run stats reset).
   restart() {
+    this.startLevel(this.levelCfg.level, { keepRun: false });
+  }
+
+  // Loads a level. keepRun carries score/kills over (used by "next level").
+  startLevel(level: number, opts: { keepRun: boolean; unlockedLevel?: number; modifiers?: PlayerModifiers }) {
     this.enemies.forEach((e) => this.scene.remove(e));
     this.enemies = [];
+    this.boss = null;
     this.particles.forEach((p) => this.scene.remove(p.mesh));
     this.particles = [];
     this.pickups.forEach((p) => this.scene.remove(p));
     this.pickups = [];
-    this.health = 100;
-    this.weaponIndex = 0;
-    this.ammoByWeapon = WEAPONS.map((w) => w.maxAmmo);
+    if (opts.modifiers) this.mods = opts.modifiers;
+    this.levelCfg = getLevelConfig(level);
+    this.unlockedLevel = Math.max(opts.unlockedLevel ?? this.unlockedLevel, this.levelCfg.level);
+    this.health = this.mods.maxHealth;
+    if (unlockLevelOf(this.weapon) > this.unlockedLevel) this.weaponIndex = 0;
+    this.ammoByWeapon = WEAPONS.map((_, i) => this.maxAmmoOf(i));
     this.reloading = false;
-    this.score = 0;
+    if (!opts.keepRun) {
+      this.score = 0;
+      this.kills = 0;
+    }
     this.wave = 1;
-    this.kills = 0;
+    this.levelKills = 0;
+    this.levelHeadshots = 0;
+    this.levelCredits = 0;
     this.gameOver = false;
+    this.levelComplete = false;
     this.paused = false;
     this.spawningNextWave = false;
     this.playerVelocity.set(0, 0, 0);
     this.camera.position.set(0, CONFIG.standHeight, 12);
     this.camera.rotation.set(0, 0, 0);
     this.equipModel();
-    this.spawnWave(5, 1);
+    this.spawnWave();
+    this.cb.onNotify(`NIVEAU ${this.levelCfg.level}`);
     this.prevTime = Date.now();
     this.emitStats();
   }
@@ -677,18 +777,25 @@ export class GameEngine {
   private emitStats() {
     this.cb.onStats({
       health: Math.max(0, Math.round(this.health)),
+      maxHealth: this.mods.maxHealth,
       ammo: this.ammo,
-      maxAmmo: this.weapon.maxAmmo,
+      maxAmmo: this.maxAmmoOf(this.weaponIndex),
       reloading: this.reloading,
       score: this.score,
+      level: this.levelCfg.level,
       wave: this.wave,
+      totalWaves: this.levelCfg.waves,
       kills: this.kills,
+      credits: this.levelCredits,
+      boss: this.boss
+        ? { health: Math.max(0, Math.ceil(this.boss.userData.health)), max: this.boss.userData.maxHealth }
+        : null,
       weaponIndex: this.weaponIndex,
       weapons: WEAPONS.map((w) => ({
         short: w.short,
         name: w.name,
-        unlocked: w.unlockWave <= this.wave,
-        unlockWave: w.unlockWave,
+        unlocked: unlockLevelOf(w) <= this.unlockedLevel,
+        unlockLevel: unlockLevelOf(w),
       })),
     });
   }
@@ -743,7 +850,7 @@ export class GameEngine {
     this.health = 0;
     this.cb.playSound("gameover");
     this.emitStats();
-    this.cb.onGameOver({ score: this.score, wave: this.wave, kills: this.kills });
+    this.cb.onGameOver({ score: this.score, level: this.levelCfg.level, kills: this.kills, credits: this.levelCredits });
   }
 
   private loop = () => {
@@ -787,7 +894,7 @@ export class GameEngine {
       }
     }
 
-    if (this.paused || this.gameOver) return;
+    if (this.paused || this.gameOver || this.levelComplete) return;
 
     // pickups: spin, bob, collect
     for (let i = this.pickups.length - 1; i >= 0; i--) {
@@ -798,10 +905,10 @@ export class GameEngine {
       const dz = pk.position.z - this.camera.position.z;
       if (Math.sqrt(dx * dx + dz * dz) < 1.8) {
         if (pk.userData.type === "health") {
-          this.health = Math.min(100, this.health + 25);
+          this.health = Math.min(this.mods.maxHealth, this.health + 25);
           this.cb.onNotify("+25 SANTÉ");
         } else {
-          this.ammo = this.weapon.maxAmmo;
+          this.ammo = this.maxAmmoOf(this.weaponIndex);
           this.reloading = false;
           this.cb.onNotify("MUNITIONS +");
         }
@@ -812,9 +919,9 @@ export class GameEngine {
       }
     }
 
-    if (this.reloading && time - this.reloadStart >= this.weapon.reloadMs) {
+    if (this.reloading && time - this.reloadStart >= this.reloadMs) {
       this.reloading = false;
-      this.ammo = this.weapon.maxAmmo;
+      this.ammo = this.maxAmmoOf(this.weaponIndex);
       this.emitStats();
     }
 
@@ -906,10 +1013,11 @@ export class GameEngine {
     this.enemies.forEach((z) => {
       const target = new THREE.Vector3(this.camera.position.x, z.position.y, this.camera.position.z);
       z.lookAt(target);
-      const distance = z.position.distanceTo(this.camera.position);
+      // Horizontal distance: the camera sits at eye height, so a 3D distance never drops below ~2m.
+      const distance = Math.hypot(this.camera.position.x - z.position.x, this.camera.position.z - z.position.z);
       const ud = z.userData as any;
 
-      if (distance > 1.5) {
+      if (distance > ud.reach) {
         const direction = new THREE.Vector3().subVectors(this.camera.position, z.position);
         direction.y = 0;
         direction.normalize();
@@ -956,7 +1064,7 @@ export class GameEngine {
         z.position.y = 0;
         if (time - ud.lastBite > 800) {
           ud.lastBite = time;
-          this.health -= 9;
+          this.health -= ud.bite;
           damagedThisFrame = true;
         }
       }
@@ -993,7 +1101,7 @@ export class GameEngine {
     let reloadRotZ = 0;
     let reloadPosY = 0;
     if (this.reloading) {
-      const progress = (time - this.reloadStart) / this.weapon.reloadMs;
+      const progress = (time - this.reloadStart) / this.reloadMs;
       const dip = Math.sin(Math.min(progress, 1) * Math.PI);
       reloadRotX = dip * -0.8;
       reloadRotZ = dip * 0.4;

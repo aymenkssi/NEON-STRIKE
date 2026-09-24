@@ -2,43 +2,68 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import * as Haptics from "expo-haptics";
-import { GameEngine, type GameStats } from "../game/GameEngine";
+import { GameEngine, type GameStats, type RunResult } from "../game/GameEngine";
+import { levelReward, type LevelResult, type PlayerModifiers } from "../game/progression";
 import { sound } from "../audio/sound";
-import { showRewarded } from "../ads";
+import { showInterstitialAtBreak, showRewarded } from "../ads";
 import { colors, fonts } from "../theme";
 import HUD from "./HUD";
 import TouchControls from "./TouchControls";
 import PauseMenu from "./PauseMenu";
 import GameOver from "./GameOver";
+import LevelComplete from "./LevelComplete";
 
 type Props = {
   username: string;
   lookSensitivity: number;
   soundEnabled: boolean;
+  startLevel: number;
+  unlockedLevel: number;
+  modifiers: PlayerModifiers;
+  // Persists a finished level (stars + credits) and unlocks the next one.
+  onLevelDone: (level: number, stars: number, credits: number) => void;
+  onAddCredits: (credits: number) => void;
   onExit: () => void;
 };
 
 const INITIAL: GameStats = {
   health: 100,
+  maxHealth: 100,
   ammo: 5,
   maxAmmo: 5,
   reloading: false,
   score: 0,
+  level: 1,
   wave: 1,
+  totalWaves: 2,
   kills: 0,
+  credits: 0,
+  boss: null,
   weaponIndex: 0,
-  weapons: [
-    { short: "SG", name: "SHOTGUN", unlocked: true, unlockWave: 1 },
-    { short: "SMG", name: "SMG", unlocked: false, unlockWave: 2 },
-    { short: "AR", name: "ASSAULT RIFLE", unlocked: false, unlockWave: 4 },
-  ],
+  weapons: [],
 };
 
-export default function GameScreen({ username, lookSensitivity, soundEnabled, onExit }: Props) {
+export default function GameScreen({
+  username,
+  lookSensitivity,
+  soundEnabled,
+  startLevel,
+  unlockedLevel,
+  modifiers,
+  onLevelDone,
+  onAddCredits,
+  onExit,
+}: Props) {
   const engineRef = useRef<GameEngine | null>(null);
   const [stats, setStats] = useState<GameStats>(INITIAL);
-  const [status, setStatus] = useState<"playing" | "paused" | "gameover">("playing");
-  const [result, setResult] = useState({ score: 0, wave: 1, kills: 0 });
+  const [status, setStatus] = useState<"playing" | "paused" | "gameover" | "complete">("playing");
+  const [result, setResult] = useState<RunResult>({ score: 0, level: startLevel, kills: 0, credits: 0 });
+  const [levelResult, setLevelResult] = useState<LevelResult | null>(null);
+  // Credits picked up before dying are paid out when the player leaves the game-over screen
+  // (not on revive, which continues the level and pays through the level reward instead).
+  const pendingRunCredits = useRef(0);
+  const latest = useRef({ unlockedLevel, modifiers, onLevelDone });
+  latest.current = { unlockedLevel, modifiers, onLevelDone };
   const [hitSignal, setHitSignal] = useState(0);
   const [damageSignal, setDamageSignal] = useState(0);
   const [canRevive, setCanRevive] = useState(true);
@@ -81,13 +106,21 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
           },
           onGameOver: (r) => {
             setResult(r);
+            pendingRunCredits.current = r.credits;
             setStatus("gameover");
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+          },
+          onLevelComplete: (r) => {
+            const reward = levelReward(r);
+            latest.current.onLevelDone(r.level, reward.stars, reward.total);
+            setLevelResult(r);
+            setStatus("complete");
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           },
           onNotify: notify,
           playSound: (n) => sound.play(n),
         },
-        { lookSensitivity }
+        { lookSensitivity, level: startLevel, unlockedLevel, modifiers }
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,14 +137,41 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
     engineRef.current?.resume();
     setStatus("playing");
   };
+  const payPendingCredits = () => {
+    if (pendingRunCredits.current > 0) onAddCredits(pendingRunCredits.current);
+    pendingRunCredits.current = 0;
+  };
   const restart = () => {
-    engineRef.current?.restart();
+    payPendingCredits();
+    engineRef.current?.startLevel(stats.level, {
+      keepRun: false,
+      unlockedLevel: latest.current.unlockedLevel,
+      modifiers: latest.current.modifiers,
+    });
     setCanRevive(true);
     setStatus("playing");
   };
+  const nextLevel = () => {
+    const next = (levelResult?.level ?? stats.level) + 1;
+    engineRef.current?.startLevel(next, {
+      keepRun: true,
+      unlockedLevel: Math.max(latest.current.unlockedLevel, next),
+      modifiers: latest.current.modifiers,
+    });
+    setLevelResult(null);
+    setCanRevive(true);
+    setStatus("playing");
+  };
+  const exit = () => {
+    payPendingCredits();
+    onExit();
+  };
+  // Leaving a level-complete / game-over screen is a natural break: maybe show an interstitial first.
+  const atBreak = (fn: () => void) => () => showInterstitialAtBreak(fn);
   const revive = () => {
     setCanRevive(false);
     showRewarded(() => {
+      pendingRunCredits.current = 0;
       engineRef.current?.revive();
       setStatus("playing");
     });
@@ -123,7 +183,7 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
 
       {status === "playing" && <TouchControls getEngine={getEngine} />}
 
-      {status !== "gameover" && (
+      {(status === "playing" || status === "paused") && (
         <HUD
           stats={stats}
           hitSignal={hitSignal}
@@ -149,8 +209,17 @@ export default function GameScreen({ username, lookSensitivity, soundEnabled, on
           result={result}
           canRevive={canRevive}
           onRevive={revive}
-          onRestart={restart}
-          onExit={onExit}
+          onRestart={atBreak(restart)}
+          onExit={atBreak(exit)}
+        />
+      )}
+
+      {status === "complete" && levelResult && (
+        <LevelComplete
+          result={levelResult}
+          onDoubleCredits={onAddCredits}
+          onNext={atBreak(nextLevel)}
+          onExit={atBreak(onExit)}
         />
       )}
     </View>

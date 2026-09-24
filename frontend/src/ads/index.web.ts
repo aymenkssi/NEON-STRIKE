@@ -14,3 +14,18 @@ export function showRewarded(onReward: () => void, onClose?: () => void) {
   onReward();
   onClose?.();
 }
+
+export function adsReady() {
+  return false;
+}
+export function onAdsReady(_fn: () => void) {
+  return () => {};
+}
+export function isPrivacyOptionsRequired() {
+  return false;
+}
+export async function showPrivacyOptions() {}
+export const INTERSTITIAL_EVERY = 2;
+export function showInterstitialAtBreak(onDone: () => void) {
+  onDone();
+}

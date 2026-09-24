@@ -4,6 +4,7 @@ import { BlurView } from "expo-blur";
 import Slider from "@react-native-community/slider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
+import { isPrivacyOptionsRequired, showPrivacyOptions } from "../ads";
 
 type Props = {
   lookSensitivity: number;
@@ -66,6 +67,13 @@ export default function Settings({
             thumbColor={soundEnabled ? colors.brand : colors.onSurfaceTertiary}
           />
         </View>
+
+        {isPrivacyOptionsRequired() && (
+          <Pressable testID="privacy-options" onPress={showPrivacyOptions} style={[styles.row, styles.toggleRow]}>
+            <Text style={styles.label}>Confidentialité des annonces</Text>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.onSurfaceSecondary} />
+          </Pressable>
+        )}
 
         <Pressable testID="settings-back" onPress={onClose} style={styles.backBtn}>
           <Text style={styles.backText}>OK</Text>

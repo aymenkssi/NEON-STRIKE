@@ -74,7 +74,7 @@ export default function Leaderboard({ username, onClose }: Props) {
                   <Text style={[styles.name, isMe && { color: colors.brand }]} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={styles.wave}>W{item.wave}</Text>
+                  <Text style={styles.wave}>N{item.wave}</Text>
                   <Text style={[styles.score, isMe && { color: colors.brand }]}>
                     {item.score.toLocaleString()}
                   </Text>

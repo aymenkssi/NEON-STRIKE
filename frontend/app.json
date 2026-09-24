@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "Neon Strike",
-    "slug": "frontend",
+    "slug": "neon-strike",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "neonstrike",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.mobileenhanceapp.j6pao7"
+      "bundleIdentifier": "com.aymenkssi.neonstrike"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.mobileenhanceapp.j6pao7"
+      "package": "com.aymenkssi.neonstrike"
     },
     "web": {
       "bundler": "metro",
@@ -41,9 +41,12 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-7488746561313974~9261401552",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "delayAppMeasurementInit": true
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true

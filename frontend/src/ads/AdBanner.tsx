@@ -1,19 +1,22 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { adsSupported, AdMob, AD_IDS } from "./index";
+import { adsSupported, AdMob, AD_IDS, adsReady, onAdsReady } from "./index";
 import { colors, fonts } from "../theme";
 
 // Renders a real AdMob banner in native builds, and a styled placeholder
 // everywhere else (Expo Go / web) so layouts stay consistent.
 export default function AdBanner({ testID }: { testID?: string }) {
-  if (adsSupported && AdMob?.BannerAd) {
+  // Wait for the consent flow before requesting a banner.
+  const [ready, setReady] = useState(adsReady());
+  useEffect(() => (ready ? undefined : onAdsReady(() => setReady(true))), [ready]);
+
+  if (adsSupported && AdMob?.BannerAd && ready) {
     const { BannerAd, BannerAdSize } = AdMob;
     return (
       <View testID={testID ?? "ad-banner"} style={styles.wrap}>
         <BannerAd
           unitId={AD_IDS.banner}
           size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         />
       </View>
     );

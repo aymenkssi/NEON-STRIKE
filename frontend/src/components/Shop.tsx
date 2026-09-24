@@ -1,0 +1,144 @@
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { colors, fonts, spacing, radius } from "../theme";
+import { COIN_PACKS } from "../iap/catalog";
+import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange } from "../iap";
+import Panel from "./Panel";
+
+type Props = {
+  credits: number;
+  onClose: () => void;
+};
+
+type Notice = { tone: "ok" | "warn" | "error"; text: string } | null;
+
+export default function Shop({ credits, onClose }: Props) {
+  const [status, setStatus] = useState(getStoreStatus());
+  const [buying, setBuying] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  useEffect(() => onStoreChange(() => setStatus(getStoreStatus())), []);
+
+  const buy = async (sku: string) => {
+    if (buying) return;
+    setBuying(sku);
+    setNotice(null);
+    const res = await buyPack(sku);
+    setBuying(null);
+    if (res.kind === "granted") {
+      setNotice({ tone: "ok", text: `+${res.credits.toLocaleString()} crédits ajoutés. Merci !` });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } else if (res.kind === "pending") {
+      setNotice({ tone: "warn", text: "Paiement en attente : les crédits seront ajoutés dès sa validation." });
+    } else if (res.kind === "error") {
+      setNotice({ tone: "error", text: res.message });
+    }
+  };
+
+  const available = status === "ready";
+
+  return (
+    <Panel title="BOUTIQUE" icon="cart" credits={credits} onClose={onClose} testID="shop">
+      <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
+        {COIN_PACKS.map((pack) => {
+          const price = getLocalizedPrice(pack.sku);
+          const canBuy = available && !!price && !buying;
+          return (
+            <View key={pack.sku} style={[styles.card, pack.tag && styles.cardFeatured]} testID={`pack-${pack.sku}`}>
+              {pack.tag ? <Text style={styles.tag}>{pack.tag}</Text> : <View style={styles.tagSpacer} />}
+              <MaterialCommunityIcons name="circle-multiple" size={34} color={colors.warning} />
+              <Text style={styles.amount}>{pack.credits.toLocaleString()}</Text>
+              <Text style={styles.unit}>CRÉDITS</Text>
+              <Text style={styles.bonus}>{pack.bonus ? `${pack.bonus} de bonus` : " "}</Text>
+              <Pressable
+                testID={`buy-${pack.sku}`}
+                disabled={!canBuy}
+                onPress={() => buy(pack.sku)}
+                style={[styles.priceBtn, !canBuy && styles.priceBtnOff]}
+              >
+                {buying === pack.sku ? (
+                  <ActivityIndicator color={colors.onBrand} />
+                ) : (
+                  <Text style={[styles.priceText, !canBuy && { color: colors.onSurfaceTertiary }]}>
+                    {price ?? pack.suggestedPrice}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {notice ? (
+        <Text
+          style={[
+            styles.notice,
+            { color: notice.tone === "ok" ? colors.brand : notice.tone === "warn" ? colors.warning : colors.error },
+          ]}
+          testID="shop-notice"
+        >
+          {notice.text}
+        </Text>
+      ) : (
+        <Text style={styles.footer}>
+          {status === "unavailable"
+            ? "Les achats sont disponibles uniquement dans l’application Android installée depuis Google Play."
+            : status === "connecting"
+              ? "Connexion à Google Play…"
+              : status === "error"
+                ? "Impossible de joindre Google Play. Vérifie ta connexion puis rouvre la boutique."
+                : "Paiement sécurisé par Google Play. Les crédits sont ajoutés immédiatement."}
+        </Text>
+      )}
+    </Panel>
+  );
+}
+
+const styles = StyleSheet.create({
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "center" },
+  card: {
+    width: 160,
+    alignItems: "center",
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+    gap: 2,
+  },
+  cardFeatured: { borderColor: "rgba(255,176,0,0.6)" },
+  tag: {
+    alignSelf: "stretch",
+    textAlign: "center",
+    backgroundColor: colors.warning,
+    color: colors.onWarning,
+    fontFamily: fonts.display,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    marginHorizontal: -spacing.sm,
+    paddingVertical: 2,
+    borderTopLeftRadius: radius.md - 2,
+    borderTopRightRadius: radius.md - 2,
+    marginBottom: 6,
+  },
+  tagSpacer: { height: 25 },
+  amount: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 26, lineHeight: 28, fontVariant: ["tabular-nums"] },
+  unit: { color: colors.onSurfaceSecondary, fontFamily: fonts.displaySemi, fontSize: 11, letterSpacing: 2 },
+  bonus: { color: colors.brand, fontFamily: fonts.displaySemi, fontSize: 13, minHeight: 18 },
+  priceBtn: {
+    alignSelf: "stretch",
+    height: 40,
+    marginTop: 4,
+    borderRadius: radius.md,
+    backgroundColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceBtnOff: { backgroundColor: colors.surfaceTertiary },
+  priceText: { color: colors.onBrand, fontFamily: fonts.display, fontSize: 17, letterSpacing: 1 },
+  notice: { fontFamily: fonts.textMed, fontSize: 14, textAlign: "center", marginTop: spacing.sm },
+  footer: { color: colors.onSurfaceSecondary, fontFamily: fonts.text, fontSize: 12, textAlign: "center", marginTop: spacing.sm },
+});
