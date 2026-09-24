@@ -37,8 +37,8 @@ apt install -y ufw
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable
 
 # Récupérer le projet
-git clone https://github.com/aymenkssi/NEON-STRIKE.git /opt/neon-strike
-cd /opt/neon-strike/deploy
+git clone https://github.com/aymenkssi/NEON-STRIKE.git /opt/apps/neon-strike
+cd /opt/apps/neon-strike/deploy
 ```
 
 ## 3. Configurer
@@ -82,7 +82,7 @@ Journaux : `docker compose logs -f api`.
    - **Réseau** : celui auquel le conteneur Traefik est connecté.
    - **Entrypoint HTTPS** : par exemple `websecure` pour `--entrypoints.websecure.address=:443`.
    - **Certresolver** : par exemple `letsencrypt` pour `--certificatesresolvers.letsencrypt.acme…`.
-2. **Dans `deploy/.env`** : décommentez `COMPOSE_FILE=docker-compose.traefik.yml` et renseignez `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` et `TRAEFIK_CERTRESOLVER`. Grâce à `COMPOSE_FILE`, toutes les commandes `docker compose` (et `backup.sh`) utilisent automatiquement cette variante.
+2. **Dans `deploy/.env`** : `COMPOSE_FILE=docker-compose.traefik.yml` est actif par défaut, avec les valeurs du VPS de production (`TRAEFIK_NETWORK=web`, `TRAEFIK_ENTRYPOINT=websecure`, `TRAEFIK_CERTRESOLVER=letsencrypt`, cf. `/opt/apps/proxy/docker-compose.yml`). Adaptez-les seulement pour un autre serveur. Grâce à `COMPOSE_FILE`, toutes les commandes `docker compose` (et `backup.sh`) utilisent automatiquement cette variante.
 3. **Lancez** `docker compose up -d --build` depuis `deploy/`. Le projet s'appelle `neon-strike` et ses routeurs Traefik `neon-api` et `neon-site` : ils n'entrent pas en conflit avec vos autres applications.
 4. **Si Traefik redirige HTTP vers HTTPS globalement** (cas le plus courant), rien d'autre à faire. Sinon, les domaines ne répondront qu'en `https://`, ce qui suffit pour l'app.
 
@@ -98,7 +98,7 @@ Journaux : `docker compose logs -f api`.
    - enregistrez.
 3. **Envoyez la clé sur le VPS**, puis redémarrez l'API :
    ```bash
-   scp play-service-account.json root@IP_DU_VPS:/opt/neon-strike/deploy/secrets/
+   scp play-service-account.json root@IP_DU_VPS:/opt/apps/neon-strike/deploy/secrets/
    docker compose restart api
    ```
 
@@ -130,7 +130,7 @@ Page : **https://api.gameneonstrike.com/admin**. Connectez-vous avec le `ADMIN_T
 ```bash
 ./backup.sh     # crée backups/neon-AAAA-MM-JJ_HHMM.gz
 crontab -e      # puis ajouter :
-0 4 * * * cd /opt/neon-strike/deploy && ./backup.sh >> backups/backup.log 2>&1
+0 4 * * * cd /opt/apps/neon-strike/deploy && ./backup.sh >> backups/backup.log 2>&1
 ```
 
 Les 14 dernières sauvegardes sont conservées. Copiez-les régulièrement hors du VPS (par exemple avec `rsync` vers un autre serveur ou un stockage objet).
