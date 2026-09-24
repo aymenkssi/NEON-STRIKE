@@ -1,5 +1,8 @@
 # Neon Strike backend on a VPS: API (FastAPI) + MongoDB + Caddy (automatic HTTPS).
 # Usage: cp .env.example .env && edit it, then `docker compose up -d --build`.
+# Server that already runs Traefik: use docker-compose.traefik.yml instead (see README).
+name: neon-strike
+
 services:
   mongo:
     image: mongo:7
@@ -31,7 +34,8 @@ services:
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/play-service-account.json
       ADMIN_TOKEN: ${ADMIN_TOKEN}
     volumes:
-      - ./secrets/play-service-account.json:/run/secrets/play-service-account.json:ro
+      # Whole folder, not the file: works before the Google key is added.
+      - ./secrets:/run/secrets:ro
 
   caddy:
     image: caddy:2
