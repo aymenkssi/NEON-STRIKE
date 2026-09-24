@@ -83,8 +83,10 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 
 ## À prévoir avant une publication
 
-- **Identifiant d'application** : `android.package` vaut `com.emergent.mobileenhanceapp.j6pao7` (valeur générée par le template). Choisissez le vôtre (ex. `com.votrenom.neonstrike`) **avant** la première publication sur le Play Store : il ne pourra plus changer ensuite. Même remarque pour `slug` et `scheme` (`frontend`).
+- **Identifiant d'application** : `com.aymenkssi.neonstrike` (Android et iOS). Il ne peut plus changer une fois l'app publiée sur le Play Store.
 - **AdMob** : les unités NEON STRIKE (bannière, interstitiel, récompensée) sont dans `frontend/src/ads/index.ts`. Seul le profil EAS `production` affiche de vraies pubs ; les builds `development` et `preview` utilisent les pubs de test. L'`iosAppId` est encore l'ID de test Google.
+- **Consentement RGPD** : l'app affiche au démarrage le message configuré dans AdMob (**Privacy & messaging → GDPR**) et ne charge aucune pub avant la réponse. Le joueur peut modifier son choix dans Réglages → « Confidentialité des annonces ». Sans message publié dans AdMob, les joueurs européens ne verront pas de pubs.
+- **Interstitiel** : affiché toutes les 2 fins de niveau ou morts, en quittant l'écran de résultat, et jamais dans la minute qui suit une pub récompensée (`INTERSTITIAL_EVERY` dans `frontend/src/ads/index.ts`).
 - **Backend** : à héberger (Render, Railway, Fly.io…) avec une base MongoDB Atlas, puis `EXPO_PUBLIC_BACKEND_URL` doit pointer vers son URL publique.
 
 ## Progression du jeu

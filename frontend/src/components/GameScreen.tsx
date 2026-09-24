@@ -5,7 +5,7 @@ import * as Haptics from "expo-haptics";
 import { GameEngine, type GameStats, type RunResult } from "../game/GameEngine";
 import { levelReward, type LevelResult, type PlayerModifiers } from "../game/progression";
 import { sound } from "../audio/sound";
-import { showRewarded } from "../ads";
+import { showInterstitialAtBreak, showRewarded } from "../ads";
 import { colors, fonts } from "../theme";
 import HUD from "./HUD";
 import TouchControls from "./TouchControls";
@@ -166,6 +166,8 @@ export default function GameScreen({
     payPendingCredits();
     onExit();
   };
+  // Leaving a level-complete / game-over screen is a natural break: maybe show an interstitial first.
+  const atBreak = (fn: () => void) => () => showInterstitialAtBreak(fn);
   const revive = () => {
     setCanRevive(false);
     showRewarded(() => {
@@ -207,13 +209,18 @@ export default function GameScreen({
           result={result}
           canRevive={canRevive}
           onRevive={revive}
-          onRestart={restart}
-          onExit={exit}
+          onRestart={atBreak(restart)}
+          onExit={atBreak(exit)}
         />
       )}
 
       {status === "complete" && levelResult && (
-        <LevelComplete result={levelResult} onDoubleCredits={onAddCredits} onNext={nextLevel} onExit={onExit} />
+        <LevelComplete
+          result={levelResult}
+          onDoubleCredits={onAddCredits}
+          onNext={atBreak(nextLevel)}
+          onExit={atBreak(onExit)}
+        />
       )}
     </View>
   );
