@@ -8,6 +8,8 @@ Ce dossier lance trois conteneurs avec Docker Compose :
 | `api` | API FastAPI : joueurs, classement, vérification des achats | non (seulement via Caddy) |
 | `mongo` | Base MongoDB 7 avec mot de passe, données dans un volume | non |
 
+> **Votre VPS a déjà Traefik devant d'autres applications ?** Utilisez la variante `docker-compose.traefik.yml` : elle n'installe pas Caddy, n'ouvre aucun port, et laisse votre Traefik router et certifier les domaines. Voir la section « Serveur avec Traefik » plus bas ; les autres étapes restent identiques.
+
 **Prérequis** : un VPS Linux (Ubuntu 22.04/24.04 ou Debian 12, 1 vCPU et 1 Go de RAM suffisent), un nom de domaine, et l'accès root en SSH.
 
 ## 1. Nom de domaine `gameneonstrike.com`
@@ -63,6 +65,26 @@ curl https://gameneonstrike.com/app-ads.txt  # google.com, pub-7488746561313974,
 
 Mise à jour après un `git pull` : `docker compose up -d --build`.
 Journaux : `docker compose logs -f api`.
+
+## Serveur avec Traefik (variante)
+
+| Service | Rôle | Réseaux |
+|---|---|---|
+| `api` | API FastAPI, routée par Traefik sur `api.gameneonstrike.com` | interne + réseau de Traefik |
+| `site` | nginx qui sert `deploy/site/`, routé sur `gameneonstrike.com` et `www` | réseau de Traefik |
+| `mongo` | MongoDB, uniquement sur le réseau interne | interne |
+
+1. **Relevez 3 valeurs de votre Traefik**, dans sa configuration (`traefik.yml`, `traefik.toml` ou les arguments `--entrypoints…` / `--certificatesresolvers…` de son conteneur) :
+   ```bash
+   docker network ls                                   # réseau partagé avec Traefik, ex. "traefik" ou "proxy"
+   docker inspect traefik --format '{{json .Args}}'    # nom du conteneur à adapter ; sinon lire traefik.yml
+   ```
+   - **Réseau** : celui auquel le conteneur Traefik est connecté.
+   - **Entrypoint HTTPS** : par exemple `websecure` pour `--entrypoints.websecure.address=:443`.
+   - **Certresolver** : par exemple `letsencrypt` pour `--certificatesresolvers.letsencrypt.acme…`.
+2. **Dans `deploy/.env`** : décommentez `COMPOSE_FILE=docker-compose.traefik.yml` et renseignez `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` et `TRAEFIK_CERTRESOLVER`. Grâce à `COMPOSE_FILE`, toutes les commandes `docker compose` (et `backup.sh`) utilisent automatiquement cette variante.
+3. **Lancez** `docker compose up -d --build` depuis `deploy/`. Le projet s'appelle `neon-strike` et ses routeurs Traefik `neon-api` et `neon-site` : ils n'entrent pas en conflit avec vos autres applications.
+4. **Si Traefik redirige HTTP vers HTTPS globalement** (cas le plus courant), rien d'autre à faire. Sinon, les domaines ne répondront qu'en `https://`, ce qui suffit pour l'app.
 
 ## 5. Autoriser le serveur à vérifier les achats Google Play
 

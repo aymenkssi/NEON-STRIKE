@@ -1,5 +1,8 @@
 # Neon Strike backend on a VPS: API (FastAPI) + MongoDB + Caddy (automatic HTTPS).
 # Usage: cp .env.example .env && edit it, then `docker compose up -d --build`.
+# Server that already runs Traefik: use docker-compose.traefik.yml instead (see README).
+name: neon-strike
+
 services:
   mongo:
     image: mongo:7
