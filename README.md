@@ -102,7 +102,8 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 
 ## Achat de crédits (Google Play Billing)
 
-- Boutique accessible via le « + » du compteur de crédits (menu et Arsenal). Code : `frontend/src/iap/`, packs dans `frontend/src/iap/catalog.ts`.
+- Boutique accessible via le « + » du compteur de crédits (menu et Arsenal). Code : `frontend/src/iap/`.
+- Packs (crédits, étiquettes, ordre, visibilité) et messages aux joueurs se gèrent sur la page d'administration `https://api.gameneonstrike.com/admin` (voir [`deploy/README.md`](deploy/README.md)). `frontend/src/iap/catalog.ts` sert de liste par défaut hors connexion.
 - Produits **consommables** à créer dans Play Console → *Monétiser → Produits intégrés*, avec exactement ces ID : `coins_500`, `coins_1200`, `coins_3500`, `coins_8000`. Les prix se règlent dans Play Console ; l'app affiche le prix localisé renvoyé par Google.
 - Les achats ne fonctionnent que dans un build Android installé (pas dans Expo Go ni sur le web). Pour tester sans payer : ajouter votre compte Google dans Play Console → *Paramètres → Test des licences*, puis installer l'app depuis un canal de test (interne ou fermé).
 - Chaque achat est vérifié par le backend auprès de Google Play avant d'être crédité ; un reçu ne peut servir qu'à un seul joueur. Sans `EXPO_PUBLIC_BACKEND_URL` (développement), l'achat est crédité sans vérification.

@@ -6,6 +6,8 @@ import GameScreen from "@/src/components/GameScreen";
 import { useProgress } from "@/src/hooks/use-progress";
 import { modifiersFrom } from "@/src/game/progression";
 import { initStore } from "@/src/iap";
+import { setRemotePacks } from "@/src/iap/catalog";
+import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
 
 const KEYS = {
   username: "np_username",
@@ -31,6 +33,20 @@ export default function Index() {
       if (typeof s === "number") setLookSensitivity(s);
       if (typeof snd === "boolean") setSoundEnabled(snd);
       setReady(true);
+    })();
+  }, []);
+
+  // Shop packs and player messages from the admin page (cached packs first, then live config).
+  const [messages, setMessages] = useState<RemoteMessage[]>([]);
+  useEffect(() => {
+    (async () => {
+      const cached = await loadCachedConfig();
+      if (cached) setRemotePacks(cached.packs);
+      const live = await fetchRemoteConfig();
+      if (live) {
+        setRemotePacks(live.packs);
+        setMessages(live.messages);
+      }
     })();
   }, []);
 
@@ -75,6 +91,7 @@ export default function Index() {
           onBuyUpgrade={buyUpgrade}
           onClaimDaily={claimDaily}
           onPlay={startGame}
+          messages={messages}
         />
       ) : (
         <GameScreen

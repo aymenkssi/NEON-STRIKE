@@ -29,6 +29,7 @@ services:
       PURCHASE_VERIFICATION: ${PURCHASE_VERIFICATION:-google}
       GOOGLE_PLAY_PACKAGE: ${GOOGLE_PLAY_PACKAGE:-com.aymenkssi.neonstrike}
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/play-service-account.json
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
     volumes:
       - ./secrets/play-service-account.json:/run/secrets/play-service-account.json:ro
 

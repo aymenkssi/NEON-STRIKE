@@ -73,22 +73,6 @@ class TestScores:
 TOKEN = "google-purchase-token-123"
 
 
-@pytest.fixture
-def google(monkeypatch):
-    calls = []
-    state = {"result": PlayPurchase(state="purchased", order_id="GPA.1", is_test=True), "calls": calls}
-
-    async def fake_verify(product_id, token):
-        calls.append((product_id, token))
-        if isinstance(state["result"], Exception):
-            raise state["result"]
-        return state["result"]
-
-    monkeypatch.setattr(server.verifier, "verify_product", fake_verify)
-    monkeypatch.setattr(type(server.verifier), "configured", property(lambda self: True))
-    return state
-
-
 def verify(api, h, product="coins_1200", token=TOKEN):
     return api.post("/api/purchases/verify", json={"product_id": product, "purchase_token": token}, headers=h)
 

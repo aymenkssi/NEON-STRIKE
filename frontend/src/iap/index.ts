@@ -11,7 +11,7 @@ import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { storage } from "@/src/utils/storage";
 import { verifyPurchaseOnServer } from "@/src/api/purchases";
-import { COIN_PACKS, PACK_BY_SKU } from "./catalog";
+import { getPack, getPacks, onPacksChange } from "./catalog";
 import type { PurchaseOutcome, StoreStatus } from "./types";
 
 type ExpoIap = typeof import("expo-iap");
@@ -70,28 +70,28 @@ function settle(outcome: PurchaseOutcome) {
 
 async function handlePurchase(purchase: Purchase) {
   if (!iap) return;
-  const pack = PACK_BY_SKU[purchase.productId];
-  if (!pack) return;
+  const sku = purchase.productId;
+  const pack = getPack(sku);
   if (purchase.purchaseState === "pending") {
     // Paid later (e.g. cash at a store): Play sends the purchase again once it clears.
-    if (inFlight?.sku === pack.sku) settle({ kind: "pending", sku: pack.sku });
+    if (inFlight?.sku === sku) settle({ kind: "pending", sku });
     return;
   }
   if (purchase.purchaseState !== "purchased") return;
 
   const token = purchase.purchaseToken || purchase.id;
   if (!granted.includes(token)) {
-    const verdict = await verifyPurchaseOnServer(pack.sku, token);
-    if (verdict === "pending") {
-      if (inFlight?.sku === pack.sku) settle({ kind: "pending", sku: pack.sku });
+    const verdict = await verifyPurchaseOnServer(sku, token);
+    if (verdict.status === "pending") {
+      if (inFlight?.sku === sku) settle({ kind: "pending", sku });
       return;
     }
-    if (verdict === "invalid") {
-      if (inFlight?.sku === pack.sku) settle({ kind: "error", message: "Achat non reconnu par Google Play." });
+    if (verdict.status === "invalid") {
+      if (inFlight?.sku === sku) settle({ kind: "error", message: "Achat non reconnu par Google Play." });
       return;
     }
-    if (verdict === "unreachable") {
-      if (inFlight?.sku === pack.sku) {
+    if (verdict.status === "unreachable") {
+      if (inFlight?.sku === sku) {
         settle({
           kind: "error",
           message: "Paiement reçu, vérification en cours. Tes crédits seront ajoutés automatiquement.",
@@ -99,10 +99,13 @@ async function handlePurchase(purchase: Purchase) {
       }
       return;
     }
-    onGrant?.(pack.credits, pack.sku);
+    // The server decides the amount (admin page); the local catalog is only the offline fallback.
+    const credits = verdict.credits ?? pack?.credits;
+    if (!credits) return;
+    onGrant?.(credits, sku);
     granted = [...granted, token].slice(-200);
     await storage.setItem(GRANTED_KEY, JSON.stringify(granted));
-    if (inFlight?.sku === pack.sku) settle({ kind: "granted", sku: pack.sku, credits: pack.credits });
+    if (inFlight?.sku === sku) settle({ kind: "granted", sku, credits });
   }
   try {
     // Consumes the purchase: without this Google refunds it after 3 days.
@@ -136,16 +139,29 @@ export async function initStore(grant: (credits: number, sku: string) => void) {
 
   try {
     await lib.initConnection();
-    const products = await lib.fetchProducts({ skus: COIN_PACKS.map((p) => p.sku), type: "in-app" });
-    for (const p of (products ?? []) as { id: string; displayPrice: string }[]) prices[p.id] = p.displayPrice;
     status = "ready";
+    await refreshProducts();
   } catch {
     status = "error";
+    emit();
   }
-  emit();
+  // Packs edited on the server may add product IDs: fetch their Play prices too.
+  onPacksChange(() => {
+    refreshProducts();
+  });
 
   // Credit purchases left unfinished by a previous session.
   await retryUnfinishedPurchases();
+}
+
+// Loads Google Play prices for the packs currently shown in the shop.
+async function refreshProducts() {
+  if (!iap || status !== "ready") return;
+  try {
+    const products = await iap.fetchProducts({ skus: getPacks().map((p) => p.sku), type: "in-app" });
+    for (const p of (products ?? []) as { id: string; displayPrice: string }[]) prices[p.id] = p.displayPrice;
+  } catch {}
+  emit();
 }
 
 // Re-processes purchases Google still holds (verification failed earlier, pending cash payments).

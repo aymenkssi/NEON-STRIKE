@@ -6,27 +6,21 @@ import secrets
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Optional
 
-from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
+import liveops
+from database import client, db
 from play_verifier import PlayVerifier
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("neon")
 
-client = AsyncIOMotorClient(os.environ["MONGO_URL"])
-db = client[os.environ["DB_NAME"]]
 
 # "google" (default) verifies every purchase with Google Play; "disabled" accepts them (local dev only).
 PURCHASE_VERIFICATION = os.environ.get("PURCHASE_VERIFICATION", "google")
@@ -35,8 +29,6 @@ verifier = PlayVerifier(
     service_account_file=os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE"),
 )
 
-# Must match frontend/src/iap/catalog.ts — the server is the authority on credits per product.
-PRODUCT_CREDITS = {"coins_500": 500, "coins_1200": 1200, "coins_3500": 3500, "coins_8000": 8000}
 
 MAX_LEVEL = 30
 SCORE_COOLDOWN_S = 5
@@ -186,7 +178,8 @@ async def my_rank(player: dict = Depends(current_player)):
 
 @api.post("/purchases/verify", response_model=PurchaseResult)
 async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(current_player)):
-    credits = PRODUCT_CREDITS.get(payload.product_id)
+    # Credits come from the pack configured in the admin page (the server is the authority).
+    credits = await liveops.pack_credits(payload.product_id)
     if credits is None:
         raise HTTPException(422, "Unknown product")
     token_hash = hash_token(payload.purchase_token)
@@ -237,11 +230,14 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
 
 
 app.include_router(api)
+app.include_router(liveops.public)
+app.include_router(liveops.admin)
+app.include_router(liveops.admin_page)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -253,6 +249,7 @@ async def create_indexes():
     await db.scores.create_index("player_id", unique=True)
     await db.scores.create_index([("score", -1)])
     await db.purchases.create_index("token_hash", unique=True)
+    await liveops.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
 

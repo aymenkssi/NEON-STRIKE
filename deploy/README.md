@@ -90,7 +90,20 @@ La clé JSON donne accès à votre compte Play : ne la commitez jamais (le dossi
 - **Site** (`deploy/site/`) : page d'accueil, `app-ads.txt` pour AdMob et politique de confidentialité sur `https://gameneonstrike.com/privacy`. **Avant la mise en ligne**, remplacez `[NOM DU RESPONSABLE]` et `[ADRESSE E-MAIL DE CONTACT]` dans `privacy.html` et `index.html`.
 - **Play Console** → **Fiche du Store** : renseignez `https://gameneonstrike.com` comme site web et `https://gameneonstrike.com/privacy` comme règles de confidentialité. AdMob vérifie ensuite automatiquement `app-ads.txt` (sous 24 h environ).
 
-## 7. Sauvegardes
+## 7. Administration : packs de crédits et messages aux joueurs
+
+Page : **https://api.gameneonstrike.com/admin**. Connectez-vous avec le `ADMIN_TOKEN` de `deploy/.env` (générez-le avec `openssl rand -hex 32` ; vide = administration désactivée). Le jeton reste dans l'onglet du navigateur jusqu'à sa fermeture.
+
+**Packs de crédits** : pour chaque pack, vous réglez le nombre de crédits, le bonus et l'étiquette affichés, l'ordre et la visibilité. Les joueurs voient les changements au prochain lancement du jeu, et les crédits accordés après un achat vérifié sont ceux configurés ici.
+
+- **Le prix en euros se règle uniquement dans Play Console** : Google encaisse ce prix et l'app affiche toujours celui de Google.
+- **Pour ajouter un pack**, créez d'abord le produit dans Play Console (**Monétiser** → **Produits intégrés**), puis ajoutez-le ici avec **exactement le même ID**. Il apparaît sans republier l'app.
+- **Un pack déjà vendu** ne peut pas être supprimé, seulement masqué : les achats en cours restent honorés.
+- **Exemple de promo** : passez `coins_1200` de 1 200 à 2 000 crédits avec l'étiquette « PROMO WEEK-END », publiez un message « Promotion », puis remettez 1 200 lundi.
+
+**Messages** : titre, texte, type (Information, Promotion avec un bouton vers la boutique, Alerte), dates de début et de fin optionnelles. Chaque joueur voit un message une seule fois, à l'ouverture du menu. Au plus 5 messages sont en ligne à la fois.
+
+## 8. Sauvegardes
 
 ```bash
 ./backup.sh     # crée backups/neon-AAAA-MM-JJ_HHMM.gz
@@ -114,6 +127,8 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `POST /api/scores` | Enregistre un score. Joueur identifié obligatoire, contrôle de vraisemblance, un envoi toutes les 5 s au plus, un seul meilleur score par joueur. |
 | `GET /api/leaderboard` | Top 100 maximum. |
 | `GET /api/leaderboard/me` | Rang du joueur. |
+| `GET /api/config` | Packs visibles et messages en ligne, lus par l'app au démarrage. |
+| `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
 | `POST /api/purchases/verify` | Interroge Google Play. Répond `valid` uniquement si l'achat est payé. Un même reçu ne peut servir qu'à un seul joueur et un seul produit. |
 
-Les crédits par produit sont définis côté serveur (`PRODUCT_CREDITS` dans `backend/server.py`) et doivent correspondre à `frontend/src/iap/catalog.ts`.
+Les crédits par produit sont ceux de la page d'administration. `frontend/src/iap/catalog.ts` ne sert que de liste par défaut quand le serveur est injoignable.

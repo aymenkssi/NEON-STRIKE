@@ -15,6 +15,9 @@ import Arsenal from "./Arsenal";
 import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
+import PlayerMessage from "./PlayerMessage";
+import { useMessageQueue } from "../hooks/use-message-queue";
+import type { RemoteMessage } from "../api/config";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
 import type { Progress } from "../hooks/use-progress";
 
@@ -29,6 +32,7 @@ type Props = {
   onBuyUpgrade: (key: UpgradeKey) => boolean;
   onClaimDaily: () => number;
   onPlay: (level: number) => void;
+  messages: RemoteMessage[];
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -51,6 +55,10 @@ export default function MainMenu(props: Props) {
     dailyAutoShown = true;
     return true;
   });
+
+  const { next: message, dismiss } = useMessageQueue(props.messages);
+  // One overlay at a time: messages wait until the daily reward and other windows are closed.
+  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings;
 
   const play = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -148,6 +156,9 @@ export default function MainMenu(props: Props) {
         />
       )}
       {showShop && <Shop credits={progress.credits} onClose={() => setShowShop(false)} />}
+      {message && !overlayOpen && (
+        <PlayerMessage message={message} onClose={() => dismiss(message.id)} onOpenShop={() => setShowShop(true)} />
+      )}
       {showDaily && (
         <DailyReward
           credits={progress.credits}

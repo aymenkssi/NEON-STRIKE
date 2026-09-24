@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { COIN_PACKS } from "../iap/catalog";
+import { getPacks, onPacksChange } from "../iap/catalog";
 import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange, retryUnfinishedPurchases } from "../iap";
 import Panel from "./Panel";
 
@@ -18,6 +18,8 @@ export default function Shop({ credits, onClose }: Props) {
   const [status, setStatus] = useState(getStoreStatus());
   const [buying, setBuying] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
+  const [packs, setPacks] = useState(getPacks());
+  useEffect(() => onPacksChange(() => setPacks(getPacks())), []);
 
   useEffect(() => onStoreChange(() => setStatus(getStoreStatus())), []);
   // Opening the shop also retries purchases whose verification failed earlier.
@@ -46,7 +48,7 @@ export default function Shop({ credits, onClose }: Props) {
   return (
     <Panel title="BOUTIQUE" icon="cart" credits={credits} onClose={onClose} testID="shop">
       <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
-        {COIN_PACKS.map((pack) => {
+        {packs.map((pack) => {
           const price = getLocalizedPrice(pack.sku);
           const canBuy = available && !!price && !buying;
           return (
@@ -66,7 +68,7 @@ export default function Shop({ credits, onClose }: Props) {
                   <ActivityIndicator color={colors.onBrand} />
                 ) : (
                   <Text style={[styles.priceText, !canBuy && { color: colors.onSurfaceTertiary }]}>
-                    {price ?? pack.suggestedPrice}
+                    {price ?? pack.suggestedPrice ?? "—"}
                   </Text>
                 )}
               </Pressable>
