@@ -5,6 +5,7 @@ import MainMenu from "@/src/components/MainMenu";
 import GameScreen from "@/src/components/GameScreen";
 import { useProgress } from "@/src/hooks/use-progress";
 import { modifiersFrom } from "@/src/game/progression";
+import { initStore } from "@/src/iap";
 
 const KEYS = {
   username: "np_username",
@@ -32,6 +33,11 @@ export default function Index() {
       setReady(true);
     })();
   }, []);
+
+  // Connect to Google Play only once the save is loaded, so purchased credits are added to it.
+  useEffect(() => {
+    if (loaded) initStore(addCredits);
+  }, [loaded, addCredits]);
 
   const updateUsername = (v: string) => {
     setUsername(v);

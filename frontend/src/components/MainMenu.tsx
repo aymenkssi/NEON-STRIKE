@@ -14,6 +14,7 @@ import LevelSelect from "./LevelSelect";
 import Arsenal from "./Arsenal";
 import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
+import Shop from "./Shop";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
 import type { Progress } from "../hooks/use-progress";
 
@@ -42,6 +43,7 @@ export default function MainMenu(props: Props) {
   const [showSettings, setShowSettings] = useState(false);
   const [showLevels, setShowLevels] = useState(false);
   const [showArsenal, setShowArsenal] = useState(false);
+  const [showShop, setShowShop] = useState(false);
   const { progress } = props;
   const dailyReady = dailyStatus(progress.dailyLast, progress.dailyStreak).canClaim;
   const [showDaily, setShowDaily] = useState(() => {
@@ -68,7 +70,7 @@ export default function MainMenu(props: Props) {
         style={[styles.topBar, { top: Math.max(insets.top, 12), right: Math.max(insets.right, 20) }]}
         pointerEvents="box-none"
       >
-        <CreditBadge amount={progress.credits} testID="menu-credits" />
+        <CreditBadge amount={progress.credits} testID="menu-credits" onPress={() => setShowShop(true)} />
         <Pressable testID="open-daily" style={styles.topBtn} onPress={() => setShowDaily(true)}>
           <MaterialCommunityIcons name="gift" size={20} color={colors.warning} />
           {dailyReady && <View style={styles.dot} />}
@@ -141,9 +143,11 @@ export default function MainMenu(props: Props) {
           credits={progress.credits}
           upgrades={progress.upgrades}
           onBuy={props.onBuyUpgrade}
+          onOpenShop={() => setShowShop(true)}
           onClose={() => setShowArsenal(false)}
         />
       )}
+      {showShop && <Shop credits={progress.credits} onClose={() => setShowShop(false)} />}
       {showDaily && (
         <DailyReward
           credits={progress.credits}

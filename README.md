@@ -97,6 +97,13 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Arsenal** : améliorations permanentes (dégâts, santé max, chargeur, rechargement), 5 niveaux chacune.
 - La progression est sauvegardée sur l'appareil (`frontend/src/hooks/use-progress.ts`, clé `np_progress_v1`).
 
+## Achat de crédits (Google Play Billing)
+
+- Boutique accessible via le « + » du compteur de crédits (menu et Arsenal). Code : `frontend/src/iap/`, packs dans `frontend/src/iap/catalog.ts`.
+- Produits **consommables** à créer dans Play Console → *Monétiser → Produits intégrés*, avec exactement ces ID : `coins_500`, `coins_1200`, `coins_3500`, `coins_8000`. Les prix se règlent dans Play Console ; l'app affiche le prix localisé renvoyé par Google.
+- Les achats ne fonctionnent que dans un build Android installé (pas dans Expo Go ni sur le web). Pour tester sans payer : ajouter votre compte Google dans Play Console → *Paramètres → Test des licences*, puis installer l'app depuis un canal de test (interne ou fermé).
+- Les crédits sont ajoutés dès la confirmation de Google, puis l'achat est « consommé ». Un achat interrompu (app fermée, paiement en espèces en attente) est crédité au lancement suivant.
+
 ## Pistes d'évolution
 
 Voir le backlog dans [`memory/PRD.md`](memory/PRD.md) : nouvelles armes et bonus, boss toutes les N vagues, mini-carte, interstitiel en fin de partie, défi quotidien, statistiques de joueur en ligne.

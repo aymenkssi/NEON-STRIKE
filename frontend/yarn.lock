@@ -3826,6 +3826,11 @@ expo-haptics@15.0.8:
   resolved "https://registry.yarnpkg.com/expo-haptics/-/expo-haptics-15.0.8.tgz#f93f895ac5d76fe0c5ac26b3644e1dbb097833f3"
   integrity sha512-lftutojy8Qs8zaDzzjwM3gKHFZ8bOOEZDCkmh2Ddpe95Ra6kt2izeOfOfKuP/QEh0MZ1j9TfqippyHdRd1ZM9g==
 
+expo-iap@5.6.3:
+  version "5.6.3"
+  resolved "https://registry.yarnpkg.com/expo-iap/-/expo-iap-5.6.3.tgz#90f35a25fa73ee394127cb04a90049e9597dc2fa"
+  integrity sha512-iWtdC6tTzPy7lY+j6rBwagFYIw4IDIHUeDwDKvIPHzWci1mtmHVcTjJkyB38elfvRNfuKgJqcE2ce5k45U5tRA==
+
 expo-image@3.0.11:
   version "3.0.11"
   resolved "https://registry.yarnpkg.com/expo-image/-/expo-image-3.0.11.tgz#54195565dc710e632c10414c3609deebb7149ac5"

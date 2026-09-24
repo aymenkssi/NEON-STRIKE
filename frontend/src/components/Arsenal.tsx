@@ -10,10 +10,11 @@ type Props = {
   credits: number;
   upgrades: UpgradeLevels;
   onBuy: (key: UpgradeKey) => boolean;
+  onOpenShop: () => void;
   onClose: () => void;
 };
 
-export default function Arsenal({ credits, upgrades, onBuy, onClose }: Props) {
+export default function Arsenal({ credits, upgrades, onBuy, onOpenShop, onClose }: Props) {
   const buy = (key: UpgradeKey) => {
     const ok = onBuy(key);
     Haptics.notificationAsync(
@@ -22,7 +23,7 @@ export default function Arsenal({ credits, upgrades, onBuy, onClose }: Props) {
   };
 
   return (
-    <Panel title="ARSENAL" icon="store" credits={credits} onClose={onClose} testID="arsenal">
+    <Panel title="ARSENAL" icon="store" credits={credits} onCreditsPress={onOpenShop} onClose={onClose} testID="arsenal">
       <ScrollView horizontal={false} contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
         {UPGRADES.map((u) => {
           const lvl = upgrades[u.key];

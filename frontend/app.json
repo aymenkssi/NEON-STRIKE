@@ -45,7 +45,8 @@
           "delayAppMeasurementInit": true
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true

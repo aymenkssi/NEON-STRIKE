@@ -9,13 +9,14 @@ type Props = {
   title: string;
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   credits?: number;
+  onCreditsPress?: () => void;
   onClose: () => void;
   testID?: string;
   children: React.ReactNode;
 };
 
 // Shared modal shell for the menu overlays (levels, arsenal, daily reward).
-export default function Panel({ title, icon, credits, onClose, testID, children }: Props) {
+export default function Panel({ title, icon, credits, onCreditsPress, onClose, testID, children }: Props) {
   return (
     <BlurView intensity={50} tint="dark" style={styles.overlay} testID={testID}>
       <View style={styles.modal}>
@@ -25,7 +26,7 @@ export default function Panel({ title, icon, credits, onClose, testID, children 
             <Text style={styles.title}>{title}</Text>
           </View>
           <View style={styles.titleRow}>
-            {credits !== undefined && <CreditBadge amount={credits} />}
+            {credits !== undefined && <CreditBadge amount={credits} onPress={onCreditsPress} />}
             <Pressable testID={testID ? `${testID}-close` : undefined} onPress={onClose} style={styles.closeBtn} hitSlop={10}>
               <MaterialCommunityIcons name="close" size={22} color={colors.onSurface} />
             </Pressable>
