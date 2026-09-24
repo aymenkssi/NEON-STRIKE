@@ -37,8 +37,13 @@ def api(monkeypatch):
 
 @pytest.fixture
 def player(api):
+    # Registered account (the leaderboard requires one); names must be unique and 3+ chars.
+    counter = {"n": 0}
+
     def make(name="ACE"):
-        r = api.post("/api/players", json={"name": name})
+        counter["n"] += 1
+        username = f"{name}_{counter['n']}" if len(name) < 3 or counter["n"] > 1 else name
+        r = api.post("/api/accounts/register", json={"username": username, "password": "secret123"})
         assert r.status_code == 200, r.text
         return {"Authorization": f"Bearer {r.json()['token']}"}
 

@@ -20,6 +20,11 @@ class TestPlayers:
 
 
 class TestScores:
+    def test_guest_cannot_submit(self, api):
+        token = api.post("/api/players", json={"name": "GUEST"}).json()["token"]
+        r = api.post("/api/scores", json={"name": "GUEST", "score": 100, "level": 1, "kills": 1}, headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 403
+
     def test_requires_player_token(self, api):
         assert api.post("/api/scores", json={"name": "A", "score": 1}).status_code == 401
         bad = {"Authorization": "Bearer nope"}
@@ -33,13 +38,14 @@ class TestScores:
         assert r.json()["is_high_score"] is False and r.json()["best"] == 900
         rows = api.get("/api/leaderboard").json()
         assert len(rows) == 1
-        assert rows[0]["score"] == 900 and rows[0]["name"] == "ACE2"  # name refreshed, best kept
+        # best kept; the name is always the account's username, whatever the client sends
+        assert rows[0]["score"] == 900 and rows[0]["name"] == "ACE"
 
     def test_leaderboard_sorted_and_hides_internal_fields(self, api, player):
-        for name, score in [("A", 500), ("B", 1500), ("C", 1000)]:
+        for name, score in [("AAA", 500), ("BBB", 1500), ("CCC", 1000)]:
             api.post("/api/scores", json={"name": name, "score": score, "level": 2, "kills": 10}, headers=player(name))
         rows = api.get("/api/leaderboard?limit=500").json()
-        assert [r["name"] for r in rows] == ["B", "C", "A"]
+        assert [r["name"][:3] for r in rows] == ["BBB", "CCC", "AAA"]
         assert [r["rank"] for r in rows] == [1, 2, 3]
         for r in rows:
             assert "player_id" not in r and "_id" not in r and "token_hash" not in r

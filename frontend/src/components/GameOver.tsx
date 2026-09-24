@@ -10,6 +10,7 @@ import type { RunResult } from "../game/GameEngine";
 
 type Props = {
   username: string;
+  guest: boolean;
   result: RunResult;
   canRevive: boolean;
   onRevive: () => void;
@@ -17,9 +18,9 @@ type Props = {
   onExit: () => void;
 };
 
-export default function GameOver({ username, result, canRevive, onRevive, onRestart, onExit }: Props) {
+export default function GameOver({ username, guest, result, canRevive, onRevive, onRestart, onExit }: Props) {
   const insets = useSafeAreaInsets();
-  const [state, setState] = useState<"submitting" | "done" | "error">("submitting");
+  const [state, setState] = useState<"submitting" | "done" | "error" | "guest">(guest ? "guest" : "submitting");
   const [rank, setRank] = useState<number | null>(null);
   const [isHigh, setIsHigh] = useState(false);
   const [displayScore, setDisplayScore] = useState(result.score);
@@ -27,6 +28,8 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
   const [doubling, setDoubling] = useState(false);
 
   const doSubmit = async (scoreValue: number) => {
+    // Guests play offline: only accounts appear on the world leaderboard.
+    if (guest) return;
     setState("submitting");
     try {
       const res = await submitScore({
@@ -93,6 +96,11 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
               Classement mondial : <Text style={styles.rankNum}>#{rank}</Text>
             </Text>
           )}
+          {state === "guest" && (
+            <Text style={styles.rankInfo} testID="guest-no-rank">
+              Mode invité : crée un compte dans Réglages pour entrer au classement mondial.
+            </Text>
+          )}
           {state === "error" && (
             <Pressable onPress={() => doSubmit(displayScore)} testID="retry-submit">
               <Text style={styles.errorText}>Échec de l’envoi. Réessayer</Text>
@@ -101,7 +109,7 @@ export default function GameOver({ username, result, canRevive, onRevive, onRest
         </View>
 
         <View style={styles.actions}>
-          {!doubled && (
+          {!doubled && !guest && (
             <Pressable testID="double-score-button" style={[styles.btn, styles.doubleBtn]} onPress={doubleScore}>
               <MaterialCommunityIcons name="star-four-points" size={20} color={colors.onWarning} />
               <Text style={[styles.btnText, { color: colors.onWarning }]}>

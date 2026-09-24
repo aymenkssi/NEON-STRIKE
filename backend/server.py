@@ -13,6 +13,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
+import accounts
 import cloudsave
 import liveops
 from auth import current_player, hash_token
@@ -121,13 +122,16 @@ def plausible(p: ScoreCreate) -> bool:
 
 @api.post("/scores", response_model=SubmitResult)
 async def submit_score(payload: ScoreCreate, player: dict = Depends(current_player)):
+    # The world leaderboard is for accounts only; guests play offline.
+    if not player.get("username"):
+        raise HTTPException(403, "Account required")
     if not plausible(payload):
         raise HTTPException(422, "Score rejected")
     now = time.time()
     if now - player.get("last_score_at", 0) < SCORE_COOLDOWN_S:
         raise HTTPException(429, "Too many submissions")
-    name = clean_name(payload.name)
-    await db.players.update_one({"id": player["id"]}, {"$set": {"last_score_at": now, "name": name}})
+    name = player["username"]  # unique: the display name cannot be spoofed
+    await db.players.update_one({"id": player["id"]}, {"$set": {"last_score_at": now}})
 
     # One row per player: keep the best run, always refresh the display name.
     prev = await db.scores.find_one({"player_id": player["id"]})
@@ -217,6 +221,7 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
 
 
 app.include_router(api)
+app.include_router(accounts.router)
 app.include_router(cloudsave.router)
 app.include_router(liveops.public)
 app.include_router(liveops.admin)
@@ -238,6 +243,7 @@ async def create_indexes():
     await db.scores.create_index([("score", -1)])
     await db.purchases.create_index("token_hash", unique=True)
     await cloudsave.setup()
+    await accounts.setup()
     await liveops.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)

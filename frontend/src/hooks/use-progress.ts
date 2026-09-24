@@ -77,12 +77,15 @@ function fromObject(p: any): Progress {
   }
 }
 
-export function useProgress() {
+// cloudEnabled: only signed-in accounts sync online; guests keep everything on the phone.
+export function useProgress(cloudEnabled: boolean) {
   const [progress, setProgress] = useState<Progress>(DEFAULT);
   const [loaded, setLoaded] = useState(false);
-  const [cloud, setCloud] = useState<CloudStatus>(cloudAvailable ? "syncing" : "off");
+  const [cloud, setCloud] = useState<CloudStatus>("off");
   const ref = useRef(progress);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enabled = useRef(false);
+  enabled.current = cloudAvailable && cloudEnabled;
 
   const replace = useCallback((p: Progress) => {
     ref.current = p;
@@ -91,7 +94,7 @@ export function useProgress() {
   }, []);
 
   const push = useCallback(async () => {
-    if (!cloudAvailable) return;
+    if (!enabled.current) return;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = null;
     try {
@@ -106,7 +109,7 @@ export function useProgress() {
   // after a recovery code was used). Otherwise uploads the local one.
   const syncFromCloud = useCallback(
     async (force = false) => {
-      if (!cloudAvailable) return false;
+      if (!enabled.current) return false;
       setCloud("syncing");
       try {
         const remote = await fetchSave();
@@ -132,20 +135,34 @@ export function useProgress() {
       ref.current = p;
       setProgress(p);
       setLoaded(true);
-      syncFromCloud();
     })();
     // Upload right away when the app goes to the background.
     const sub = AppState.addEventListener("change", (state) => {
       if (state !== "active" && pushTimer.current) push();
     });
     return () => sub.remove();
-  }, [push, syncFromCloud]);
+  }, [push]);
+
+  // Sync when an account is (or becomes) active; show "off" for guests.
+  useEffect(() => {
+    if (!loaded) return;
+    if (cloudAvailable && cloudEnabled) syncFromCloud();
+    else setCloud("off");
+  }, [loaded, cloudEnabled, syncFromCloud]);
+
+  // Logout: upload pending changes, then start again from a blank progress on this phone.
+  const resetLocal = useCallback(async () => {
+    if (pushTimer.current) await push();
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = null;
+    replace(DEFAULT);
+  }, [push, replace]);
 
   const update = useCallback(
     (fn: (p: Progress) => Progress) => {
       const next = { ...fn(ref.current), updatedAt: Date.now() };
       replace(next);
-      if (cloudAvailable) {
+      if (enabled.current) {
         if (pushTimer.current) clearTimeout(pushTimer.current);
         pushTimer.current = setTimeout(push, PUSH_DELAY_MS);
       }
@@ -228,6 +245,7 @@ export function useProgress() {
     loaded,
     cloud,
     syncFromCloud,
+    resetLocal,
     addCredits,
     completeLevel,
     buyUpgrade,

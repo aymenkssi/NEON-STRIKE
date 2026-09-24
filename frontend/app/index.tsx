@@ -4,6 +4,10 @@ import { storage } from "@/src/utils/storage";
 import MainMenu from "@/src/components/MainMenu";
 import GameScreen from "@/src/components/GameScreen";
 import { useProgress } from "@/src/hooks/use-progress";
+import { useAccount } from "@/src/hooks/use-account";
+import { logoutAccount } from "@/src/api/account";
+import Welcome from "@/src/components/Welcome";
+import type { AuthMode } from "@/src/components/AuthForm";
 import { modifiersFrom } from "@/src/game/progression";
 import { initStore } from "@/src/iap";
 import { music } from "@/src/audio/music";
@@ -11,7 +15,6 @@ import { setRemotePacks } from "@/src/iap/catalog";
 import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
 
 const KEYS = {
-  username: "np_username",
   lookSens: "np_look_sensitivity",
   sound: "np_sound_enabled",
   music: "np_music_enabled",
@@ -21,17 +24,19 @@ const KEYS = {
 export default function Index() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<"menu" | "game">("menu");
-  const [username, setUsername] = useState("PLAYER");
   const [lookSensitivity, setLookSensitivity] = useState(0.008);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.5);
   const [level, setLevel] = useState(1);
+  const { account, loaded: accountLoaded, playAsGuest, signedIn, signedOut } = useAccount();
+  const isGuest = account.mode !== "account";
   const {
     progress,
     loaded,
     cloud,
     syncFromCloud,
+    resetLocal,
     addCredits,
     completeLevel,
     buyUpgrade,
@@ -39,16 +44,14 @@ export default function Index() {
     recordSession,
     claimMission,
     claimAchievement,
-  } = useProgress();
+  } = useProgress(account.mode === "account");
 
   useEffect(() => {
     (async () => {
-      const u = await storage.getItem(KEYS.username, "PLAYER");
       const s = await storage.getItem(KEYS.lookSens, 0.008);
       const snd = await storage.getItem(KEYS.sound, true);
       const mus = await storage.getItem(KEYS.music, true);
       const vol = await storage.getItem(KEYS.musicVolume, 0.5);
-      if (u) setUsername(u);
       if (typeof s === "number") setLookSensitivity(s);
       if (typeof snd === "boolean") setSoundEnabled(snd);
       if (typeof mus === "boolean") setMusicEnabled(mus);
@@ -84,9 +87,16 @@ export default function Index() {
     if (loaded) initStore(addCredits);
   }, [loaded, addCredits]);
 
-  const updateUsername = (v: string) => {
-    setUsername(v);
-    storage.setItem(KEYS.username, v);
+  // New account: this phone's progress is uploaded. Login: the account's online save replaces it.
+  const onSignedIn = async (name: string, mode: AuthMode) => {
+    signedIn(name);
+    await syncFromCloud(mode === "login");
+  };
+  // Logout: pending changes are pushed, then this phone goes back to the welcome screen.
+  const onLogout = async () => {
+    await resetLocal();
+    await logoutAccount();
+    signedOut();
   };
   const updateLookSens = (v: number) => {
     setLookSensitivity(v);
@@ -106,12 +116,22 @@ export default function Index() {
   };
 
   const startGame = (lvl: number) => {
-    if (!username || !username.trim()) updateUsername("PLAYER");
     setLevel(lvl);
     setScreen("game");
   };
 
-  if (!ready || !loaded) return <View style={styles.root} />;
+  if (!ready || !loaded || !accountLoaded) return <View style={styles.root} />;
+
+  if (account.mode === "unset") {
+    return (
+      <View style={styles.root}>
+        <StatusBar hidden />
+        <Welcome onGuest={playAsGuest} onSignedIn={onSignedIn} />
+      </View>
+    );
+  }
+
+  const username = account.username ?? "INVITÉ";
 
   return (
     <View style={styles.root}>
@@ -119,7 +139,7 @@ export default function Index() {
       {screen === "menu" ? (
         <MainMenu
           username={username}
-          setUsername={updateUsername}
+          account={account}
           lookSensitivity={lookSensitivity}
           setLookSensitivity={updateLookSens}
           soundEnabled={soundEnabled}
@@ -129,10 +149,8 @@ export default function Index() {
           musicVolume={musicVolume}
           setMusicVolume={updateMusicVolume}
           cloudStatus={cloud}
-          onRecovered={async (name) => {
-            updateUsername(name);
-            await syncFromCloud(true);
-          }}
+          onSignedIn={onSignedIn}
+          onLogout={onLogout}
           progress={progress}
           onBuyUpgrade={buyUpgrade}
           onClaimDaily={claimDaily}
@@ -143,7 +161,8 @@ export default function Index() {
         />
       ) : (
         <GameScreen
-          username={username && username.trim() ? username.trim() : "PLAYER"}
+          username={username}
+          guest={isGuest}
           lookSensitivity={lookSensitivity}
           soundEnabled={soundEnabled}
           startLevel={level}

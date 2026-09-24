@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,15 +6,21 @@ import Animated, { useAnimatedStyle, useSharedValue, runOnJS, withTiming } from 
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, fonts } from "../theme";
-import type { GameEngine } from "../game/GameEngine";
+import type { FireMode, GameEngine } from "../game/GameEngine";
 
-type Props = { getEngine: () => GameEngine | null };
+type Props = { getEngine: () => GameEngine | null; fireMode: FireMode; fireModes: FireMode[] };
+
+const MODE_UI: Record<FireMode, { icon: string; label: string }> = {
+  single: { icon: "numeric-1-circle-outline", label: "COUP/COUP" },
+  burst: { icon: "dots-horizontal-circle-outline", label: "RAFALE ×3" },
+  auto: { icon: "infinity", label: "AUTO" },
+};
 
 const KNOB_MAX = 55;
 const RING = 120; // joystick diameter
 const SPRINT_AT = 0.85; // push beyond 85% of the radius to sprint
 
-export default function TouchControls({ getEngine }: Props) {
+export default function TouchControls({ getEngine, fireMode, fireModes }: Props) {
   const insets = useSafeAreaInsets();
   // Resting spot of the joystick (bottom-left of the left zone), set once the zone is measured.
   const homeX = useSharedValue(Math.max(insets.left, 24) + RING / 2 + 16);
@@ -25,7 +31,6 @@ export default function TouchControls({ getEngine }: Props) {
   const knobY = useSharedValue(homeY.value);
   const active = useSharedValue(0);
   const sprinting = useSharedValue(0);
-  const fireInterval = useRef<any>(null);
 
   const onJoyLayout = (e: LayoutChangeEvent) => {
     const { height } = e.nativeEvent.layout;
@@ -109,25 +114,12 @@ export default function TouchControls({ getEngine }: Props) {
     transform: [{ translateX: baseX.value - 40 }, { translateY: baseY.value - RING / 2 - 26 }],
   }));
 
+  // The engine times the shots (tap, 3-round burst or auto while held) from the weapon's fire mode.
   const startFire = () => {
-    const e = getEngine();
-    if (!e) return;
-    e.shoot();
+    getEngine()?.pullTrigger();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-    if (fireInterval.current) clearInterval(fireInterval.current);
-    if (e.isAuto()) {
-      fireInterval.current = setInterval(() => {
-        getEngine()?.shoot();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      }, e.getFireInterval());
-    }
   };
-  const stopFire = () => {
-    if (fireInterval.current) {
-      clearInterval(fireInterval.current);
-      fireInterval.current = null;
-    }
-  };
+  const stopFire = () => getEngine()?.releaseTrigger();
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -180,6 +172,23 @@ export default function TouchControls({ getEngine }: Props) {
         <MaterialCommunityIcons name="reload" size={24} color={colors.warning} />
         <Text style={styles.smallLabel}>RELOAD</Text>
       </Pressable>
+
+      {fireModes.length > 1 && (
+        <Pressable
+          testID="fire-mode-button"
+          onPress={() => {
+            getEngine()?.cycleFireMode();
+            Haptics.selectionAsync().catch(() => {});
+          }}
+          hitSlop={6}
+          style={({ pressed }) => [styles.modeBtn, pressed && styles.pressed]}
+        >
+          <MaterialCommunityIcons name={MODE_UI[fireMode].icon as any} size={16} color={colors.brandSecondary} />
+          <Text style={styles.modeText} testID="fire-mode-label">
+            {MODE_UI[fireMode].label}
+          </Text>
+        </Pressable>
+      )}
 
       <Pressable
         testID="fire-button"
@@ -234,6 +243,21 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: colors.brand,
   },
+  modeBtn: {
+    position: "absolute",
+    right: 30,
+    bottom: 176,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(13,15,18,0.7)",
+    borderWidth: 1.5,
+    borderColor: "rgba(0,255,255,0.55)",
+  },
+  modeText: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 12, letterSpacing: 1 },
   firePressed: { backgroundColor: "rgba(255,0,60,0.6)" },
   jumpBtn: {
     position: "absolute",

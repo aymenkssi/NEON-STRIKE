@@ -5,8 +5,10 @@ import Slider from "@react-native-community/slider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { isPrivacyOptionsRequired, showPrivacyOptions } from "../ads";
-import CloudSave from "./CloudSave";
+import AccountSection from "./AccountSection";
+import type { AuthMode } from "./AuthForm";
 import type { CloudStatus } from "../hooks/use-progress";
+import type { AccountState } from "../hooks/use-account";
 
 type Props = {
   lookSensitivity: number;
@@ -17,8 +19,10 @@ type Props = {
   setMusicEnabled: (v: boolean) => void;
   musicVolume: number;
   setMusicVolume: (v: number) => void;
+  account: AccountState;
   cloudStatus: CloudStatus;
-  onRecovered: (name: string) => Promise<void>;
+  onSignedIn: (username: string, mode: AuthMode) => Promise<void>;
+  onLogout: () => Promise<void>;
   onClose: () => void;
 };
 
@@ -34,8 +38,10 @@ export default function Settings({
   setMusicEnabled,
   musicVolume,
   setMusicVolume,
+  account,
   cloudStatus,
-  onRecovered,
+  onSignedIn,
+  onLogout,
   onClose,
 }: Props) {
   const pct = Math.round(((lookSensitivity - MIN) / (MAX - MIN)) * 100);
@@ -53,7 +59,8 @@ export default function Settings({
           </Pressable>
         </View>
 
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <AccountSection account={account} cloudStatus={cloudStatus} onSignedIn={onSignedIn} onLogout={onLogout} />
         <View style={styles.row}>
           <View style={styles.rowLabel}>
             <Text style={styles.label}>Sensibilité de visée</Text>
@@ -114,7 +121,7 @@ export default function Settings({
           </View>
         )}
 
-        <CloudSave status={cloudStatus} onRecovered={onRecovered} />
+
 
         {isPrivacyOptionsRequired() && (
           <Pressable testID="privacy-options" onPress={showPrivacyOptions} style={[styles.row, styles.toggleRow]}>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -21,10 +21,12 @@ import { useMessageQueue } from "../hooks/use-message-queue";
 import type { RemoteMessage } from "../api/config";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
 import type { CloudStatus, Progress } from "../hooks/use-progress";
+import type { AccountState } from "../hooks/use-account";
+import type { AuthMode } from "./AuthForm";
 
 type Props = {
   username: string;
-  setUsername: (v: string) => void;
+  account: AccountState;
   lookSensitivity: number;
   setLookSensitivity: (v: number) => void;
   soundEnabled: boolean;
@@ -34,7 +36,8 @@ type Props = {
   musicVolume: number;
   setMusicVolume: (v: number) => void;
   cloudStatus: CloudStatus;
-  onRecovered: (name: string) => Promise<void>;
+  onSignedIn: (username: string, mode: AuthMode) => Promise<void>;
+  onLogout: () => Promise<void>;
   progress: Progress;
   onBuyUpgrade: (key: UpgradeKey) => boolean;
   onClaimDaily: () => number;
@@ -50,7 +53,8 @@ let dailyAutoShown = false;
 const COVER = require("../../assets/images/neon-cover.png");
 
 export default function MainMenu(props: Props) {
-  const { username, setUsername, onPlay } = props;
+  const { username, account, onPlay } = props;
+  const guest = account.mode !== "account";
   const insets = useSafeAreaInsets();
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -117,20 +121,20 @@ export default function MainMenu(props: Props) {
           ]}
         >
           <View style={styles.actionRow}>
-            <View style={styles.inputWrap}>
-              <Text style={styles.inputLabel}>NOM DE SURVIVANT</Text>
-              <TextInput
-                testID="username-input"
-                value={username}
-                onChangeText={(t) => setUsername(t.slice(0, 16))}
-                placeholder="PLAYER"
-                placeholderTextColor={colors.onSurfaceTertiary}
-                style={styles.input}
-                maxLength={16}
-                autoCapitalize="characters"
-                returnKeyType="done"
-              />
-            </View>
+            <Pressable testID="profile-chip" style={styles.inputWrap} onPress={() => setShowSettings(true)}>
+              <Text style={styles.inputLabel}>{guest ? "MODE INVITÉ" : "SURVIVANT"}</Text>
+              <View style={[styles.input, styles.profile, guest && { borderColor: colors.border }]}>
+                <MaterialCommunityIcons
+                  name={guest ? "incognito" : "account-circle"}
+                  size={22}
+                  color={guest ? colors.onSurfaceSecondary : colors.brandSecondary}
+                />
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {username}
+                </Text>
+                {guest && <Text style={styles.profileHint}>CRÉER UN COMPTE</Text>}
+              </View>
+            </Pressable>
 
             <Pressable testID="play-button" style={styles.playBtn} onPress={play}>
               <MaterialCommunityIcons name="play" size={26} color={colors.onBrand} />
@@ -196,7 +200,7 @@ export default function MainMenu(props: Props) {
           onClose={() => setShowDaily(false)}
         />
       )}
-      {showLeaderboard && <Leaderboard username={username} onClose={() => setShowLeaderboard(false)} />}
+      {showLeaderboard && <Leaderboard username={username} guest={guest} onClose={() => setShowLeaderboard(false)} />}
       {showSettings && (
         <Settings
           lookSensitivity={props.lookSensitivity}
@@ -208,7 +212,9 @@ export default function MainMenu(props: Props) {
           musicVolume={props.musicVolume}
           setMusicVolume={props.setMusicVolume}
           cloudStatus={props.cloudStatus}
-          onRecovered={props.onRecovered}
+          account={account}
+          onSignedIn={props.onSignedIn}
+          onLogout={props.onLogout}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -234,6 +240,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     letterSpacing: 2,
   },
+  profile: { flexDirection: "row", alignItems: "center", gap: 8 },
+  profileName: { flex: 1, color: colors.onSurface, fontFamily: fonts.display, fontSize: 20, letterSpacing: 1 },
+  profileHint: { color: colors.brand, fontFamily: fonts.displaySemi, fontSize: 10, letterSpacing: 1 },
   playBtn: {
     flexDirection: "row",
     alignItems: "center",
