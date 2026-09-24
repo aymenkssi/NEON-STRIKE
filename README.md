@@ -106,8 +106,11 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Objectifs** (`frontend/src/game/meta.ts`) : 3 missions du jour (les mêmes pour tous, renouvelées à minuit), 17 succès récompensés en crédits et des statistiques de joueur.
 - **Armes** : fusil à pompe, SMG (niveau 2), fusil d'assaut (4), railgun perforant (10), minigun (15), lance-grenades (20).
 - **Commandes** : joystick visible en bas à gauche (il suit le pouce, sprint en poussant à fond), visée à droite.
+- **Modes de tir** : bouton MODE au-dessus de FIRE pour les armes qui en ont plusieurs : coup par coup, rafale de 3 balles, automatique. Fusil d'assaut : coup par coup / rafale ; SMG : auto / rafale / coup par coup. Le mode choisi est mémorisé par arme pendant la partie.
 - **Musique** : thèmes originaux du menu et du combat (`frontend/scripts/generate-music.py` les régénère), réglables dans Réglages.
-- La progression est sauvegardée sur l'appareil (`frontend/src/hooks/use-progress.ts`, clé `np_progress_v1`) **et en ligne** : synchronisation automatique, et un **code de récupération** (Réglages → Sauvegarde en ligne) pour la retrouver sur un autre téléphone.
+- **Au premier lancement**, le joueur choisit : **créer un compte** (nom d'utilisateur unique, 3 à 16 lettres, chiffres ou `_`, sans distinction de casse, et mot de passe de 6 caractères minimum), **se connecter**, ou **jouer en invité**.
+  - **Invité** : progression uniquement sur le téléphone, pas de classement. Il peut créer un compte plus tard (Réglages → Compte) et garde alors sa progression et ses achats.
+  - **Compte** : progression synchronisée en ligne (`frontend/src/hooks/use-progress.ts`), retrouvée en se connectant sur un autre téléphone, et nom affiché au classement mondial.
 
 ## Achat de crédits (Google Play Billing)
 

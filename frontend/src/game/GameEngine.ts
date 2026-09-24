@@ -45,6 +45,11 @@ const CONFIG = {
   standHeight: 2.0,
 };
 
+// SINGLE: one round per tap. BURST: 3 rounds per tap. AUTO: fires while the trigger is held.
+export type FireMode = "single" | "burst" | "auto";
+export const FIRE_MODE_LABEL: Record<FireMode, string> = { single: "COUP PAR COUP", burst: "RAFALE ×3", auto: "AUTO" };
+const BURST_ROUNDS = 3;
+
 type WeaponConfig = {
   key: string;
   name: string;
@@ -56,8 +61,9 @@ type WeaponConfig = {
   bodyDmg: number;
   headDmg: number;
   recoil: number;
-  fireRate: number;
-  auto: boolean;
+  fireRate: number; // ms between shots (auto) or between taps / bursts
+  modes: FireMode[]; // the first one is the default
+  burstGap?: number; // ms between the rounds of a burst
   flashZ: number;
   sound?: string; // defaults to key
   pierce?: number; // railgun: zombies hit by one shot
@@ -68,32 +74,32 @@ const WEAPONS: WeaponConfig[] = [
   {
     key: "shotgun", name: "SHOTGUN", short: "SG",
     pellets: 8, spread: 0.06, maxAmmo: 5, reloadMs: 1500,
-    bodyDmg: 1, headDmg: 2, recoil: 0.18, fireRate: 400, auto: false, flashZ: -0.4,
+    bodyDmg: 1, headDmg: 2, recoil: 0.18, fireRate: 400, modes: ["single"], flashZ: -0.4,
   },
   {
     key: "smg", name: "SMG", short: "SMG",
     pellets: 1, spread: 0.02, maxAmmo: 30, reloadMs: 1200,
-    bodyDmg: 1, headDmg: 2, recoil: 0.09, fireRate: 95, auto: true, flashZ: -0.5,
+    bodyDmg: 1, headDmg: 2, recoil: 0.09, fireRate: 95, modes: ["auto", "burst", "single"], burstGap: 70, flashZ: -0.5,
   },
   {
     key: "rifle", name: "ASSAULT RIFLE", short: "AR",
     pellets: 1, spread: 0.004, maxAmmo: 10, reloadMs: 1500,
-    bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, auto: false, flashZ: -0.78,
+    bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, modes: ["single", "burst"], burstGap: 90, flashZ: -0.78,
   },
   {
     key: "railgun", name: "RAILGUN", short: "RG",
     pellets: 1, spread: 0, maxAmmo: 4, reloadMs: 1800,
-    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, auto: false, flashZ: -0.85, pierce: 5,
+    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, modes: ["single"], flashZ: -0.85, pierce: 5,
   },
   {
     key: "minigun", name: "MINIGUN", short: "MG", sound: "smg",
     pellets: 1, spread: 0.035, maxAmmo: 120, reloadMs: 2800,
-    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, auto: true, flashZ: -0.7,
+    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, modes: ["auto"], flashZ: -0.7,
   },
   {
     key: "launcher", name: "LANCE-GRENADES", short: "GL",
     pellets: 1, spread: 0, maxAmmo: 3, reloadMs: 2200,
-    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, auto: false, flashZ: -0.7, projectile: true,
+    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, modes: ["single"], flashZ: -0.7, projectile: true,
   },
 ];
 
@@ -118,6 +124,8 @@ export type GameStats = {
   boss: { health: number; max: number } | null;
   weaponIndex: number;
   weapons: WeaponInfo[];
+  fireMode: FireMode;
+  fireModes: FireMode[]; // modes of the current weapon (MODE button hidden when only one)
   sector: { index: number; name: string };
   powerups: { kind: PowerUpKind; remaining: number }[]; // seconds left, active ones only
 };
@@ -180,6 +188,13 @@ export class GameEngine {
   private levelCfg: LevelConfig = getLevelConfig(1);
   private health = 100;
   private weaponIndex = 0;
+  // Trigger: shots are timed by the game loop so every fire mode respects the weapon's rate.
+  private fireModeByWeapon: number[] = WEAPONS.map(() => 0);
+  private triggerHeld = false;
+  private queuedShot = false; // tap during the cooldown: fired as soon as the weapon is ready
+  private nextShotAt = 0;
+  private burstLeft = 0;
+  private nextBurstAt = 0;
   private ammoByWeapon: number[] = WEAPONS.map((w) => w.maxAmmo);
   private reloading = false;
   private reloadStart = 0;
@@ -247,11 +262,8 @@ export class GameEngine {
     this.ammoByWeapon[this.weaponIndex] = v;
   }
 
-  isAuto() {
-    return this.weapon.auto;
-  }
-  getFireInterval() {
-    return this.weapon.fireRate;
+  private get fireMode(): FireMode {
+    return this.weapon.modes[this.fireModeByWeapon[this.weaponIndex]] ?? this.weapon.modes[0];
   }
 
   private init() {
@@ -663,6 +675,7 @@ export class GameEngine {
     if (!cfg || unlockLevelOf(cfg) > this.unlockedLevel) return;
     this.weaponIndex = index;
     this.reloading = false;
+    this.cancelTrigger();
     this.equipModel();
     this.cb.playSound("switch");
     this.cb.onNotify(cfg.name);
@@ -670,6 +683,59 @@ export class GameEngine {
   }
 
   // ---------------- Input ----------------
+  pullTrigger() {
+    if (this.paused || this.gameOver || this.levelComplete) return;
+    this.triggerHeld = true;
+    if (this.burstLeft === 0 && Date.now() >= this.nextShotAt) this.startShot(Date.now());
+    else this.queuedShot = true;
+  }
+
+  releaseTrigger() {
+    this.triggerHeld = false; // a burst already started still fires its 3 rounds
+  }
+
+  cycleFireMode() {
+    const modes = this.weapon.modes;
+    if (modes.length < 2) return;
+    const i = (this.fireModeByWeapon[this.weaponIndex] + 1) % modes.length;
+    this.fireModeByWeapon[this.weaponIndex] = i;
+    this.cancelTrigger();
+    this.cb.playSound("switch");
+    this.cb.onNotify(FIRE_MODE_LABEL[modes[i]]);
+    this.emitStats();
+  }
+
+  private cancelTrigger() {
+    this.burstLeft = 0;
+    this.queuedShot = false;
+  }
+
+  // First round of a tap (or of an auto stream), then the cooldown until the next one.
+  private startShot(now: number) {
+    this.queuedShot = false;
+    const mode = this.fireMode;
+    if (!this.shoot()) return;
+    if (mode === "burst") {
+      this.burstLeft = BURST_ROUNDS - 1;
+      this.nextBurstAt = now + (this.weapon.burstGap ?? 80);
+    } else {
+      this.nextShotAt = now + this.weapon.fireRate;
+    }
+  }
+
+  private updateTrigger(now: number) {
+    if (this.burstLeft > 0) {
+      if (now < this.nextBurstAt) return;
+      this.burstLeft--;
+      if (!this.shoot()) this.burstLeft = 0;
+      this.nextBurstAt = now + (this.weapon.burstGap ?? 80);
+      if (this.burstLeft === 0) this.nextShotAt = now + this.weapon.fireRate;
+      return;
+    }
+    if (now < this.nextShotAt) return;
+    if (this.queuedShot || (this.triggerHeld && this.fireMode === "auto")) this.startShot(now);
+  }
+
   setMove(x: number, y: number, sprint: boolean) {
     this.moveVec.x = x;
     this.moveVec.y = y;
@@ -708,13 +774,14 @@ export class GameEngine {
     this.emitStats();
   }
 
-  shoot() {
-    if (this.paused || this.gameOver || this.levelComplete || !this.weaponGroup) return;
-    if (this.reloading) return;
+  // Fires one round; false when the weapon cannot fire (reloading, empty, paused).
+  private shoot(): boolean {
+    if (this.paused || this.gameOver || this.levelComplete || !this.weaponGroup) return false;
+    if (this.reloading) return false;
     if (this.ammo <= 0) {
       this.cb.playSound("empty");
       this.reload();
-      return;
+      return false;
     }
 
     const wpn = this.weapon;
@@ -754,7 +821,7 @@ export class GameEngine {
     if (wpn.projectile) {
       this.launchGrenade(origin, baseDir);
       if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
-      return;
+      return true;
     }
 
     if (wpn.pierce) {
@@ -787,7 +854,7 @@ export class GameEngine {
         if (this.boss) this.emitStats();
       }
       if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
-      return;
+      return true;
     }
 
     for (let i = 0; i < wpn.pellets; i++) {
@@ -828,6 +895,7 @@ export class GameEngine {
       if (this.boss) this.emitStats();
     }
     if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
+    return true;
   }
 
   private removeZombie(target: THREE.Group) {
@@ -1060,6 +1128,8 @@ export class GameEngine {
 
   // Loads a level. keepRun carries score/kills over (used by "next level").
   startLevel(level: number, opts: { keepRun: boolean; unlockedLevel?: number; modifiers?: PlayerModifiers }) {
+    this.triggerHeld = false;
+    this.cancelTrigger();
     this.enemies.forEach((e) => this.scene.remove(e));
     this.enemies = [];
     this.boss = null;
@@ -1126,6 +1196,8 @@ export class GameEngine {
 
   pause() {
     this.paused = true;
+    this.triggerHeld = false;
+    this.cancelTrigger();
   }
   resume() {
     this.paused = false;
@@ -1149,6 +1221,8 @@ export class GameEngine {
         ? { health: Math.max(0, Math.ceil(this.boss.userData.health)), max: this.boss.userData.maxHealth }
         : null,
       weaponIndex: this.weaponIndex,
+      fireMode: this.fireMode,
+      fireModes: this.weapon.modes,
       weapons: WEAPONS.map((w) => ({
         short: w.short,
         name: w.name,
@@ -1336,6 +1410,7 @@ export class GameEngine {
       return;
     }
 
+    this.updateTrigger(time);
     this.updateGrenades(delta, time);
     if (this.gameOver) return;
 

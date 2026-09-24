@@ -146,11 +146,11 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | Route | Rôle |
 |---|---|
 | `POST /api/players` | Crée un joueur anonyme et renvoie une clé secrète. Le serveur n'en garde qu'une empreinte (SHA-256). |
-| `POST /api/scores` | Enregistre un score. Joueur identifié obligatoire, contrôle de vraisemblance, un envoi toutes les 5 s au plus, un seul meilleur score par joueur. |
+| `POST /api/accounts/register` · `POST /api/accounts/login` · `GET /api/accounts/available` | Comptes : nom d'utilisateur unique (insensible à la casse) et mot de passe (haché avec scrypt). Créer un compte depuis le mode invité conserve les achats du joueur. 10 essais / 10 min par IP. |
+| `POST /api/scores` | Enregistre un score. Compte obligatoire (les invités ne sont pas classés), contrôle de vraisemblance, un envoi toutes les 5 s au plus, un seul meilleur score par joueur. |
 | `GET /api/leaderboard` | Top 100 maximum. |
 | `GET /api/leaderboard/me` | Rang du joueur. |
 | `GET/PUT /api/save` | Sauvegarde en ligne de la progression (la plus récente l'emporte). |
-| `POST /api/players/recovery-code` · `POST /api/players/recover` | Code de récupération : retrouver sa progression sur un autre téléphone (10 essais / 10 min par IP). |
 | `GET /api/config` | Packs visibles et messages en ligne, lus par l'app au démarrage. |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
 | `POST /api/purchases/verify` | Interroge Google Play. Répond `valid` uniquement si l'achat est payé. Un même reçu ne peut servir qu'à un seul joueur et un seul produit. |

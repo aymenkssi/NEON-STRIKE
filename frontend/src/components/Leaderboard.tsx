@@ -5,9 +5,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { fetchLeaderboard, fetchMyRank, type LeaderboardRow } from "../api/leaderboard";
 
-type Props = { username: string; onClose: () => void };
+type Props = { username: string; guest: boolean; onClose: () => void };
 
-export default function Leaderboard({ username, onClose }: Props) {
+export default function Leaderboard({ username, guest, onClose }: Props) {
   const [state, setState] = useState<"loading" | "done" | "error">("loading");
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [me, setMe] = useState<LeaderboardRow | null>(null);
@@ -18,7 +18,7 @@ export default function Leaderboard({ username, onClose }: Props) {
       const data = await fetchLeaderboard(50);
       setRows(data);
       setState("done");
-      fetchMyRank(username).then(setMe, () => setMe(null));
+      if (!guest) fetchMyRank(username).then(setMe, () => setMe(null));
     } catch {
       setState("error");
     }
@@ -70,7 +70,7 @@ export default function Leaderboard({ username, onClose }: Props) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: spacing.md }}
             renderItem={({ item }) => {
-              const isMe = me ? item.id === me.id : item.name === username;
+              const isMe = !guest && (me ? item.id === me.id : item.name === username);
               return (
                 <View style={[styles.row, isMe && styles.meRow]}>
                   <Text style={[styles.rank, { color: medal(item.rank) }]}>#{item.rank}</Text>
@@ -85,6 +85,11 @@ export default function Leaderboard({ username, onClose }: Props) {
               );
             }}
           />
+        )}
+        {guest && (
+          <Text style={styles.guestNote} testID="leaderboard-guest">
+            Mode invité : crée un compte (Réglages) pour apparaître dans ce classement.
+          </Text>
         )}
         {state === "done" && me && !rows.some((r) => r.id === me.id) && (
           <View style={[styles.row, styles.meRow]} testID="leaderboard-me">
@@ -132,6 +137,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
+  guestNote: { color: colors.warning, fontFamily: fonts.textMed, fontSize: 12, textAlign: "center", paddingTop: spacing.sm },
   dim: { color: colors.onSurfaceSecondary, fontFamily: fonts.text, fontSize: 14 },
   retry: { paddingHorizontal: spacing.lg, height: 40, borderRadius: radius.md, borderWidth: 2, borderColor: colors.brand, justifyContent: "center" },
   retryText: { color: colors.brand, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1 },

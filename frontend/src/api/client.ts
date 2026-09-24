@@ -62,7 +62,26 @@ async function loadOrCreateSession(name: string, forceNew = false): Promise<Sess
   return creating;
 }
 
-// Adopts another player's session (recovery code used on this phone).
+// Session stored on this phone, without creating one (null for a fresh install).
+export async function storedSession(): Promise<Session | null> {
+  if (session) return session;
+  const raw = await storage.secureGet(SESSION_KEY, null as string | null);
+  if (typeof raw !== "string") return null;
+  try {
+    session = JSON.parse(raw);
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+// Forgets the session (logout): the next online call starts a fresh anonymous player.
+export async function clearSession() {
+  session = null;
+  await storage.secureRemove(SESSION_KEY);
+}
+
+// Adopts another player's session (account login on this phone).
 export async function setSession(id: string, token: string) {
   session = { id, token };
   await storage.secureSet(SESSION_KEY, JSON.stringify(session));
@@ -73,9 +92,10 @@ export function get<T>(path: string): Promise<T> {
   return request(path);
 }
 
-// Public POST (no session), e.g. recovering an account.
-export function post<T>(path: string, body: unknown): Promise<T> {
-  return request(path, { method: "POST", body: JSON.stringify(body) });
+// POST without creating a session; sends the stored one when there is one.
+export async function post<T>(path: string, body: unknown): Promise<T> {
+  const s = await storedSession();
+  return request(path, { method: "POST", body: JSON.stringify(body) }, s?.token);
 }
 
 // Authenticated call; re-registers once if the server no longer knows this player.

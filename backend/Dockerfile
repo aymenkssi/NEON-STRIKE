@@ -6,7 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py auth.py database.py liveops.py cloudsave.py play_verifier.py admin.html ./
+COPY server.py auth.py accounts.py database.py liveops.py cloudsave.py play_verifier.py admin.html ./
 
 RUN useradd --create-home --uid 10001 app
 USER app

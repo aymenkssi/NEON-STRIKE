@@ -16,6 +16,7 @@ import LevelComplete from "./LevelComplete";
 
 type Props = {
   username: string;
+  guest: boolean;
   lookSensitivity: number;
   soundEnabled: boolean;
   startLevel: number;
@@ -44,12 +45,15 @@ const INITIAL: GameStats = {
   boss: null,
   weaponIndex: 0,
   weapons: [],
+  fireMode: "single",
+  fireModes: ["single"],
   sector: { index: 1, name: "NEON DISTRICT" },
   powerups: [],
 };
 
 export default function GameScreen({
   username,
+  guest,
   lookSensitivity,
   soundEnabled,
   startLevel,
@@ -203,7 +207,7 @@ export default function GameScreen({
     <View style={styles.root}>
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
 
-      {status === "playing" && <TouchControls getEngine={getEngine} />}
+      {status === "playing" && <TouchControls getEngine={getEngine} fireMode={stats.fireMode} fireModes={stats.fireModes} />}
 
       {(status === "playing" || status === "paused") && (
         <HUD
@@ -228,6 +232,7 @@ export default function GameScreen({
       {status === "gameover" && (
         <GameOver
           username={username}
+          guest={guest}
           result={result}
           canRevive={canRevive}
           onRevive={revive}
