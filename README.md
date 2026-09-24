@@ -90,7 +90,7 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **AdMob** : les unités NEON STRIKE (bannière, interstitiel, récompensée) sont dans `frontend/src/ads/index.ts`. Seul le profil EAS `production` affiche de vraies pubs ; les builds `development` et `preview` utilisent les pubs de test. L'`iosAppId` est encore l'ID de test Google.
 - **Consentement RGPD** : l'app affiche au démarrage le message configuré dans AdMob (**Privacy & messaging → GDPR**) et ne charge aucune pub avant la réponse. Le joueur peut modifier son choix dans Réglages → « Confidentialité des annonces ». Sans message publié dans AdMob, les joueurs européens ne verront pas de pubs.
 - **Interstitiel** : affiché toutes les 2 fins de niveau ou morts, en quittant l'écran de résultat, et jamais dans la minute qui suit une pub récompensée (`INTERSTITIAL_EVERY` dans `frontend/src/ads/index.ts`).
-- **Backend** : à déployer sur votre VPS avec Docker Compose (API + MongoDB + HTTPS automatique), voir [`deploy/README.md`](deploy/README.md). Ensuite, `EXPO_PUBLIC_BACKEND_URL` dans `frontend/eas.json` doit pointer vers `https://votre-domaine`.
+- **Backend** : à déployer sur votre VPS avec Docker Compose (API + MongoDB + HTTPS automatique), voir [`deploy/README.md`](deploy/README.md). Ensuite, l'app utilise `https://api.gameneonstrike.com` (`frontend/eas.json`) ; le site `https://gameneonstrike.com` sert `app-ads.txt` et la politique de confidentialité.
 
 ## Progression du jeu
 

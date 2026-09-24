@@ -4,15 +4,25 @@ Ce dossier lance trois conteneurs avec Docker Compose :
 
 | Service | Rôle | Exposé sur Internet |
 |---|---|---|
-| `caddy` | HTTPS automatique (Let's Encrypt) et reverse proxy | oui (ports 80 et 443) |
+| `caddy` | HTTPS automatique (Let's Encrypt) : sert l'API sur `api.gameneonstrike.com` et le site sur `gameneonstrike.com` | oui (ports 80 et 443) |
 | `api` | API FastAPI : joueurs, classement, vérification des achats | non (seulement via Caddy) |
 | `mongo` | Base MongoDB 7 avec mot de passe, données dans un volume | non |
 
 **Prérequis** : un VPS Linux (Ubuntu 22.04/24.04 ou Debian 12, 1 vCPU et 1 Go de RAM suffisent), un nom de domaine, et l'accès root en SSH.
 
-## 1. Nom de domaine
+## 1. Nom de domaine `gameneonstrike.com`
 
-Chez votre registrar, créez un enregistrement DNS de type **A**, par exemple `api.votre-domaine.fr`, pointant vers l'adresse IP du VPS. Vérifiez avec `ping api.votre-domaine.fr` avant de continuer : Caddy en a besoin pour obtenir le certificat HTTPS.
+Dans la zone DNS du domaine, chez votre registrar, créez ou modifiez ces 3 enregistrements, en remplaçant `IP_DU_VPS` par l'adresse IPv4 du VPS :
+
+| Type | Nom | Valeur |
+|---|---|---|
+| A | `@` (le domaine nu) | `IP_DU_VPS` |
+| A | `www` | `IP_DU_VPS` |
+| A | `api` | `IP_DU_VPS` |
+
+Aujourd'hui, `gameneonstrike.com` et `www` pointent vers `81.88.57.68` (probablement la page par défaut du registrar) et `api` n'existe pas. Supprimez aussi un éventuel enregistrement **AAAA** (IPv6) qui ne pointerait pas vers le VPS.
+
+Avant de continuer, vérifiez que `ping api.gameneonstrike.com` répond avec l'IP du VPS (la propagation prend de quelques minutes à quelques heures). Caddy en a besoin pour obtenir les certificats HTTPS.
 
 ## 2. Préparer le VPS
 
@@ -36,7 +46,7 @@ cp .env.example .env
 nano .env
 ```
 
-- `DOMAIN` : le domaine de l'étape 1, par exemple `api.votre-domaine.fr`.
+- `DOMAIN=api.gameneonstrike.com` et `SITE_DOMAIN=gameneonstrike.com` (déjà remplis).
 - `MONGO_PASSWORD` : un mot de passe long, générable avec `openssl rand -hex 24`.
 - `PURCHASE_VERIFICATION=google`.
 
@@ -47,7 +57,8 @@ Copiez ensuite la clé du compte de service Google (étape 5) dans `secrets/play
 ```bash
 docker compose up -d --build
 docker compose ps                     # les 3 services doivent être "running"/"healthy"
-curl https://api.votre-domaine.fr/api/  # {"message":"Neon Strike API online"}
+curl https://api.gameneonstrike.com/api/   # {"message":"Neon Strike API online"}
+curl https://gameneonstrike.com/app-ads.txt  # google.com, pub-7488746561313974, DIRECT, f08c47fec0942fa0
 ```
 
 Mise à jour après un `git pull` : `docker compose up -d --build`.
@@ -73,18 +84,11 @@ Journaux : `docker compose logs -f api`.
 
 La clé JSON donne accès à votre compte Play : ne la commitez jamais (le dossier `secrets/` est ignoré par git) et ne la partagez pas.
 
-## 6. Brancher l'application
+## 6. Application et site web
 
-Dans `frontend/eas.json`, ajoutez l'URL de l'API aux variables du profil `production` (et `preview` si vous voulez tester avec le vrai serveur) :
-
-```json
-"env": {
-  "EXPO_PUBLIC_AD_MODE": "production",
-  "EXPO_PUBLIC_BACKEND_URL": "https://api.votre-domaine.fr"
-}
-```
-
-Pour le développement local, mettez la même variable dans `frontend/.env`.
+- L'application est déjà branchée sur `https://api.gameneonstrike.com` pour tous les profils de build (`frontend/eas.json`).
+- **Site** (`deploy/site/`) : page d'accueil, `app-ads.txt` pour AdMob et politique de confidentialité sur `https://gameneonstrike.com/privacy`. **Avant la mise en ligne**, remplacez `[NOM DU RESPONSABLE]` et `[ADRESSE E-MAIL DE CONTACT]` dans `privacy.html` et `index.html`.
+- **Play Console** → **Fiche du Store** : renseignez `https://gameneonstrike.com` comme site web et `https://gameneonstrike.com/privacy` comme règles de confidentialité. AdMob vérifie ensuite automatiquement `app-ads.txt` (sous 24 h environ).
 
 ## 7. Sauvegardes
 
