@@ -20,7 +20,7 @@ import Goals, { claimableGoals } from "./Goals";
 import { useMessageQueue } from "../hooks/use-message-queue";
 import type { RemoteMessage } from "../api/config";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
-import type { Progress } from "../hooks/use-progress";
+import type { CloudStatus, Progress } from "../hooks/use-progress";
 
 type Props = {
   username: string;
@@ -29,6 +29,12 @@ type Props = {
   setLookSensitivity: (v: number) => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
+  musicEnabled: boolean;
+  setMusicEnabled: (v: boolean) => void;
+  musicVolume: number;
+  setMusicVolume: (v: number) => void;
+  cloudStatus: CloudStatus;
+  onRecovered: (name: string) => Promise<void>;
   progress: Progress;
   onBuyUpgrade: (key: UpgradeKey) => boolean;
   onClaimDaily: () => number;
@@ -197,6 +203,12 @@ export default function MainMenu(props: Props) {
           setLookSensitivity={props.setLookSensitivity}
           soundEnabled={props.soundEnabled}
           setSoundEnabled={props.setSoundEnabled}
+          musicEnabled={props.musicEnabled}
+          setMusicEnabled={props.setMusicEnabled}
+          musicVolume={props.musicVolume}
+          setMusicVolume={props.setMusicVolume}
+          cloudStatus={props.cloudStatus}
+          onRecovered={props.onRecovered}
           onClose={() => setShowSettings(false)}
         />
       )}

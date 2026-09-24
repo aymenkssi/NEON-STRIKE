@@ -1,16 +1,24 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable, Switch } from "react-native";
+import { View, Text, StyleSheet, Pressable, Switch, ScrollView } from "react-native";
 import { BlurView } from "expo-blur";
 import Slider from "@react-native-community/slider";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { isPrivacyOptionsRequired, showPrivacyOptions } from "../ads";
+import CloudSave from "./CloudSave";
+import type { CloudStatus } from "../hooks/use-progress";
 
 type Props = {
   lookSensitivity: number;
   setLookSensitivity: (v: number) => void;
   soundEnabled: boolean;
   setSoundEnabled: (v: boolean) => void;
+  musicEnabled: boolean;
+  setMusicEnabled: (v: boolean) => void;
+  musicVolume: number;
+  setMusicVolume: (v: number) => void;
+  cloudStatus: CloudStatus;
+  onRecovered: (name: string) => Promise<void>;
   onClose: () => void;
 };
 
@@ -22,6 +30,12 @@ export default function Settings({
   setLookSensitivity,
   soundEnabled,
   setSoundEnabled,
+  musicEnabled,
+  setMusicEnabled,
+  musicVolume,
+  setMusicVolume,
+  cloudStatus,
+  onRecovered,
   onClose,
 }: Props) {
   const pct = Math.round(((lookSensitivity - MIN) / (MAX - MIN)) * 100);
@@ -39,6 +53,7 @@ export default function Settings({
           </Pressable>
         </View>
 
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.row}>
           <View style={styles.rowLabel}>
             <Text style={styles.label}>Sensibilité de visée</Text>
@@ -68,12 +83,47 @@ export default function Settings({
           />
         </View>
 
+        <View style={[styles.row, styles.toggleRow]}>
+          <Text style={styles.label}>Musique</Text>
+          <Switch
+            testID="music-toggle"
+            value={musicEnabled}
+            onValueChange={setMusicEnabled}
+            trackColor={{ false: colors.surfaceTertiary, true: colors.brandTertiary }}
+            thumbColor={musicEnabled ? colors.brand : colors.onSurfaceTertiary}
+          />
+        </View>
+
+        {musicEnabled && (
+          <View style={styles.row}>
+            <View style={styles.rowLabel}>
+              <Text style={styles.label}>Volume de la musique</Text>
+              <Text style={styles.value}>{Math.round(musicVolume * 100)}%</Text>
+            </View>
+            <Slider
+              testID="music-volume"
+              style={{ width: "100%", height: 40 }}
+              minimumValue={0}
+              maximumValue={1}
+              value={musicVolume}
+              onSlidingComplete={setMusicVolume}
+              minimumTrackTintColor={colors.brand}
+              maximumTrackTintColor={colors.surfaceTertiary}
+              thumbTintColor={colors.brand}
+            />
+          </View>
+        )}
+
+        <CloudSave status={cloudStatus} onRecovered={onRecovered} />
+
         {isPrivacyOptionsRequired() && (
           <Pressable testID="privacy-options" onPress={showPrivacyOptions} style={[styles.row, styles.toggleRow]}>
             <Text style={styles.label}>Confidentialité des annonces</Text>
             <MaterialCommunityIcons name="chevron-right" size={22} color={colors.onSurfaceSecondary} />
           </Pressable>
         )}
+
+        </ScrollView>
 
         <Pressable testID="settings-back" onPress={onClose} style={styles.backBtn}>
           <Text style={styles.backText}>OK</Text>
@@ -88,6 +138,7 @@ const styles = StyleSheet.create({
   modal: {
     width: "62%",
     maxWidth: 480,
+    maxHeight: "94%",
     backgroundColor: "rgba(13,15,18,0.9)",
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -109,7 +160,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  row: { marginBottom: spacing.lg },
+  scroll: { flexShrink: 1 },
+  row: { marginBottom: spacing.md },
   rowLabel: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.xs },
   toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { color: colors.onSurface, fontFamily: fonts.textMed, fontSize: 15 },

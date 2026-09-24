@@ -30,7 +30,14 @@ export function getLevelConfig(level: number): LevelConfig {
 
 // ---------------- Weapons ----------------
 // Unlocked permanently once the player reaches the level.
-export const WEAPON_UNLOCK_LEVEL: Record<string, number> = { shotgun: 1, smg: 2, rifle: 4 };
+export const WEAPON_UNLOCK_LEVEL: Record<string, number> = {
+  shotgun: 1,
+  smg: 2,
+  rifle: 4,
+  railgun: 10,
+  minigun: 15,
+  launcher: 20,
+};
 
 // ---------------- Stars & rewards ----------------
 export const CREDITS_PER_KILL = 5;

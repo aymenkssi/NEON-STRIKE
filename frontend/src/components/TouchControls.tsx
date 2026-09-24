@@ -1,7 +1,8 @@
 import React, { useCallback, useRef } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, runOnJS } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { useAnimatedStyle, useSharedValue, runOnJS, withTiming } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, fonts } from "../theme";
@@ -10,14 +11,30 @@ import type { GameEngine } from "../game/GameEngine";
 type Props = { getEngine: () => GameEngine | null };
 
 const KNOB_MAX = 55;
+const RING = 120; // joystick diameter
+const SPRINT_AT = 0.85; // push beyond 85% of the radius to sprint
 
 export default function TouchControls({ getEngine }: Props) {
-  const baseX = useSharedValue(0);
-  const baseY = useSharedValue(0);
-  const knobX = useSharedValue(0);
-  const knobY = useSharedValue(0);
+  const insets = useSafeAreaInsets();
+  // Resting spot of the joystick (bottom-left of the left zone), set once the zone is measured.
+  const homeX = useSharedValue(Math.max(insets.left, 24) + RING / 2 + 16);
+  const homeY = useSharedValue(300);
+  const baseX = useSharedValue(homeX.value);
+  const baseY = useSharedValue(homeY.value);
+  const knobX = useSharedValue(homeX.value);
+  const knobY = useSharedValue(homeY.value);
   const active = useSharedValue(0);
+  const sprinting = useSharedValue(0);
   const fireInterval = useRef<any>(null);
+
+  const onJoyLayout = (e: LayoutChangeEvent) => {
+    const { height } = e.nativeEvent.layout;
+    homeY.value = height - Math.max(insets.bottom, 16) - RING / 2 - 20;
+    if (!active.value) {
+      baseX.value = knobX.value = homeX.value;
+      baseY.value = knobY.value = homeY.value;
+    }
+  };
 
   const move = useCallback(
     (x: number, y: number, sprint: boolean) => {
@@ -38,11 +55,14 @@ export default function TouchControls({ getEngine }: Props) {
   const joystick = Gesture.Pan()
     .minDistance(0)
     .onBegin((e) => {
-      baseX.value = e.x;
-      baseY.value = e.y;
+      // Touching near the joystick grabs it where it is; anywhere else in the left zone
+      // moves it under the thumb (so the player never has to aim for it).
+      const nearHome = Math.hypot(e.x - homeX.value, e.y - homeY.value) < RING * 0.75;
+      baseX.value = nearHome ? homeX.value : e.x;
+      baseY.value = nearHome ? homeY.value : e.y;
       knobX.value = e.x;
       knobY.value = e.y;
-      active.value = 1;
+      active.value = withTiming(1, { duration: 80 });
     })
     .onUpdate((e) => {
       const dx = e.x - baseX.value;
@@ -53,10 +73,16 @@ export default function TouchControls({ getEngine }: Props) {
       knobX.value = baseX.value + Math.cos(ang) * clamped;
       knobY.value = baseY.value + Math.sin(ang) * clamped;
       const mag = clamped / KNOB_MAX;
-      runOnJS(move)(mag * Math.cos(ang), -mag * Math.sin(ang), mag > 0.85);
+      sprinting.value = mag > SPRINT_AT ? 1 : 0;
+      runOnJS(move)(mag * Math.cos(ang), -mag * Math.sin(ang), mag > SPRINT_AT);
     })
     .onFinalize(() => {
-      active.value = 0;
+      active.value = withTiming(0, { duration: 150 });
+      sprinting.value = 0;
+      baseX.value = withTiming(homeX.value, { duration: 150 });
+      baseY.value = withTiming(homeY.value, { duration: 150 });
+      knobX.value = withTiming(homeX.value, { duration: 150 });
+      knobY.value = withTiming(homeY.value, { duration: 150 });
       runOnJS(endMove)();
     });
 
@@ -66,13 +92,21 @@ export default function TouchControls({ getEngine }: Props) {
       runOnJS(look)(e.changeX, e.changeY);
     });
 
+  // Always visible: dimmed at rest, bright while used, amber while sprinting.
   const ringStyle = useAnimatedStyle(() => ({
-    opacity: active.value,
-    transform: [{ translateX: baseX.value - 45 }, { translateY: baseY.value - 45 }],
+    opacity: 0.55 + active.value * 0.45,
+    borderColor: sprinting.value ? "rgba(255,176,0,0.8)" : "rgba(57,255,20,0.45)",
+    transform: [{ translateX: baseX.value - RING / 2 }, { translateY: baseY.value - RING / 2 }],
   }));
   const knobStyle = useAnimatedStyle(() => ({
-    opacity: active.value,
-    transform: [{ translateX: knobX.value - 28 }, { translateY: knobY.value - 28 }],
+    opacity: 0.7 + active.value * 0.3,
+    backgroundColor: sprinting.value ? "rgba(255,176,0,0.45)" : "rgba(57,255,20,0.3)",
+    borderColor: sprinting.value ? "rgba(255,176,0,0.95)" : "rgba(57,255,20,0.75)",
+    transform: [{ translateX: knobX.value - 30 }, { translateY: knobY.value - 30 }],
+  }));
+  const sprintStyle = useAnimatedStyle(() => ({
+    opacity: sprinting.value,
+    transform: [{ translateX: baseX.value - 40 }, { translateY: baseY.value - RING / 2 - 26 }],
   }));
 
   const startFire = () => {
@@ -99,9 +133,20 @@ export default function TouchControls({ getEngine }: Props) {
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Movement joystick zone (left) */}
       <GestureDetector gesture={joystick}>
-        <View style={styles.joyZone}>
-          <Animated.View style={[styles.ring, ringStyle]} pointerEvents="none" />
-          <Animated.View style={[styles.knob, knobStyle]} pointerEvents="none" />
+        <View style={styles.joyZone} onLayout={onJoyLayout} testID="joystick-zone">
+          <Animated.View style={[styles.ring, ringStyle]} pointerEvents="none" testID="joystick">
+            {/* Direction ticks */}
+            <View style={[styles.tick, { top: 6, left: RING / 2 - 3 }]} />
+            <View style={[styles.tick, { bottom: 6, left: RING / 2 - 3 }]} />
+            <View style={[styles.tick, { left: 6, top: RING / 2 - 3 }]} />
+            <View style={[styles.tick, { right: 6, top: RING / 2 - 3 }]} />
+          </Animated.View>
+          <Animated.View style={[styles.knob, knobStyle]} pointerEvents="none">
+            <MaterialCommunityIcons name="cursor-move" size={22} color="rgba(255,255,255,0.8)" />
+          </Animated.View>
+          <Animated.View style={[styles.sprintTag, sprintStyle]} pointerEvents="none">
+            <Text style={styles.sprintText}>SPRINT</Text>
+          </Animated.View>
         </View>
       </GestureDetector>
 
@@ -154,22 +199,28 @@ const styles = StyleSheet.create({
   lookZone: { position: "absolute", right: 0, top: 0, bottom: 0, width: "55%" },
   ring: {
     position: "absolute",
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: RING,
+    height: RING,
+    borderRadius: RING / 2,
     borderWidth: 2,
-    borderColor: "rgba(57,255,20,0.35)",
-    backgroundColor: "rgba(57,255,20,0.05)",
+    backgroundColor: "rgba(13,15,18,0.35)",
   },
+  tick: { position: "absolute", width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(57,255,20,0.5)" },
   knob: {
     position: "absolute",
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(57,255,20,0.25)",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     borderWidth: 2,
-    borderColor: "rgba(57,255,20,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
+  sprintTag: {
+    position: "absolute",
+    width: 80,
+    alignItems: "center",
+  },
+  sprintText: { color: colors.warning, fontFamily: fonts.display, fontSize: 13, letterSpacing: 2 },
   fireBtn: {
     position: "absolute",
     right: 32,

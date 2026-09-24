@@ -59,6 +59,9 @@ type WeaponConfig = {
   fireRate: number;
   auto: boolean;
   flashZ: number;
+  sound?: string; // defaults to key
+  pierce?: number; // railgun: zombies hit by one shot
+  projectile?: boolean; // grenade launcher
 };
 
 const WEAPONS: WeaponConfig[] = [
@@ -77,7 +80,24 @@ const WEAPONS: WeaponConfig[] = [
     pellets: 1, spread: 0.004, maxAmmo: 10, reloadMs: 1500,
     bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, auto: false, flashZ: -0.78,
   },
+  {
+    key: "railgun", name: "RAILGUN", short: "RG",
+    pellets: 1, spread: 0, maxAmmo: 4, reloadMs: 1800,
+    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, auto: false, flashZ: -0.85, pierce: 5,
+  },
+  {
+    key: "minigun", name: "MINIGUN", short: "MG", sound: "smg",
+    pellets: 1, spread: 0.035, maxAmmo: 120, reloadMs: 2800,
+    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, auto: true, flashZ: -0.7,
+  },
+  {
+    key: "launcher", name: "LANCE-GRENADES", short: "GL",
+    pellets: 1, spread: 0, maxAmmo: 3, reloadMs: 2200,
+    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, auto: false, flashZ: -0.7, projectile: true,
+  },
 ];
+
+const GRENADE = { speed: 32, lift: 6, gravity: 22, damage: 14, fuseMs: 3000 };
 
 const unlockLevelOf = (w: WeaponConfig) => WEAPON_UNLOCK_LEVEL[w.key] ?? 1;
 
@@ -183,6 +203,8 @@ export class GameEngine {
   private shake = 0;
   private shakeOffset = new THREE.Vector3();
   private flashes: { light: THREE.PointLight; ring: THREE.Mesh; life: number }[] = [];
+  private grenades: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number }[] = [];
+  private beams: { line: THREE.Line; life: number }[] = [];
 
   private prevTime = 0;
   private rafId: any = null;
@@ -517,6 +539,80 @@ export class GameEngine {
     return model;
   }
 
+  private buildRailgun(): THREE.Group {
+    const dark = new THREE.MeshStandardMaterial({ color: 0x1a1d24, metalness: 0.8, roughness: 0.35 });
+    const glow = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const model = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.8), dark);
+    body.position.z = -0.1;
+    model.add(body);
+    for (const x of [-0.05, 0.05]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.7), dark);
+      rail.position.set(x, 0.02, -0.72);
+      model.add(rail);
+    }
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.62), glow);
+    core.position.set(0, 0.02, -0.7);
+    model.add(core);
+    const coil = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 12), glow);
+    coil.rotation.x = Math.PI / 2;
+    coil.position.set(0, -0.02, 0.12);
+    model.add(coil);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
+    grip.position.set(0, -0.13, 0.22);
+    grip.rotation.x = 0.25;
+    model.add(grip);
+    return model;
+  }
+
+  private buildMinigun(): THREE.Group {
+    const dark = new THREE.MeshStandardMaterial({ color: 0x22262e, metalness: 0.85, roughness: 0.35 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0xffb000 });
+    const model = new THREE.Group();
+    const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.35, 12), dark);
+    housing.rotation.x = Math.PI / 2;
+    model.add(housing);
+    const barrels = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 8), dark);
+      b.rotation.x = Math.PI / 2;
+      b.position.set(Math.cos(a) * 0.05, Math.sin(a) * 0.05, -0.4);
+      barrels.add(b);
+    }
+    barrels.name = "barrels";
+    model.add(barrels);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.012, 6, 16), accent);
+    band.position.z = -0.5;
+    model.add(band);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), dark);
+    handle.position.set(0, -0.14, 0.12);
+    model.add(handle);
+    return model;
+  }
+
+  private buildLauncher(): THREE.Group {
+    const dark = new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.6, roughness: 0.5 });
+    const accent = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
+    const model = new THREE.Group();
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.75, 14), dark);
+    tube.rotation.x = Math.PI / 2;
+    tube.position.z = -0.25;
+    model.add(tube);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 8), dark);
+    drum.rotation.x = Math.PI / 2;
+    drum.position.z = 0.05;
+    model.add(drum);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 6, 16), accent);
+    ring.position.z = -0.62;
+    model.add(ring);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
+    grip.position.set(0, -0.14, 0.18);
+    grip.rotation.x = 0.2;
+    model.add(grip);
+    return model;
+  }
+
   private createWeapon() {
     this.weaponGroup = new THREE.Group();
     this.modelHolder = new THREE.Group();
@@ -548,8 +644,12 @@ export class GameEngine {
   private equipModel() {
     this.modelHolder.clear();
     let model: THREE.Group;
-    if (this.weapon.key === "smg") model = this.buildSMG();
-    else if (this.weapon.key === "rifle") model = this.buildRifle();
+    const key = this.weapon.key;
+    if (key === "smg") model = this.buildSMG();
+    else if (key === "rifle") model = this.buildRifle();
+    else if (key === "railgun") model = this.buildRailgun();
+    else if (key === "minigun") model = this.buildMinigun();
+    else if (key === "launcher") model = this.buildLauncher();
     else model = this.buildShotgun();
     this.modelHolder.add(model);
     const z = this.weapon.flashZ;
@@ -619,9 +719,11 @@ export class GameEngine {
 
     const wpn = this.weapon;
     if (!this.powerActive("infinite")) this.ammo = this.ammo - 1;
-    this.cb.playSound(wpn.key);
+    this.cb.playSound(wpn.sound ?? wpn.key);
     this.emitStats();
     this.addShake(wpn.recoil * 0.25);
+    const barrels = this.modelHolder.getObjectByName("barrels");
+    if (barrels) barrels.rotation.z += 0.9;
 
     this.currentRecoil = wpn.recoil;
     this.currentRecoilX = (Math.random() - 0.5) * 0.05;
@@ -647,6 +749,46 @@ export class GameEngine {
     const up = new THREE.Vector3().crossVectors(right, baseDir).normalize();
     const candidates = [...this.objects, ...this.enemies];
     let hitZombie = false;
+    const rage = this.powerActive("rage") ? RAGE_MULT : 1;
+
+    if (wpn.projectile) {
+      this.launchGrenade(origin, baseDir);
+      if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
+      return;
+    }
+
+    if (wpn.pierce) {
+      // Railgun: one straight beam that goes through up to `pierce` zombies, stopped by walls.
+      const hits = new THREE.Raycaster(origin, baseDir).intersectObjects(candidates, true);
+      const done = new Set<THREE.Object3D>();
+      let end = origin.clone().addScaledVector(baseDir, 70);
+      for (const hit of hits) {
+        let target: any = hit.object;
+        while (target.parent && target.parent !== this.scene && target.parent !== this.world) target = target.parent;
+        if (target.userData?.type !== "zombie") {
+          end = hit.point.clone();
+          break; // wall
+        }
+        if (done.has(target) || target.userData.dead) continue;
+        done.add(target);
+        const headshot = hit.object.name === "Head";
+        target.userData.health -= (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult * rage;
+        hitZombie = true;
+        this.createImpact(hit.point, (hit.face as any)?.normal ?? new THREE.Vector3(0, 1, 0));
+        if (target.userData.health <= 0) this.killZombie(target, headshot, false);
+        if (done.size >= wpn.pierce) {
+          end = hit.point.clone();
+          break;
+        }
+      }
+      this.createBeam(this.muzzleWorldPosition(), end);
+      if (hitZombie) {
+        this.cb.onHitMarker();
+        if (this.boss) this.emitStats();
+      }
+      if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
+      return;
+    }
 
     for (let i = 0; i < wpn.pellets; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -662,7 +804,6 @@ export class GameEngine {
         this.createImpact(hit.point, (hit.face as any).normal);
         let target: any = hit.object;
         const headshot = hit.object.name === "Head";
-        const rage = this.powerActive("rage") ? RAGE_MULT : 1;
         const dmg = (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult * rage;
         while (target.parent && target.parent !== this.scene) target = target.parent;
         if (target.userData?.type === "zombie") {
@@ -725,7 +866,7 @@ export class GameEngine {
     } else if (label) {
       this.cb.onNotify(`${label}  +${bonus.score}`);
     }
-    if (kind === "exploder") this.explode(target.position.clone(), false);
+    if (kind === "exploder") this.explode(target.position.clone(), "shot");
     this.emitStats();
     this.checkWaveCleared();
   }
@@ -735,17 +876,19 @@ export class GameEngine {
     if (z.userData.dead) return;
     z.userData.dead = true;
     this.removeZombie(z);
-    this.explode(z.position.clone(), true);
+    this.explode(z.position.clone(), "contact");
     this.checkWaveCleared();
   }
 
-  private explode(center: THREE.Vector3, triggeredByContact: boolean) {
+  // cause: "contact" (exploder reached the player), "shot" (exploder killed), "grenade" (player's own).
+  private explode(center: THREE.Vector3, cause: "contact" | "shot" | "grenade") {
+    const triggeredByContact = cause === "contact";
     this.createExplosion(center);
     this.cb.playSound("explosion");
     const dPlayer = Math.hypot(this.camera.position.x - center.x, this.camera.position.z - center.z);
     this.addShake(Math.max(0.15, 0.7 - dPlayer * 0.06));
     // The player is hurt by contact explosions, and by shot exploders that were too close.
-    if (dPlayer < EXPLOSION.radius && !this.gameOver) {
+    if (cause !== "grenade" && dPlayer < EXPLOSION.radius && !this.gameOver) {
       const full = EXPLOSION.playerDamage(this.levelCfg.level);
       this.health -= triggeredByContact ? full : Math.round(full * (1 - dPlayer / EXPLOSION.radius));
       this.cb.onDamage();
@@ -758,11 +901,60 @@ export class GameEngine {
     for (const z of [...this.enemies]) {
       if (z.userData.dead) continue;
       if (z.position.distanceTo(center) < EXPLOSION.radius) {
-        z.userData.health -= EXPLOSION.zombieDamage * (z.userData.boss ? 0.5 : 1);
+        const base = cause === "grenade" ? GRENADE.damage * this.mods.damageMult * (this.powerActive("rage") ? RAGE_MULT : 1) : EXPLOSION.zombieDamage;
+        z.userData.health -= base * (z.userData.boss ? 0.5 : 1);
         if (z.userData.health <= 0) this.killZombie(z, false, true);
       }
     }
     if (this.boss) this.emitStats();
+  }
+
+  private muzzleWorldPosition() {
+    const p = new THREE.Vector3();
+    this.muzzleFlash.getWorldPosition(p);
+    return p;
+  }
+
+  private launchGrenade(origin: THREE.Vector3, dir: THREE.Vector3) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.8 })
+    );
+    mesh.position.copy(this.muzzleWorldPosition());
+    const vel = dir.clone().multiplyScalar(GRENADE.speed);
+    vel.y += GRENADE.lift;
+    this.scene.add(mesh);
+    this.grenades.push({ mesh, vel, born: Date.now() });
+  }
+
+  private updateGrenades(delta: number, time: number) {
+    for (let i = this.grenades.length - 1; i >= 0; i--) {
+      const g = this.grenades[i];
+      g.vel.y -= GRENADE.gravity * delta;
+      g.mesh.position.addScaledVector(g.vel, delta);
+      const p = g.mesh.position;
+      let hit = p.y <= 0.15 || time - g.born > GRENADE.fuseMs;
+      if (!hit) hit = this.enemies.some((z) => !z.userData.dead && Math.hypot(z.position.x - p.x, z.position.z - p.z) < 0.9 * z.scale.x && p.y < 2.2 * z.scale.y);
+      if (!hit) hit = this.objects.some((o) => (o.userData.aabb as THREE.Box3).containsPoint(p));
+      if (hit) {
+        this.scene.remove(g.mesh);
+        g.mesh.geometry.dispose();
+        (g.mesh.material as THREE.Material).dispose();
+        this.grenades.splice(i, 1);
+        this.explode(new THREE.Vector3(p.x, 0, p.z), "grenade");
+        if (this.gameOver) return;
+      }
+    }
+  }
+
+  private createBeam(from: THREE.Vector3, to: THREE.Vector3) {
+    const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const line = new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    this.scene.add(line);
+    this.beams.push({ line, life: 1 });
   }
 
   private checkWaveCleared() {
@@ -882,6 +1074,8 @@ export class GameEngine {
     this.combo = 0;
     this.powerUntil = {};
     this.shake = 0;
+    this.grenades.forEach((g) => this.scene.remove(g.mesh));
+    this.grenades = [];
     this.unlockedLevel = Math.max(opts.unlockedLevel ?? this.unlockedLevel, this.levelCfg.level);
     this.health = this.mods.maxHealth;
     if (unlockLevelOf(this.weapon) > this.unlockedLevel) this.weaponIndex = 0;
@@ -1121,6 +1315,18 @@ export class GameEngine {
       }
     }
 
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      const b = this.beams[i];
+      b.life -= delta * 4;
+      (b.line.material as THREE.LineBasicMaterial).opacity = Math.max(0, b.life);
+      if (b.life <= 0) {
+        this.scene.remove(b.line);
+        b.line.geometry.dispose();
+        (b.line.material as THREE.Material).dispose();
+        this.beams.splice(i, 1);
+      }
+    }
+
     this.shake = Math.max(0, this.shake - delta * 1.8);
     const amp = this.shake * this.shake * 0.35;
     this.shakeOffset.set((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp);
@@ -1129,6 +1335,9 @@ export class GameEngine {
       this.shakeOffset.set(0, 0, 0);
       return;
     }
+
+    this.updateGrenades(delta, time);
+    if (this.gameOver) return;
 
     // Refresh power-up timers in the HUD a few times per second while one is active.
     if (Object.keys(this.powerUntil).length && time - this.lastPowerEmit > 250) {

@@ -13,6 +13,7 @@ motor.motor_asyncio.AsyncIOMotorClient = mongomock_motor.AsyncMongoMockClient
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import server  # noqa: E402
+import cloudsave  # noqa: E402
 from play_verifier import PlayPurchase  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -27,7 +28,8 @@ def api(monkeypatch):
     monkeypatch.setattr(server, "PURCHASE_VERIFICATION", "google")
     monkeypatch.setenv("ADMIN_TOKEN", ADMIN_TOKEN)
     with TestClient(server.app) as c:
-        for name in ("players", "scores", "purchases", "packs", "messages"):
+        cloudsave._attempts.clear()
+        for name in ("players", "scores", "purchases", "packs", "messages", "saves"):
             c.portal.call(server.db[name].delete_many, {})
         c.portal.call(server.liveops.setup)  # re-seed default packs
         yield c

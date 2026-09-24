@@ -104,7 +104,10 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Combos** (DOUBLE KILL, TRIPLE KILL… en moins de 2,5 s) avec bonus de score et de crédits ; **bonus temporaires** lâchés par les zombies : dégâts ×2, vitesse, munitions infinies.
 - **6 secteurs** de 5 niveaux, chacun avec ses couleurs et son nom ; secousses d'écran et explosions.
 - **Objectifs** (`frontend/src/game/meta.ts`) : 3 missions du jour (les mêmes pour tous, renouvelées à minuit), 17 succès récompensés en crédits et des statistiques de joueur.
-- La progression est sauvegardée sur l'appareil (`frontend/src/hooks/use-progress.ts`, clé `np_progress_v1`).
+- **Armes** : fusil à pompe, SMG (niveau 2), fusil d'assaut (4), railgun perforant (10), minigun (15), lance-grenades (20).
+- **Commandes** : joystick visible en bas à gauche (il suit le pouce, sprint en poussant à fond), visée à droite.
+- **Musique** : thèmes originaux du menu et du combat (`frontend/scripts/generate-music.py` les régénère), réglables dans Réglages.
+- La progression est sauvegardée sur l'appareil (`frontend/src/hooks/use-progress.ts`, clé `np_progress_v1`) **et en ligne** : synchronisation automatique, et un **code de récupération** (Réglages → Sauvegarde en ligne) pour la retrouver sur un autre téléphone.
 
 ## Achat de crédits (Google Play Billing)
 

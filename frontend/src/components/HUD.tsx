@@ -14,6 +14,14 @@ import { POWERUPS } from "../game/content";
 
 const POWERUP_ICONS = { rage: "fire", haste: "run-fast", infinite: "infinity" } as const;
 const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
+const WEAPON_ICONS: Record<string, string> = {
+  SG: "pistol",
+  SMG: "pistol",
+  AR: "pistol",
+  RG: "flash",
+  MG: "fan",
+  GL: "bomb",
+};
 
 type Props = {
   stats: GameStats;
@@ -104,6 +112,9 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       <View style={[styles.weaponRow, { top: padT }]} pointerEvents="box-none">
         {stats.weapons.map((w, i) => {
           const selected = i === stats.weaponIndex;
+          // Unlocked weapons + only the next locked one, so the row fits on small screens.
+          const firstLocked = stats.weapons.findIndex((x) => !x.unlocked);
+          if (!w.unlocked && i !== firstLocked) return null;
           return (
             <Pressable
               key={w.short}
@@ -119,7 +130,7 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
               {w.unlocked ? (
                 <>
                   <MaterialCommunityIcons
-                    name="pistol"
+                    name={(WEAPON_ICONS[w.short] ?? "pistol") as any}
                     size={16}
                     color={selected ? colors.onBrand : colors.onSurfaceSecondary}
                   />
@@ -265,7 +276,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     height: 34,
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: colors.border,

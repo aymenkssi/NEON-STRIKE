@@ -14,7 +14,13 @@ type Props = {
   onExit: () => void;
 };
 
-const WEAPON_NAMES: Record<string, string> = { smg: "SMG", rifle: "ASSAULT RIFLE" };
+const WEAPON_NAMES: Record<string, string> = {
+  smg: "SMG",
+  rifle: "ASSAULT RIFLE",
+  railgun: "RAILGUN",
+  minigun: "MINIGUN",
+  launcher: "LANCE-GRENADES",
+};
 
 export default function LevelComplete({ result, onDoubleCredits, onNext, onExit }: Props) {
   const insets = useSafeAreaInsets();
