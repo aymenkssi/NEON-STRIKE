@@ -151,8 +151,9 @@ export function useProgress(cloudEnabled: boolean) {
   }, [loaded, cloudEnabled, syncFromCloud]);
 
   // Logout: upload pending changes, then start again from a blank progress on this phone.
-  const resetLocal = useCallback(async () => {
-    if (pushTimer.current) await push();
+  // keepPending=false (account deleted): drop unsent changes instead of pushing them.
+  const resetLocal = useCallback(async (keepPending = true) => {
+    if (keepPending && pushTimer.current) await push();
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = null;
     replace(DEFAULT);

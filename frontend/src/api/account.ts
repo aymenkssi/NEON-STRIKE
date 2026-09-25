@@ -57,6 +57,21 @@ export async function logoutAccount() {
   await clearSession();
 }
 
+// Deletes the account and its online data (Google Play requires it), then forgets the session.
+export async function deleteAccount(password: string): Promise<"deleted" | "credentials" | "rate" | "network"> {
+  if (!backendConfigured) return "network";
+  // post (not authed): never re-register a new player and delete that one by mistake.
+  try {
+    await post("/accounts/delete", { password });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 403) return "credentials";
+    if (e instanceof ApiError && e.status === 429) return "rate";
+    return "network";
+  }
+  await clearSession();
+  return "deleted";
+}
+
 export const AUTH_ERRORS: Record<AuthError, Key> = {
   taken: "auth.err.taken",
   invalid: "auth.err.invalid",

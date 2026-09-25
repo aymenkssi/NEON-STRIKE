@@ -4,6 +4,8 @@
   scores, purchases and save), or creates a new player when called without a token.
 - POST /api/accounts/login    : returns a new device token for an existing account.
 - GET  /api/accounts/available: live check while typing a username.
+- POST /api/accounts/delete   : deletes the caller's account and its data (password required);
+  purchases are kept for accounting but detached from the player.
 
 Passwords are stored as salted scrypt hashes (hashlib, no extra dependency).
 """
@@ -16,10 +18,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from auth import find_player_by_token, hash_token
+from auth import current_player, find_player_by_token, hash_token
 from cloudsave import MAX_DEVICES, _rate_limited
 from database import db
 from stats import client_ip, record_visit
@@ -49,6 +51,10 @@ def check_password(password: str, stored: str) -> bool:
 class Credentials(BaseModel):
     username: str = Field(..., min_length=3, max_length=16)
     password: str = Field(..., min_length=6, max_length=72)
+
+
+class DeleteRequest(BaseModel):
+    password: str = Field("", max_length=72)
 
 
 class AccountSession(BaseModel):
@@ -138,6 +144,24 @@ async def login(payload: Credentials, request: Request):
     await db.players.update_one({"id": player["id"]}, {"$set": {"device_token_hashes": devices}})
     await record_visit(player, request)
     return AccountSession(id=player["id"], token=token, username=player["username"])
+
+
+@router.post("/delete")
+async def delete_account(payload: DeleteRequest, request: Request, player: dict = Depends(current_player)):
+    if _rate_limited(f"delete:{client_ip(request)}"):
+        raise HTTPException(429, "Too many attempts, try again later")
+    # An account needs its password; an anonymous player (no username) only its token.
+    # 403, not 401: a 401 makes the app re-register a fresh player and retry with it.
+    if player.get("username") and not check_password(payload.password, player.get("password_hash", "")):
+        raise HTTPException(403, "Wrong password")
+    pid = player["id"]
+    for name in ("scores", "saves", "activity", "suggestions"):
+        await db[name].delete_many({"player_id": pid})
+    # Random placeholder: sales stats still count distinct buyers, without any link to the player.
+    await db.purchases.update_many({"player_id": pid}, {"$set": {"player_id": f"deleted-{uuid.uuid4()}"}})
+    await db.players.delete_one({"id": pid})
+    logger.info("Account %s deleted", player.get("username") or pid)
+    return {"deleted": True}
 
 
 async def setup():

@@ -9,6 +9,10 @@ export const en: Record<Key, string> = {
   "account.title": "Account",
   "account.logout": "LOG OUT",
   "account.logoutWarning": "Your progress stays saved on your account. This phone will start from scratch until you log in again.",
+  "account.delete": "Delete my account",
+  "account.deleteWarning": "Your account, online save, leaderboard score and suggestions will be permanently erased. Purchased credits will be lost. Enter your password to confirm.",
+  "account.deleteConfirm": "Delete permanently",
+  "account.err.password": "Wrong password.",
   "account.guestTitle": "Guest mode",
   "account.guestText": "Your progress is only stored on this phone and your scores don’t enter the leaderboard. Create an account to save them online: you keep everything you’ve already earned.",
 
