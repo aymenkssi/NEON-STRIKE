@@ -39,6 +39,7 @@ type Props = {
   cloudStatus: CloudStatus;
   onSignedIn: (username: string, mode: AuthMode) => Promise<void>;
   onLogout: () => Promise<void>;
+  onDeleted: () => Promise<void>;
   progress: Progress;
   onBuyUpgrade: (key: UpgradeKey) => boolean;
   onClaimDaily: () => number;
@@ -217,6 +218,7 @@ export default function MainMenu(props: Props) {
           account={account}
           onSignedIn={props.onSignedIn}
           onLogout={props.onLogout}
+          onDeleted={props.onDeleted}
           onClose={() => setShowSettings(false)}
         />
       )}

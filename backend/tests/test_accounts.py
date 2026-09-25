@@ -81,3 +81,33 @@ def test_hashing_roundtrip():
     assert accounts.check_password("hunter22", h) and not accounts.check_password("hunter23", h)
     assert h != accounts.hash_password("hunter22")  # salted
     assert not accounts.check_password("x", "garbage")
+
+
+class TestDelete:
+    def test_delete_account_removes_data(self, api, google):
+        body = register(api, "Gone").json()
+        h = auth(body["token"])
+        pid = body["id"]
+        assert api.post("/api/scores", json={"name": "Gone", "score": 500, "level": 2, "kills": 5}, headers=h).status_code == 200
+        assert api.put("/api/save", json={"data": {"credits": 5}, "updated_at": 1000}, headers=h).status_code == 200
+        assert api.post("/api/suggestions", json={"category": "idea", "message": "More cities please"}, headers=h).status_code == 200
+        r = api.post("/api/purchases/verify", json={"product_id": "coins_1200", "purchase_token": "token-of-deleted-player"}, headers=h)
+        assert r.status_code == 200 and r.json()["status"] == "valid", r.text
+
+        cloudsave._attempts.clear()
+        assert api.post("/api/accounts/delete", json={"password": "wrong-pass"}, headers=h).status_code == 403
+        assert api.post("/api/accounts/delete", json={"password": "secret123"}, headers=h).json() == {"deleted": True}
+
+        db = accounts.db
+        for name in ("players", "scores", "saves", "activity", "suggestions"):
+            key = "id" if name == "players" else "player_id"
+            assert api.portal.call(db[name].count_documents, {key: pid}) == 0, name
+        purchase = api.portal.call(db.purchases.find_one, {})
+        assert purchase and purchase["player_id"].startswith("deleted-")
+        # The token is dead, the name is free again, the leaderboard no longer lists it.
+        assert api.get("/api/save", headers=h).status_code == 401
+        assert api.get("/api/accounts/available?username=Gone").json()["available"] is True
+        assert all(row["name"] != "Gone" for row in api.get("/api/leaderboard").json())
+
+    def test_delete_requires_token(self, api):
+        assert api.post("/api/accounts/delete", json={"password": "secret123"}).status_code == 401

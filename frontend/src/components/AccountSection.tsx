@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
-import { accountsAvailable } from "../api/account";
+import { accountsAvailable, deleteAccount, PASSWORD_MIN } from "../api/account";
 import type { AccountState } from "../hooks/use-account";
 import type { CloudStatus } from "../hooks/use-progress";
 import AuthForm, { type AuthMode } from "./AuthForm";
@@ -14,6 +14,7 @@ type Props = {
   cloudStatus: CloudStatus;
   onSignedIn: (username: string, mode: AuthMode) => Promise<void>;
   onLogout: () => Promise<void>;
+  onDeleted: () => Promise<void>;
 };
 
 const SYNC: Record<CloudStatus, { text: Key; icon: string; color: string }> = {
@@ -23,11 +24,14 @@ const SYNC: Record<CloudStatus, { text: Key; icon: string; color: string }> = {
   offline: { text: "account.sync.offline", icon: "cloud-alert", color: colors.warning },
 };
 
-export default function AccountSection({ account, cloudStatus, onSignedIn, onLogout }: Props) {
+export default function AccountSection({ account, cloudStatus, onSignedIn, onLogout, onDeleted }: Props) {
   const [form, setForm] = useState<AuthMode | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [password, setPassword] = useState("");
+  const [deleteError, setDeleteError] = useState<Key | null>(null);
   const t = useT();
 
   if (account.mode === "account") {
@@ -87,6 +91,61 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
               <MaterialCommunityIcons name="send" size={16} color={colors.onBrand} />
               <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("suggest.open")}</Text>
             </Pressable>
+          </>
+        )}
+        <View style={styles.divider} />
+        {!deleting ? (
+          <Pressable onPress={() => setDeleting(true)} style={[styles.btn, styles.danger]} testID="delete-account">
+            <MaterialCommunityIcons name="account-remove" size={16} color={colors.error} />
+            <Text style={[styles.btnText, { color: colors.error }]}>{t("account.delete")}</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Text style={[styles.hint, { color: colors.error }]}>{t("account.deleteWarning")}</Text>
+            <TextInput
+              testID="delete-password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder={t("auth.password", { n: PASSWORD_MIN })}
+              placeholderTextColor={colors.onSurfaceTertiary}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="current-password"
+              maxLength={72}
+              style={styles.input}
+            />
+            {deleteError && <Text style={[styles.hint, { color: colors.error }]} testID="delete-error">{t(deleteError)}</Text>}
+            <View style={styles.row}>
+              <Pressable
+                onPress={() => {
+                  setDeleting(false);
+                  setPassword("");
+                  setDeleteError(null);
+                }}
+                style={styles.btn}
+              >
+                <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("common.cancel")}</Text>
+              </Pressable>
+              <Pressable
+                disabled={busy || !password}
+                onPress={async () => {
+                  setBusy(true);
+                  setDeleteError(null);
+                  const r = await deleteAccount(password);
+                  if (r === "deleted") {
+                    await onDeleted();
+                    return;
+                  }
+                  setBusy(false);
+                  setDeleteError(r === "credentials" ? "account.err.password" : r === "rate" ? "auth.err.rate" : "auth.err.network");
+                }}
+                style={[styles.btn, styles.dangerFill, (busy || !password) && { opacity: 0.5 }]}
+                testID="delete-confirm"
+              >
+                {busy ? <ActivityIndicator color={colors.onSurface} /> : <Text style={[styles.btnText, { color: colors.onSurface }]}>{t("account.deleteConfirm")}</Text>}
+              </Pressable>
+            </View>
           </>
         )}
       </View>
@@ -166,5 +225,18 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: colors.brand },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
   warn: { backgroundColor: colors.warning, borderColor: colors.warning },
+  danger: { borderColor: colors.error, alignSelf: "flex-start" },
+  dangerFill: { backgroundColor: colors.error, borderColor: colors.error },
+  input: {
+    height: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: "rgba(13,15,18,0.85)",
+    color: colors.onSurface,
+    fontFamily: fonts.displaySemi,
+    fontSize: 16,
+  },
   btnText: { color: colors.brand, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1 },
 });

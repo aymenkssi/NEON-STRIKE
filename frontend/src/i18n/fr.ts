@@ -7,6 +7,10 @@ export const fr = {
   "account.title": "Compte",
   "account.logout": "SE DÉCONNECTER",
   "account.logoutWarning": "Ta progression reste sauvegardée sur ton compte. Ce téléphone repartira de zéro jusqu’à ta prochaine connexion.",
+  "account.delete": "Supprimer mon compte",
+  "account.deleteWarning": "Ton compte, ta sauvegarde en ligne, ton score au classement et tes suggestions seront effacés définitivement. Les crédits achetés seront perdus. Entre ton mot de passe pour confirmer.",
+  "account.deleteConfirm": "Supprimer définitivement",
+  "account.err.password": "Mot de passe incorrect.",
   "account.guestTitle": "Mode invité",
   "account.guestText": "Ta progression est enregistrée uniquement sur ce téléphone et tes scores ne vont pas au classement. Crée un compte pour les sauvegarder en ligne : tu gardes tout ce que tu as déjà gagné.",
 

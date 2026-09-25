@@ -109,8 +109,8 @@ La clé JSON donne accès à votre compte Play : ne la commitez jamais (le dossi
 ## 6. Application et site web
 
 - L'application est déjà branchée sur `https://api.gameneonstrike.com` pour tous les profils de build (`frontend/eas.json`).
-- **Site** (`deploy/site/`) : page d'accueil, `app-ads.txt` pour AdMob et politique de confidentialité sur `https://gameneonstrike.com/privacy`. **Avant la mise en ligne**, remplacez `[NOM DU RESPONSABLE]` et `[ADRESSE E-MAIL DE CONTACT]` dans `privacy.html` et `index.html`.
-- **Play Console** → **Fiche du Store** : renseignez `https://gameneonstrike.com` comme site web et `https://gameneonstrike.com/privacy` comme règles de confidentialité. AdMob vérifie ensuite automatiquement `app-ads.txt` (sous 24 h environ).
+- **Site** (`deploy/site/`) : page d'accueil, `app-ads.txt` pour AdMob politique de confidentialité sur `https://gameneonstrike.com/privacy` et page de suppression de compte sur `https://gameneonstrike.com/delete-account`. **Avant la mise en ligne**, remplacez `[NOM DU RESPONSABLE]` et `[ADRESSE E-MAIL DE CONTACT]` dans `privacy.html` et `index.html`.
+- **Play Console** → **Fiche du Store** : renseignez `https://gameneonstrike.com` comme site web et `https://gameneonstrike.com/privacy` comme règles de confidentialité. Dans **Sécurité des données → Suppression des données**, indiquez `https://gameneonstrike.com/delete-account`. AdMob vérifie ensuite automatiquement `app-ads.txt` (sous 24 h environ).
 
 ## 7. Administration : packs de crédits et messages aux joueurs
 
@@ -165,6 +165,7 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 |---|---|
 | `POST /api/players` | Crée un joueur anonyme et renvoie une clé secrète. Le serveur n'en garde qu'une empreinte (SHA-256). |
 | `POST /api/accounts/register` · `POST /api/accounts/login` · `GET /api/accounts/available` | Comptes : nom d'utilisateur unique (insensible à la casse) et mot de passe (haché avec scrypt). Créer un compte depuis le mode invité conserve les achats du joueur. 10 essais / 10 min par IP. |
+| `POST /api/accounts/delete` | Suppression du compte par le joueur (Réglages → Supprimer mon compte, mot de passe requis) : compte, sauvegarde, score, statistiques et suggestions sont effacés ; les achats restent pour la comptabilité, détachés du joueur. |
 | `POST /api/scores` | Enregistre un score. Compte obligatoire (les invités ne sont pas classés), contrôle de vraisemblance, un envoi toutes les 5 s au plus, un seul meilleur score par joueur. |
 | `GET /api/leaderboard` | Top 100 maximum. |
 | `GET /api/leaderboard/me` | Rang du joueur. |

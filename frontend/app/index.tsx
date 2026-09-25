@@ -106,6 +106,11 @@ export default function Index() {
     await logoutAccount();
     signedOut();
   };
+  // Account deleted on the server (session already cleared): back to the welcome screen.
+  const onDeleted = async () => {
+    await resetLocal(false);
+    signedOut();
+  };
   const updateLookSens = (v: number) => {
     setLookSensitivity(v);
     storage.setItem(KEYS.lookSens, v);
@@ -159,6 +164,7 @@ export default function Index() {
           cloudStatus={cloud}
           onSignedIn={onSignedIn}
           onLogout={onLogout}
+          onDeleted={onDeleted}
           progress={progress}
           onBuyUpgrade={buyUpgrade}
           onClaimDaily={claimDaily}

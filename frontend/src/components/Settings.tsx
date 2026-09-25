@@ -24,6 +24,7 @@ type Props = {
   cloudStatus: CloudStatus;
   onSignedIn: (username: string, mode: AuthMode) => Promise<void>;
   onLogout: () => Promise<void>;
+  onDeleted: () => Promise<void>;
   onClose: () => void;
 };
 
@@ -43,6 +44,7 @@ export default function Settings({
   cloudStatus,
   onSignedIn,
   onLogout,
+  onDeleted,
   onClose,
 }: Props) {
   const pct = Math.round(((lookSensitivity - MIN) / (MAX - MIN)) * 100);
@@ -63,7 +65,7 @@ export default function Settings({
         </View>
 
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <AccountSection account={account} cloudStatus={cloudStatus} onSignedIn={onSignedIn} onLogout={onLogout} />
+          <AccountSection account={account} cloudStatus={cloudStatus} onSignedIn={onSignedIn} onLogout={onLogout} onDeleted={onDeleted} />
         <View style={[styles.row, styles.toggleRow]}>
           <Text style={styles.label}>{t("settings.language")}</Text>
           <View style={styles.langs}>
