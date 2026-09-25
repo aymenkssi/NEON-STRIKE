@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import { Renderer } from "expo-three";
 import type { ExpoWebGLRenderingContext } from "expo-gl";
-import { buildScenery, type Scenery } from "./scenery";
+import { buildWorld, type World } from "./world";
+import { CITIES } from "./cities";
+import { buildZombie, disposeZombie } from "./characters";
+import { MUZZLE, buildWeaponModel } from "./weapons";
 import {
   CREDITS_PER_BOSS,
   CREDITS_PER_HEADSHOT,
@@ -76,36 +79,63 @@ const WEAPONS: WeaponConfig[] = [
   {
     key: "shotgun", name: "SHOTGUN", short: "SG",
     pellets: 8, spread: 0.06, maxAmmo: 5, reloadMs: 1500,
-    bodyDmg: 1, headDmg: 2, recoil: 0.18, fireRate: 400, modes: ["single"], flashZ: -0.4,
+    bodyDmg: 1, headDmg: 2, recoil: 0.18, fireRate: 400, modes: ["single"], flashZ: 0,
   },
   {
     key: "smg", name: "SMG", short: "SMG",
     pellets: 1, spread: 0.02, maxAmmo: 30, reloadMs: 1200,
-    bodyDmg: 1, headDmg: 2, recoil: 0.09, fireRate: 95, modes: ["auto", "burst", "single"], burstGap: 70, flashZ: -0.5,
+    bodyDmg: 1, headDmg: 2, recoil: 0.09, fireRate: 95, modes: ["auto", "burst", "single"], burstGap: 70, flashZ: 0,
   },
   {
     key: "rifle", name: "ASSAULT RIFLE", short: "AR",
     pellets: 1, spread: 0.004, maxAmmo: 10, reloadMs: 1500,
-    bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, modes: ["single", "burst"], burstGap: 90, flashZ: -0.78,
+    bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, modes: ["single", "burst"], burstGap: 90, flashZ: 0,
   },
   {
     key: "railgun", name: "RAILGUN", short: "RG",
     pellets: 1, spread: 0, maxAmmo: 4, reloadMs: 1800,
-    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, modes: ["single"], flashZ: -0.85, pierce: 5,
+    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, modes: ["single"], flashZ: 0, pierce: 5,
   },
   {
     key: "minigun", name: "MINIGUN", short: "MG", sound: "smg",
     pellets: 1, spread: 0.035, maxAmmo: 120, reloadMs: 2800,
-    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, modes: ["auto"], flashZ: -0.7,
+    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, modes: ["auto"], flashZ: 0,
   },
   {
     key: "launcher", name: "LANCE-GRENADES", short: "GL",
     pellets: 1, spread: 0, maxAmmo: 3, reloadMs: 2200,
-    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, modes: ["single"], flashZ: -0.7, projectile: true,
+    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, modes: ["single"], flashZ: 0, projectile: true,
   },
 ];
 
 const GRENADE = { speed: 32, lift: 6, gravity: 22, damage: 14, fuseMs: 3000 };
+
+// Soft star-shaped glow for the muzzle flash (generated: no image file needed on the phone).
+let flashTex: THREE.DataTexture | null = null;
+function flashTexture() {
+  if (flashTex) return flashTex;
+  const N = 64;
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const dx = (x + 0.5) / N - 0.5;
+      const dy = (y + 0.5) / N - 0.5;
+      const r = Math.hypot(dx, dy) * 2;
+      const rays = Math.pow(Math.abs(Math.cos(Math.atan2(dy, dx) * 3)), 6) * 0.6;
+      const a = Math.max(0, 1 - r / (0.45 + rays * 0.55));
+      const v = Math.round(Math.min(1, a * a * 1.4) * 255);
+      data.set([255, 255, 255, v], (y * N + x) * 4);
+    }
+  flashTex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  flashTex.needsUpdate = true;
+  return flashTex;
+}
+
+const WEAPON_SCALE = 0.8;
+const WEAPON_Z = -0.14;
+
+// Muzzle positions come from the weapon models.
+WEAPONS.forEach((w) => (w.flashZ = MUZZLE[w.key] ?? -0.6));
 
 const unlockLevelOf = (w: WeaponConfig) => WEAPON_UNLOCK_LEVEL[w.key] ?? 1;
 
@@ -212,8 +242,11 @@ export class GameEngine {
 
   private sector: Sector = sectorOf(1);
   private world: THREE.Group | null = null;
-  private scenery: Scenery | null = null;
-  private fillLight!: THREE.DirectionalLight;
+  private worldInfo: World | null = null;
+  private spawnPoints: THREE.Vector3[] = [];
+  private hemi!: THREE.HemisphereLight;
+  private sun!: THREE.DirectionalLight;
+  private ambient!: THREE.AmbientLight;
   private combo = 0;
   private lastKillAt = 0;
   private powerUntil: Partial<Record<PowerUpKind, number>> = {};
@@ -281,18 +314,13 @@ export class GameEngine {
     this.renderer = new Renderer({ gl: this.gl });
     this.renderer.setSize(w, h);
 
-    const hemi = new THREE.HemisphereLight(0xafc4ee, 0x2a3a58, 1.5);
-    this.scene.add(hemi);
-    const moon = new THREE.DirectionalLight(0xffffff, 1.9);
-    moon.position.set(10, 24, 8);
-    this.scene.add(moon);
-    this.fillLight = new THREE.DirectionalLight(0x00ffff, 0.5);
-    this.fillLight.position.set(-12, 8, -10);
-    this.scene.add(this.fillLight);
-    const ambient = new THREE.AmbientLight(0x3a4c70, 1.5);
-    this.scene.add(ambient);
+    // Colours and intensities come from the time of day of each level (see cities.ts).
+    this.hemi = new THREE.HemisphereLight(0xffffff, 0x888888, 1);
+    this.sun = new THREE.DirectionalLight(0xffffff, 2);
+    this.ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    this.scene.add(this.hemi, this.sun, this.ambient);
 
-    this.buildWorld(sectorOf(this.levelCfg.level));
+    this.buildWorld(this.levelCfg.level);
     this.createWeapon();
     this.spawnWave();
     this.announceLevel();
@@ -302,61 +330,39 @@ export class GameEngine {
   private announceLevel() {
     const l = this.levelCfg.level;
     // First level of a sector: show the sector name instead of the level number.
-    this.cb.onNotify((l - 1) % 5 === 0 ? t("game.sector", { n: this.sector.index, name: this.sector.name }) : t("menu.levelN", { n: l }));
+    const city = t(CITIES[this.sector.city].name);
+    this.cb.onNotify((l - 1) % 5 === 0 ? t("game.sector", { n: this.sector.index, name: city }) : `${t("menu.levelN", { n: l })} · ${city}`);
   }
 
-  // Builds the arena in the colours of a sector; called again when the sector changes.
-  private buildWorld(sector: Sector) {
-    if (this.world) {
-      this.scene.remove(this.world);
-      this.world.traverse((o: any) => {
+  // Builds the city of a level (a new time of day each level, a new city each sector).
+  private buildWorld(level: number) {
+    if (this.worldInfo) {
+      this.scene.remove(this.worldInfo.group);
+      this.worldInfo.group.traverse((o: any) => {
         o.geometry?.dispose?.();
         o.material?.dispose?.();
       });
     }
-    this.sector = sector;
-    this.objects = [];
-    const world = new THREE.Group();
-    this.world = world;
-    this.scene.add(world);
-    // Fog in the horizon colour: far buildings fade into the glow of the sky.
-    this.scene.background = new THREE.Color(sector.horizon);
-    this.scene.fog = new THREE.FogExp2(sector.horizon, sector.fogDensity);
-    this.renderer.setClearColor(sector.horizon, 1);
-    this.fillLight.color.setHex(sector.neonB);
+    this.sector = sectorOf(level);
+    const world = buildWorld(level, this.camera);
+    this.worldInfo = world;
+    this.world = world.group;
+    this.objects = world.colliders;
+    this.spawnPoints = world.spawnPoints;
+    this.scene.add(world.group);
 
-    const floorGeo = new THREE.PlaneGeometry(220, 220);
-    floorGeo.rotateX(-Math.PI / 2);
-    const floor = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({ color: sector.floor }));
-    world.add(floor);
-
-    const grid = new THREE.GridHelper(220, 110, sector.gridMain, sector.gridSub);
-    (grid.material as THREE.Material).transparent = true;
-    (grid.material as any).opacity = 0.8;
-    world.add(grid);
-
-    const boxMat = new THREE.MeshPhongMaterial({ color: sector.box, specular: 0x1a222f, shininess: 25 });
-    const neonGreen = new THREE.MeshBasicMaterial({ color: sector.neonA });
-    const neonCyan = new THREE.MeshBasicMaterial({ color: sector.neonB });
-
-    for (let i = 0; i < 30; i++) {
-      const size = 2 + Math.random() * 6;
-      const height = size * (1 + Math.random());
-      const geometry = new THREE.BoxGeometry(size, height, size);
-      let material: THREE.Material = boxMat;
-      const r = Math.random();
-      if (r > 0.92) material = neonGreen;
-      else if (r > 0.86) material = neonCyan;
-      const box = new THREE.Mesh(geometry, material);
-      let x = (Math.random() - 0.5) * 150;
-      let z = (Math.random() - 0.5) * 150;
-      if (Math.abs(x) < 12 && Math.abs(z) < 12) x += 22;
-      box.position.set(x, height / 2, z);
-      world.add(box);
-      box.userData.aabb = new THREE.Box3().setFromObject(box);
-      this.objects.push(box);
-    }
-    this.scenery = buildScenery(world, sector, this.objects, this.camera);
+    const L = world.lighting;
+    this.scene.background = new THREE.Color(L.horizon);
+    this.scene.fog = new THREE.FogExp2(L.horizon, L.fog);
+    this.renderer.setClearColor(L.horizon, 1);
+    this.hemi.color.set(L.hemiSky);
+    this.hemi.groundColor.set(L.hemiGround);
+    this.hemi.intensity = L.hemiIntensity;
+    this.sun.color.set(L.sun);
+    this.sun.intensity = L.sunIntensity;
+    this.sun.position.set(...L.sunDir).multiplyScalar(50);
+    this.ambient.color.set(L.ambient);
+    this.ambient.intensity = L.ambientIntensity;
     if (this.muzzleLight) this.weaponLight();
   }
 
@@ -375,61 +381,11 @@ export class GameEngine {
     const cfg = this.levelCfg;
     const isBoss = kind === "boss";
     const def = ZOMBIES[isBoss ? "walker" : kind];
-    const g = new THREE.Group();
-    const skin = new THREE.MeshStandardMaterial({ color: isBoss ? 0x7a2c4a : def.skin });
-    const shirt = new THREE.MeshStandardMaterial(
-      def.glow ? { color: def.shirt, emissive: def.glow, emissiveIntensity: 0.55 } : { color: isBoss ? 0x1a1a1a : def.shirt }
-    );
-    const pants = new THREE.MeshStandardMaterial({ color: 0x1a1f4a });
-    const faceZ = 0.5 / 2 + 0.05 / 2;
-
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skin.clone());
-    head.position.y = 1.75;
-    head.name = "Head";
-    g.add(head);
-
-    const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0x39ff14 : def.eyes });
-    const mouthMat = new THREE.MeshBasicMaterial({ color: 0x162a0c });
-    const le = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
-    le.position.set(0.12, 1.85, faceZ);
-    le.name = "Head";
-    g.add(le);
-    const re = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.05), eyeMat);
-    re.position.set(-0.12, 1.85, faceZ);
-    re.name = "Head";
-    g.add(re);
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.05), mouthMat);
-    mouth.position.set(0, 1.65, faceZ);
-    mouth.name = "Head";
-    g.add(mouth);
-
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.25), shirt.clone());
-    body.position.y = 1.15;
-    g.add(body);
-
-    const armGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
-    armGeo.translate(0, -0.35, 0);
-    const leftArm = new THREE.Mesh(armGeo, skin.clone());
-    leftArm.position.set(0.35, 1.5, 0);
-    leftArm.rotation.x = -Math.PI / 2;
-    g.add(leftArm);
-    const rightArm = new THREE.Mesh(armGeo, skin.clone());
-    rightArm.position.set(-0.35, 1.5, 0);
-    rightArm.rotation.x = -Math.PI / 2;
-    g.add(rightArm);
-
-    const legGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-    legGeo.translate(0, -0.4, 0);
-    const leftLeg = new THREE.Mesh(legGeo, pants.clone());
-    leftLeg.position.set(0.13, 0.8, 0);
-    g.add(leftLeg);
-    const rightLeg = new THREE.Mesh(legGeo, pants.clone());
-    rightLeg.position.set(-0.13, 0.8, 0);
-    g.add(rightLeg);
-
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 30 + Math.random() * 25;
-    g.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+    const { group: g, limbs } = buildZombie(kind);
+    // Zombies come in from the streets, never right next to the player.
+    const far = this.spawnPoints.filter((p) => Math.hypot(p.x - this.camera.position.x, p.z - this.camera.position.z) > 24);
+    const from = far.length ? far[Math.floor(Math.random() * far.length)] : this.spawnPoints[0] ?? new THREE.Vector3(0, 0, -50);
+    g.position.set(from.x + (Math.random() - 0.5) * 3, 0, from.z + (Math.random() - 0.5) * 3);
     const scale = isBoss ? 2.2 : def.scale;
     g.scale.set(scale, scale, scale);
 
@@ -447,7 +403,7 @@ export class GameEngine {
       walkProgress: Math.random() * 100,
       bias: Math.random() < 0.5 ? 1 : -1,
       lastBite: 0,
-      limbs: { leftLeg, rightLeg, leftArm, rightArm },
+      limbs,
     };
 
     this.scene.add(g);
@@ -455,182 +411,7 @@ export class GameEngine {
     return g;
   }
 
-  // ---------------- Weapon models ----------------
-  private buildShotgun(): THREE.Group {
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x3a1e0d, roughness: 0.6 });
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x14141a, metalness: 0.9, roughness: 0.3 });
-    const receiverMat = new THREE.MeshStandardMaterial({ color: 0x4a4a52, metalness: 0.7, roughness: 0.4 });
-    const brassMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 1, roughness: 0.3 });
-    const model = new THREE.Group();
-    model.add(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.24), receiverMat));
-
-    const shellRedMat = new THREE.MeshStandardMaterial({ color: 0xe62e2e, roughness: 0.4 });
-    for (let i = 0; i < 6; i++) {
-      const shell = new THREE.Group();
-      const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.12, 12), shellRedMat);
-      hull.position.set(0, -0.02, 0);
-      shell.add(hull);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 12), brassMat);
-      base.position.set(0, 0.06, 0);
-      shell.add(base);
-      shell.position.set(-0.1 + i * 0.1, 0.05, -0.18);
-      shell.rotation.x = -0.15;
-      model.add(shell);
-    }
-    const stockShape = new THREE.Shape();
-    stockShape.moveTo(0, 0.1);
-    stockShape.bezierCurveTo(-0.6, 0.15, -1.2, 0.05, -1.8, -0.4);
-    stockShape.lineTo(-1.85, -0.8);
-    stockShape.lineTo(-1.5, -0.8);
-    stockShape.bezierCurveTo(-1.2, -0.4, -0.6, -0.1, 0, -0.1);
-    const extrude = { depth: 0.24, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3 };
-    const stock = new THREE.Mesh(new THREE.ExtrudeGeometry(stockShape, extrude), woodMat);
-    stock.position.set(-0.4, 0, -0.12);
-    model.add(stock);
-    const barrelGeo = new THREE.CylinderGeometry(0.045, 0.045, 3.2, 16);
-    barrelGeo.rotateZ(Math.PI / 2);
-    const lb = new THREE.Mesh(barrelGeo, metalMat);
-    lb.position.set(2, 0.02, -0.045);
-    model.add(lb);
-    const rb = new THREE.Mesh(barrelGeo, metalMat);
-    rb.position.set(2, 0.02, 0.045);
-    model.add(rb);
-    model.rotation.y = Math.PI / 2;
-    model.scale.set(0.12, 0.12, 0.12);
-    model.position.set(0, -0.02, 0.1);
-    return model;
-  }
-
-  private buildSMG(): THREE.Group {
-    const dark = new THREE.MeshStandardMaterial({ color: 0x181c22, metalness: 0.7, roughness: 0.45 });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-    const model = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.5), dark);
-    model.add(body);
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.3, 12), dark);
-    barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.01, -0.4);
-    model.add(barrel);
-    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.24, 0.1), dark);
-    mag.position.set(0, -0.18, 0.02);
-    model.add(mag);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
-    grip.position.set(0, -0.12, 0.2);
-    grip.rotation.x = 0.2;
-    model.add(grip);
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.4), accent);
-    strip.position.set(0.07, 0.06, -0.05);
-    model.add(strip);
-    model.position.set(0, 0, 0);
-    return model;
-  }
-
-  private buildRifle(): THREE.Group {
-    const dark = new THREE.MeshStandardMaterial({ color: 0x14181c, metalness: 0.8, roughness: 0.4 });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
-    const model = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.72), dark);
-    body.position.set(0, 0, -0.05);
-    model.add(body);
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 12), dark);
-    barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.02, -0.6);
-    model.add(barrel);
-    const scopeBody = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.18, 12), dark);
-    scopeBody.rotation.x = Math.PI / 2;
-    scopeBody.position.set(0, 0.14, -0.05);
-    model.add(scopeBody);
-    const scopeMount = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.12), dark);
-    scopeMount.position.set(0, 0.09, -0.05);
-    model.add(scopeMount);
-    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.26, 0.1), dark);
-    mag.position.set(0, -0.19, 0.04);
-    mag.rotation.x = -0.15;
-    model.add(mag);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
-    grip.position.set(0, -0.12, 0.24);
-    grip.rotation.x = 0.25;
-    model.add(grip);
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.5), accent);
-    strip.position.set(0.07, 0.07, -0.1);
-    model.add(strip);
-    return model;
-  }
-
-  private buildRailgun(): THREE.Group {
-    const dark = new THREE.MeshStandardMaterial({ color: 0x1a1d24, metalness: 0.8, roughness: 0.35 });
-    const glow = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-    const model = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.8), dark);
-    body.position.z = -0.1;
-    model.add(body);
-    for (const x of [-0.05, 0.05]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.7), dark);
-      rail.position.set(x, 0.02, -0.72);
-      model.add(rail);
-    }
-    const core = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.62), glow);
-    core.position.set(0, 0.02, -0.7);
-    model.add(core);
-    const coil = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 12), glow);
-    coil.rotation.x = Math.PI / 2;
-    coil.position.set(0, -0.02, 0.12);
-    model.add(coil);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
-    grip.position.set(0, -0.13, 0.22);
-    grip.rotation.x = 0.25;
-    model.add(grip);
-    return model;
-  }
-
-  private buildMinigun(): THREE.Group {
-    const dark = new THREE.MeshStandardMaterial({ color: 0x22262e, metalness: 0.85, roughness: 0.35 });
-    const accent = new THREE.MeshBasicMaterial({ color: 0xffb000 });
-    const model = new THREE.Group();
-    const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.35, 12), dark);
-    housing.rotation.x = Math.PI / 2;
-    model.add(housing);
-    const barrels = new THREE.Group();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 8), dark);
-      b.rotation.x = Math.PI / 2;
-      b.position.set(Math.cos(a) * 0.05, Math.sin(a) * 0.05, -0.4);
-      barrels.add(b);
-    }
-    barrels.name = "barrels";
-    model.add(barrels);
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.012, 6, 16), accent);
-    band.position.z = -0.5;
-    model.add(band);
-    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), dark);
-    handle.position.set(0, -0.14, 0.12);
-    model.add(handle);
-    return model;
-  }
-
-  private buildLauncher(): THREE.Group {
-    const dark = new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.6, roughness: 0.5 });
-    const accent = new THREE.MeshBasicMaterial({ color: 0x39ff14 });
-    const model = new THREE.Group();
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.75, 14), dark);
-    tube.rotation.x = Math.PI / 2;
-    tube.position.z = -0.25;
-    model.add(tube);
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 8), dark);
-    drum.rotation.x = Math.PI / 2;
-    drum.position.z = 0.05;
-    model.add(drum);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.012, 6, 16), accent);
-    ring.position.z = -0.62;
-    model.add(ring);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), dark);
-    grip.position.set(0, -0.14, 0.18);
-    grip.rotation.x = 0.2;
-    model.add(grip);
-    return model;
-  }
-
+  // ---------------- Weapon models (see weapons.ts) ----------------
   private createWeapon() {
     this.weaponGroup = new THREE.Group();
     this.modelHolder = new THREE.Group();
@@ -638,7 +419,7 @@ export class GameEngine {
 
     const flashGeo = new THREE.PlaneGeometry(0.5, 0.5);
     const flashMat = new THREE.MeshBasicMaterial({
-      color: 0xffcc44, transparent: true, opacity: 0,
+      color: 0xffd27a, map: flashTexture(), transparent: true, opacity: 0,
       side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     this.muzzleFlash = new THREE.Group();
@@ -663,31 +444,17 @@ export class GameEngine {
 
   private equipModel() {
     this.modelHolder.clear();
-    let model: THREE.Group;
-    const key = this.weapon.key;
-    if (key === "smg") model = this.buildSMG();
-    else if (key === "rifle") model = this.buildRifle();
-    else if (key === "railgun") model = this.buildRailgun();
-    else if (key === "minigun") model = this.buildMinigun();
-    else if (key === "launcher") model = this.buildLauncher();
-    else model = this.buildShotgun();
-    // Very metallic parts render black without an environment to reflect: keep them readable.
-    model.traverse((o: any) => {
-      const m = o.material;
-      if (m?.isMeshStandardMaterial && m.metalness > 0.45) {
-        m.metalness = 0.45;
-        m.roughness = Math.max(m.roughness, 0.35);
-      }
-    });
-    this.modelHolder.add(model);
-    const z = this.weapon.flashZ;
-    this.muzzleFlash.position.set(0, 0.01, z);
+    this.modelHolder.add(buildWeaponModel(this.weapon.key));
+    // Models are in metres; held a bit smaller and further out so the stock stays in view.
+    this.modelHolder.scale.setScalar(WEAPON_SCALE);
+    this.modelHolder.position.set(0.03, -0.02, WEAPON_Z);
+    this.muzzleFlash.position.set(0.03, -0.02 + 0.02 * WEAPON_SCALE, WEAPON_Z + this.weapon.flashZ * WEAPON_SCALE);
   }
 
   // Idle: dim light just above the weapon, tinted by the sector, too short to reach the arena.
   private weaponLight() {
-    this.muzzleLight.color.set(0xffffff).lerp(new THREE.Color(this.sector.neonB), 0.35);
-    this.muzzleLight.intensity = 2.2;
+    this.muzzleLight.color.set(0xfff4e0);
+    this.muzzleLight.intensity = 0.6;
     this.muzzleLight.distance = 1.6;
     this.muzzleLight.position.set(0.05, 0.3, 0.05);
   }
@@ -825,7 +592,7 @@ export class GameEngine {
     this.muzzleFlash.children.forEach((c: any) => (c.material.opacity = 1));
     this.muzzleLight.color.set(0xffaa00);
     this.muzzleLight.distance = 8;
-    this.muzzleLight.position.set(0, 0.1, wpn.flashZ - 0.05);
+    this.muzzleLight.position.copy(this.muzzleFlash.position).y += 0.08;
     this.muzzleLight.intensity = 1.5 + Math.random() * 0.5;
     if (this.muzzleTimer) clearTimeout(this.muzzleTimer);
     this.muzzleTimer = setTimeout(() => {
@@ -926,6 +693,7 @@ export class GameEngine {
 
   private removeZombie(target: THREE.Group) {
     this.scene.remove(target);
+    disposeZombie(target);
     const idx = this.enemies.indexOf(target);
     if (idx > -1) this.enemies.splice(idx, 1);
   }
@@ -1156,7 +924,10 @@ export class GameEngine {
   startLevel(level: number, opts: { keepRun: boolean; unlockedLevel?: number; modifiers?: PlayerModifiers }) {
     this.triggerHeld = false;
     this.cancelTrigger();
-    this.enemies.forEach((e) => this.scene.remove(e));
+    this.enemies.forEach((e) => {
+      this.scene.remove(e);
+      disposeZombie(e);
+    });
     this.enemies = [];
     this.boss = null;
     this.particles.forEach((p) => this.scene.remove(p.mesh));
@@ -1165,8 +936,7 @@ export class GameEngine {
     this.pickups = [];
     if (opts.modifiers) this.mods = opts.modifiers;
     this.levelCfg = getLevelConfig(level);
-    const sector = sectorOf(this.levelCfg.level);
-    if (sector.index !== this.sector.index) this.buildWorld(sector);
+    this.buildWorld(this.levelCfg.level);
     this.combo = 0;
     this.powerUntil = {};
     this.shake = 0;
@@ -1255,7 +1025,7 @@ export class GameEngine {
         unlocked: unlockLevelOf(w) <= this.unlockedLevel,
         unlockLevel: unlockLevelOf(w),
       })),
-      sector: { index: this.sector.index, name: this.sector.name },
+      sector: { index: this.sector.index, name: t(CITIES[this.sector.city].name) },
       powerups: (Object.keys(this.powerUntil) as PowerUpKind[])
         .map((kind) => ({ kind, remaining: Math.ceil(((this.powerUntil[kind] ?? 0) - Date.now()) / 1000) }))
         .filter((p) => p.remaining > 0),
@@ -1427,7 +1197,7 @@ export class GameEngine {
       }
     }
 
-    this.scenery?.update(delta, time);
+    this.worldInfo?.update(delta, time);
     this.shake = Math.max(0, this.shake - delta * 1.8);
     const amp = this.shake * this.shake * 0.35;
     this.shakeOffset.set((Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp, (Math.random() - 0.5) * amp);

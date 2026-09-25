@@ -16,6 +16,7 @@ export const fr = {
   "common.menu": "MENU",
   "common.retry": "RÉESSAYER",
   "common.guestName": "INVITÉ",
+  "common.close": "FERMER",
 
   "auth.register": "CRÉER UN COMPTE",
   "auth.login": "SE CONNECTER",
@@ -239,6 +240,28 @@ export const fr = {
   "iap.busy": "Un achat est déjà en cours.",
   "iap.timeout": "Aucune réponse de Google Play. Si tu as payé, tes crédits arriveront automatiquement.",
   "iap.webOnly": "Les achats sont disponibles uniquement dans l’application Android.",
+
+  "suggest.title": "Suggestions",
+  "suggest.hint": "Une idée pour améliorer le jeu ou un bug à signaler ? Écris-nous, on lit tout.",
+  "suggest.open": "ENVOYER UNE SUGGESTION",
+  "suggest.guest": "Avec un compte, tu peux aussi nous envoyer tes suggestions.",
+  "suggest.idea": "Idée",
+  "suggest.bug": "Bug",
+  "suggest.other": "Autre",
+  "suggest.placeholder": "Décris ton idée ou le problème rencontré…",
+  "suggest.send": "ENVOYER",
+  "suggest.thanks": "Merci ! Ta suggestion a bien été envoyée.",
+  "suggest.another": "EN ENVOYER UNE AUTRE",
+  "suggest.err.limit": "Tu as atteint la limite de 5 suggestions par jour. Réessaie demain.",
+  "suggest.err.invalid": "Ton message doit faire entre 5 et 1 000 caractères.",
+  "suggest.err.account": "Connecte-toi à ton compte pour envoyer une suggestion.",
+
+  "city.paris": "PARIS",
+  "city.newyork": "NEW YORK",
+  "city.tokyo": "TOKYO",
+  "city.london": "LONDRES",
+  "city.cairo": "LE CAIRE",
+  "city.rio": "RIO DE JANEIRO",
 } as const;
 
 export type Key = keyof typeof fr;

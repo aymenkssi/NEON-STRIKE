@@ -227,8 +227,20 @@ export default function MainMenu(props: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface },
   bottomBar: { flex: 1, justifyContent: "flex-end", gap: spacing.sm },
-  actionRow: { flexDirection: "row", alignItems: "flex-end", gap: spacing.md },
-  inputWrap: { flex: 1, maxWidth: 300 },
+  // Solid backdrop: the row never overlaps the artwork of the cover image.
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.md,
+    alignSelf: "flex-start",
+    padding: spacing.sm,
+    paddingTop: 6,
+    borderRadius: radius.lg,
+    backgroundColor: "rgba(7,11,18,0.88)",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  inputWrap: { width: 280 },
   inputLabel: { color: colors.brandSecondary, fontFamily: fonts.displaySemi, fontSize: 11, letterSpacing: 2, marginBottom: 5 },
   input: {
     height: 50,

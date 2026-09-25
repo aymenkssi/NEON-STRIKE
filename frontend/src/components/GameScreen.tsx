@@ -47,7 +47,7 @@ const INITIAL: GameStats = {
   weapons: [],
   fireMode: "single",
   fireModes: ["single"],
-  sector: { index: 1, name: "NEON DISTRICT" },
+  sector: { index: 1, name: "PARIS" },
   powerups: [],
 };
 
