@@ -6,6 +6,7 @@ import { accountsAvailable } from "../api/account";
 import type { AccountState } from "../hooks/use-account";
 import type { CloudStatus } from "../hooks/use-progress";
 import AuthForm, { type AuthMode } from "./AuthForm";
+import SuggestionForm from "./SuggestionForm";
 import { useT, type Key } from "@/src/i18n";
 
 type Props = {
@@ -26,6 +27,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
   const [form, setForm] = useState<AuthMode | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const t = useT();
 
   if (account.mode === "account") {
@@ -71,6 +73,22 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
             </View>
           </>
         )}
+        <View style={styles.divider} />
+        <View style={styles.head}>
+          <MaterialCommunityIcons name="lightbulb-on-outline" size={20} color={colors.warning} />
+          <Text style={styles.title}>{t("suggest.title")}</Text>
+        </View>
+        {suggesting ? (
+          <SuggestionForm onClose={() => setSuggesting(false)} />
+        ) : (
+          <>
+            <Text style={styles.hint}>{t("suggest.hint")}</Text>
+            <Pressable onPress={() => setSuggesting(true)} style={[styles.btn, styles.primary]} testID="open-suggestion">
+              <MaterialCommunityIcons name="send" size={16} color={colors.onBrand} />
+              <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("suggest.open")}</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     );
   }
@@ -93,7 +111,7 @@ export default function AccountSection({ account, cloudStatus, onSignedIn, onLog
       ) : (
         <>
           <Text style={styles.hint}>
-            {t("account.guestText")}
+            {t("account.guestText")} {t("suggest.guest")}
           </Text>
           <View style={styles.row}>
             <Pressable
@@ -146,6 +164,7 @@ const styles = StyleSheet.create({
     borderColor: colors.brand,
   },
   primary: { backgroundColor: colors.brand },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
   warn: { backgroundColor: colors.warning, borderColor: colors.warning },
   btnText: { color: colors.brand, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1 },
 });

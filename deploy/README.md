@@ -171,6 +171,8 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `GET/PUT /api/save` | Sauvegarde en ligne de la progression (la plus récente l'emporte). |
 | `POST /api/players/session` | Appelé à chaque lancement du jeu : activité du jour, pays, langue, version (statistiques). |
 | `GET /api/admin/stats` | Statistiques de la page d'administration. |
+| `POST /api/suggestions` | Suggestion d'un joueur connecté (idée, bug, autre), 5 par jour au plus. |
+| `GET/PUT/DELETE /api/admin/suggestions` | Onglet « Suggestions » de la page d'administration (liste, statut nouvelle / lue / traitée, suppression). |
 | `GET /api/config` | Packs visibles et messages en ligne, lus par l'app au démarrage. |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
 | `POST /api/purchases/verify` | Interroge Google Play. Répond `valid` uniquement si l'achat est payé. Un même reçu ne peut servir qu'à un seul joueur et un seul produit. |

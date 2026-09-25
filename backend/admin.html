@@ -76,6 +76,7 @@
   td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
   table.compact { min-width: 560px; }
   .muted { color: var(--muted); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -99,6 +100,7 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="stats" aria-selected="true">Statistiques</button>
       <button type="button" role="tab" data-tab="liveops" aria-selected="false">Packs et messages</button>
+      <button type="button" role="tab" data-tab="suggestions" aria-selected="false">Suggestions <span id="sugg-badge" class="pill live" hidden></span></button>
     </nav>
 
     <div id="tab-stats">
@@ -127,6 +129,21 @@
       <h2>Langue, version et plateforme</h2>
       <div class="charts" id="shares"></div>
       <p class="hint" style="margin-top:18px">Pays : base <a href="https://db-ip.com" style="color:var(--cyan)">IP Geolocation by DB-IP</a> (CC BY 4.0) quand elle est installée, sinon la région du téléphone.</p>
+    </div>
+
+    <div id="tab-suggestions" hidden>
+      <h2>Suggestions des joueurs</h2>
+      <p class="hint">Envoyées depuis le jeu (Réglages → Envoyer une suggestion) par les joueurs connectés à un compte, 5 par jour au plus. Marque-les « Lue » ou « Traitée » pour t'y retrouver.</p>
+      <div class="row" style="margin-bottom:12px">
+        <div class="filters" id="sugg-filters">
+          <button type="button" data-status="" class="primary">Toutes</button>
+          <button type="button" data-status="new">Nouvelles</button>
+          <button type="button" data-status="read">Lues</button>
+          <button type="button" data-status="done">Traitées</button>
+        </div>
+      </div>
+      <div id="sugg-status" class="status"></div>
+      <div id="sugg-list"></div>
     </div>
 
     <div id="tab-liveops" hidden>
@@ -228,7 +245,7 @@
       await loadPacks();
       try { sessionStorage.setItem(KEY, token); } catch (e2) {}
       $("login").hidden = true; $("app").hidden = false;
-      loadMessages(); loadStats();
+      loadMessages(); loadStats(); loadSuggestions();
     } catch (err) {
       if (err.message !== "401") say($("login-status"), err.message, false);
     }
@@ -376,7 +393,8 @@
   // ---------------- Statistiques ----------------
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("nav.tabs button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
-    $("tab-stats").hidden = b.dataset.tab !== "stats"; $("tab-liveops").hidden = b.dataset.tab !== "liveops";
+    ["stats", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    if (b.dataset.tab === "suggestions") loadSuggestions();
   }));
   $("stats-refresh").addEventListener("click", () => loadStats());
   $("stats-days").addEventListener("change", () => loadStats());
@@ -487,8 +505,49 @@
     $("shares").replaceChildren(shareBox("Langue", s.languages, P.total), shareBox("Version de l'app", s.versions, P.total), shareBox("Plateforme", s.platforms, P.total));
   }
 
+  // ---------------- Suggestions ----------------
+  const CAT = { idea: ["Idée", "var(--green)"], bug: ["Bug", "var(--red)"], other: ["Autre", "var(--cyan)"] };
+  const STATUS = { new: ["Nouvelle", "live"], read: ["Lue", "sched"], done: ["Traitée", "off"] };
+  let suggFilter = "";
+  document.querySelectorAll("#sugg-filters button").forEach((btn) => btn.addEventListener("click", () => {
+    suggFilter = btn.dataset.status;
+    document.querySelectorAll("#sugg-filters button").forEach((o) => o.classList.toggle("primary", o === btn));
+    loadSuggestions();
+  }));
+
+  async function loadSuggestions() {
+    const r = await api("GET", "/suggestions" + (suggFilter ? "?status=" + suggFilter : ""));
+    const badge = $("sugg-badge"); badge.hidden = !r.counts.new; badge.textContent = r.counts.new;
+    const box = $("sugg-list"); box.replaceChildren();
+    if (!r.items.length) { box.append(el("p", "hint", "Aucune suggestion pour l'instant.")); return; }
+    for (const s of r.items) {
+      const card = el("article", "msg"); card.style.borderLeft = "4px solid " + CAT[s.category][1];
+      const meta = el("div", "meta");
+      const pill = el("span", "pill " + STATUS[s.status][1], STATUS[s.status][0]);
+      const info = [CAT[s.category][0], s.username, new Date(s.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }),
+        s.country ? flag(s.country) + s.country : null, s.lang ? s.lang.toUpperCase() : null, s.app_version ? "v" + s.app_version : null].filter(Boolean).join(" · ");
+      meta.append(pill, el("span", null, info));
+      const body = el("div", "body", s.message);
+      const actions = el("div", "actions");
+      for (const [st, label] of [["read", "Marquer lue"], ["done", "Marquer traitée"], ["new", "Remettre en nouvelle"]]) {
+        if (st === s.status) continue;
+        const b = el("button", null, label); b.type = "button";
+        b.onclick = async () => { try { await api("PUT", "/suggestions/" + s.id, { status: st }); loadSuggestions(); } catch (err) { say($("sugg-status"), err.message, false); } };
+        actions.append(b);
+      }
+      const del = el("button", "danger", "Supprimer"); del.type = "button";
+      del.onclick = async () => {
+        if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Confirmer ?"; return; }
+        try { await api("DELETE", "/suggestions/" + s.id); loadSuggestions(); } catch (err) { say($("sugg-status"), err.message, false); }
+      };
+      actions.append(del);
+      card.append(meta, body, actions);
+      box.append(card);
+    }
+  }
+
   if (token) {
-    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); }).catch(() => {});
+    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); loadSuggestions(); }).catch(() => {});
   }
 })();
 </script>

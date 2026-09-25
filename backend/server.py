@@ -17,6 +17,7 @@ import accounts
 import cloudsave
 import liveops
 import stats
+import suggestions
 from auth import current_player, hash_token
 from database import client, db
 from play_verifier import PlayVerifier
@@ -233,6 +234,8 @@ app.include_router(api)
 app.include_router(accounts.router)
 app.include_router(stats.public)
 app.include_router(stats.admin)
+app.include_router(suggestions.public)
+app.include_router(suggestions.admin)
 app.include_router(cloudsave.router)
 app.include_router(liveops.public)
 app.include_router(liveops.admin)
@@ -257,6 +260,7 @@ async def create_indexes():
     await accounts.setup()
     await liveops.setup()
     await stats.setup()
+    await suggestions.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
 

@@ -102,11 +102,12 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Arsenal** : améliorations permanentes (dégâts, santé max, chargeur, rechargement), 5 niveaux chacune.
 - **Zombies** (`frontend/src/game/content.ts`) : rôdeur, coureur (dès le niveau 3), blindé (niveau 5) et explosif (niveau 7, explose au contact et en chaîne), plus un boss par niveau.
 - **Combos** (DOUBLE KILL, TRIPLE KILL… en moins de 2,5 s) avec bonus de score et de crédits ; **bonus temporaires** lâchés par les zombies : dégâts ×2, vitesse, munitions infinies.
-- **6 secteurs** de 5 niveaux, chacun avec ses couleurs et son nom ; secousses d'écran et explosions.
-- **Décor** (`frontend/src/game/scenery.ts`) : ciel en dégradé et étoiles, skyline néon à l'horizon, arêtes lumineuses sur les caisses, lampadaires et particules propres à chaque secteur (poussière néon, pluie, braises, neige). Les armes sont éclairées par une petite lumière qui ne coûte rien de plus (c'est aussi celle du tir).
+- **6 villes du monde**, une par secteur de 5 niveaux : Paris, New York, Tokyo, Londres, Le Caire, Rio (`frontend/src/game/cities.ts`). Chaque ville a son architecture, son monument au loin (tour Eiffel, Empire State, Tokyo Tower, Big Ben et London Eye, pyramides, Christ Rédempteur), ses accessoires et sa météo. Les 5 niveaux d'une ville vont du matin à la nuit.
+- **Rendu cartoon** : éclairage « toon » à paliers, couleurs vives. La ville est générée (`frontend/src/game/world.ts`) puis fusionnée en 2 maillages, et les collisions utilisent des boîtes invisibles. Zombies cartoon (`characters.ts`) et armes aux couleurs de rareté avec main gantée (`weapons.ts`).
 - **Objectifs** (`frontend/src/game/meta.ts`) : 3 missions du jour (les mêmes pour tous, renouvelées à minuit), 17 succès récompensés en crédits et des statistiques de joueur.
 - **Armes** : fusil à pompe, SMG (niveau 2), fusil d'assaut (4), railgun perforant (10), minigun (15), lance-grenades (20).
-- **Commandes** : joystick visible en bas à gauche (il suit le pouce, sprint en poussant à fond), visée à droite.
+- **Commandes** : joystick visible en bas à gauche (il suit le pouce, sprint en poussant à fond), visée à droite. Tous les boutons de combat sont des gestes natifs : on peut tirer en se déplaçant, et glisser le doigt sur FIRE vise en même temps.
+- **Suggestions** : les joueurs connectés envoient une idée ou un bug depuis Réglages ; tu les lis dans l'onglet « Suggestions » de la page d'administration.
 - **Modes de tir** : bouton MODE au-dessus de FIRE pour les armes qui en ont plusieurs : coup par coup, rafale de 3 balles, automatique. Fusil d'assaut : coup par coup / rafale ; SMG : auto / rafale / coup par coup. Le mode choisi est mémorisé par arme pendant la partie.
 - **Musique** : thèmes originaux du menu et du combat (`frontend/scripts/generate-music.py` les régénère), réglables dans Réglages.
 - **Au premier lancement**, le joueur choisit : **créer un compte** (nom d'utilisateur unique, 3 à 16 lettres, chiffres ou `_`, sans distinction de casse, et mot de passe de 6 caractères minimum), **se connecter**, ou **jouer en invité**.

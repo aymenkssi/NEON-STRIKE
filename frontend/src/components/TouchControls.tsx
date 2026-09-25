@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
+import React, { useCallback } from "react";
+import { View, Text, StyleSheet, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useSharedValue, runOnJS, withTiming } from "react-native-reanimated";
@@ -122,6 +122,66 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
   };
   const stopFire = () => getEngine()?.releaseTrigger();
+  const jumpDown = () => {
+    getEngine()?.jumpDown();
+    Haptics.selectionAsync().catch(() => {});
+  };
+  const jumpUp = () => getEngine()?.jumpUp();
+  const reload = () => {
+    getEngine()?.reload();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
+  const cycleMode = () => {
+    getEngine()?.cycleFireMode();
+    Haptics.selectionAsync().catch(() => {});
+  };
+
+  // Combat buttons are native gestures too: each finger is tracked on its own, so firing keeps
+  // going while the other thumb moves or aims (a JS responder would be cancelled by those).
+  const firePressed = useSharedValue(0);
+  const fireGesture = Gesture.Pan()
+    .minDistance(0)
+    .onBegin(() => {
+      firePressed.value = 1;
+      runOnJS(startFire)();
+    })
+    // Sliding the thumb on FIRE also aims, like the look zone.
+    .onChange((e) => {
+      runOnJS(look)(e.changeX, e.changeY);
+    })
+    .onFinalize(() => {
+      firePressed.value = 0;
+      runOnJS(stopFire)();
+    });
+  const jumpPressed = useSharedValue(0);
+  const jumpGesture = Gesture.Pan()
+    .minDistance(0)
+    .onBegin(() => {
+      jumpPressed.value = 1;
+      runOnJS(jumpDown)();
+    })
+    .onFinalize(() => {
+      jumpPressed.value = 0;
+      runOnJS(jumpUp)();
+    });
+  const reloadPressed = useSharedValue(0);
+  const reloadGesture = Gesture.Tap()
+    .maxDuration(10000)
+    .onBegin(() => {
+      reloadPressed.value = 1;
+      runOnJS(reload)();
+    })
+    .onFinalize(() => {
+      reloadPressed.value = 0;
+    });
+  const modeGesture = Gesture.Tap().onEnd(() => {
+    runOnJS(cycleMode)();
+  });
+  const fireStyle = useAnimatedStyle(() => ({
+    backgroundColor: firePressed.value ? "rgba(255,0,60,0.6)" : "rgba(255,0,60,0.28)",
+  }));
+  const jumpStyle = useAnimatedStyle(() => ({ opacity: jumpPressed.value ? 0.7 : 1 }));
+  const reloadStyle = useAnimatedStyle(() => ({ opacity: reloadPressed.value ? 0.7 : 1 }));
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -150,87 +210,37 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
       </GestureDetector>
 
       {/* Combat buttons (right, over look zone) */}
-      <HoldButton
-        testID="jump-button"
-        onDown={() => {
-          getEngine()?.jumpDown();
-          Haptics.selectionAsync().catch(() => {});
-        }}
-        onUp={() => getEngine()?.jumpUp()}
-        style={styles.jumpBtn}
-        pressedStyle={styles.pressed}
-      >
-        <MaterialCommunityIcons name="arrow-up-bold" size={26} color={colors.brandSecondary} />
-        <Text style={styles.smallLabel}>JUMP</Text>
-      </HoldButton>
+      <GestureDetector gesture={jumpGesture}>
+        <Animated.View testID="jump-button" accessibilityRole="button" style={[styles.jumpBtn, jumpStyle]}>
+          <MaterialCommunityIcons name="arrow-up-bold" size={26} color={colors.brandSecondary} />
+          <Text style={styles.smallLabel}>JUMP</Text>
+        </Animated.View>
+      </GestureDetector>
 
-      <Pressable
-        testID="reload-button"
-        onPress={() => {
-          getEngine()?.reload();
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        }}
-        style={({ pressed }) => [styles.reloadBtn, pressed && styles.pressed]}
-      >
-        <MaterialCommunityIcons name="reload" size={24} color={colors.warning} />
-        <Text style={styles.smallLabel}>RELOAD</Text>
-      </Pressable>
+      <GestureDetector gesture={reloadGesture}>
+        <Animated.View testID="reload-button" accessibilityRole="button" style={[styles.reloadBtn, reloadStyle]}>
+          <MaterialCommunityIcons name="reload" size={24} color={colors.warning} />
+          <Text style={styles.smallLabel}>RELOAD</Text>
+        </Animated.View>
+      </GestureDetector>
 
       {fireModes.length > 1 && (
-        <Pressable
-          testID="fire-mode-button"
-          onPress={() => {
-            getEngine()?.cycleFireMode();
-            Haptics.selectionAsync().catch(() => {});
-          }}
-          hitSlop={6}
-          style={({ pressed }) => [styles.modeBtn, pressed && styles.pressed]}
-        >
-          <MaterialCommunityIcons name={MODE_UI[fireMode].icon as any} size={16} color={colors.brandSecondary} />
-          <Text style={styles.modeText} testID="fire-mode-label">
-            {t(MODE_UI[fireMode].label)}
-          </Text>
-        </Pressable>
+        <GestureDetector gesture={modeGesture}>
+          <View testID="fire-mode-button" accessibilityRole="button" hitSlop={6} style={styles.modeBtn}>
+            <MaterialCommunityIcons name={MODE_UI[fireMode].icon as any} size={16} color={colors.brandSecondary} />
+            <Text style={styles.modeText} testID="fire-mode-label">
+              {t(MODE_UI[fireMode].label)}
+            </Text>
+          </View>
+        </GestureDetector>
       )}
 
-      <HoldButton testID="fire-button" onDown={startFire} onUp={stopFire} style={styles.fireBtn} pressedStyle={styles.firePressed}>
-        <MaterialCommunityIcons name="pistol" size={40} color="#fff" />
-        <Text style={styles.fireLabel}>FIRE</Text>
-      </HoldButton>
-    </View>
-  );
-}
-
-// Reacts on touch down with no delay: Pressable ignores taps shorter than its press delay on the
-// web, which loses quick shots. Uses the plain responder system, like Pressable on Android.
-function HoldButton(p: {
-  testID?: string;
-  onDown: () => void;
-  onUp: () => void;
-  style: StyleProp<ViewStyle>;
-  pressedStyle: StyleProp<ViewStyle>;
-  children: React.ReactNode;
-}) {
-  const [pressed, setPressed] = useState(false);
-  const up = () => {
-    setPressed(false);
-    p.onUp();
-  };
-  return (
-    <View
-      testID={p.testID}
-      accessibilityRole="button"
-      style={[p.style, pressed && p.pressedStyle]}
-      onStartShouldSetResponder={() => true}
-      onResponderTerminationRequest={() => false}
-      onResponderGrant={() => {
-        setPressed(true);
-        p.onDown();
-      }}
-      onResponderRelease={up}
-      onResponderTerminate={up}
-    >
-      {p.children}
+      <GestureDetector gesture={fireGesture}>
+        <Animated.View testID="fire-button" accessibilityRole="button" style={[styles.fireBtn, fireStyle]}>
+          <MaterialCommunityIcons name="pistol" size={40} color="#fff" />
+          <Text style={styles.fireLabel}>FIRE</Text>
+        </Animated.View>
+      </GestureDetector>
     </View>
   );
 }

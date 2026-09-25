@@ -180,6 +180,9 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
   );
 }
 
+// Dark outline so the HUD stays readable over bright daytime cities.
+const shadow = { textShadowColor: "rgba(0,0,0,0.8)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 };
+
 const styles = StyleSheet.create({
   vignette: {
     ...StyleSheet.absoluteFillObject,
@@ -188,7 +191,7 @@ const styles = StyleSheet.create({
   },
   topLeft: { position: "absolute", gap: 4 },
   waveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  waveText: { color: colors.brand, fontFamily: fonts.display, fontSize: 16, letterSpacing: 1.5 },
+  waveText: { ...shadow, color: colors.brand, fontFamily: fonts.display, fontSize: 16, letterSpacing: 1.5 },
   healthBar: {
     width: 180,
     height: 12,
@@ -200,7 +203,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   healthFill: { height: "100%", borderRadius: 2 },
-  healthLabel: { fontFamily: fonts.displaySemi, fontSize: 12, letterSpacing: 1 },
+  healthLabel: { ...shadow, fontFamily: fonts.displaySemi, fontSize: 12, letterSpacing: 1 },
   powerRow: { flexDirection: "row", gap: 6, marginTop: 4 },
   powerChip: {
     flexDirection: "row",
@@ -212,11 +215,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     backgroundColor: "rgba(13,15,18,0.7)",
   },
-  powerText: { fontFamily: fonts.display, fontSize: 12, fontVariant: ["tabular-nums"] },
+  powerText: { ...shadow, fontFamily: fonts.display, fontSize: 12, fontVariant: ["tabular-nums"] },
   topRight: { position: "absolute", flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  scoreText: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 30, letterSpacing: 1, lineHeight: 32 },
+  scoreText: { ...shadow, color: colors.onSurface, fontFamily: fonts.display, fontSize: 30, letterSpacing: 1, lineHeight: 32 },
   killRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
-  killText: { color: colors.onSurfaceSecondary, fontFamily: fonts.displayMed, fontSize: 11, letterSpacing: 1 },
+  killText: { ...shadow, color: colors.onSurfaceSecondary, fontFamily: fonts.displayMed, fontSize: 11, letterSpacing: 1 },
   pauseBtn: {
     width: 40,
     height: 40,
@@ -252,11 +255,11 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
   },
   ammoBox: { position: "absolute", bottom: 132, alignItems: "flex-end" },
-  ammoText: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 44, letterSpacing: 1 },
-  ammoMax: { color: colors.onSurfaceTertiary, fontSize: 22 },
-  reloadText: { color: colors.warning, fontFamily: fonts.displaySemi, fontSize: 18, letterSpacing: 1 },
+  ammoText: { ...shadow, color: colors.onSurface, fontFamily: fonts.display, fontSize: 44, letterSpacing: 1 },
+  ammoMax: { ...shadow, color: colors.onSurfaceTertiary, fontSize: 22 },
+  reloadText: { ...shadow, color: colors.warning, fontFamily: fonts.displaySemi, fontSize: 18, letterSpacing: 1 },
   bossWrap: { position: "absolute", alignSelf: "center", alignItems: "center", gap: 2 },
-  bossLabel: { color: colors.error, fontFamily: fonts.display, fontSize: 13, letterSpacing: 3 },
+  bossLabel: { ...shadow, color: colors.error, fontFamily: fonts.display, fontSize: 13, letterSpacing: 3 },
   bossBar: {
     width: 260,
     height: 10,
