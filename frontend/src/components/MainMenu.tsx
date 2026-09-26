@@ -17,6 +17,8 @@ import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
 import Skins from "./Skins";
 import SeasonReward from "./SeasonReward";
+import SeasonIntro, { SEASON_INTRO_KEY, markSeasonIntroSeen } from "./SeasonIntro";
+import { storage } from "@/src/utils/storage";
 import { currentSeason, daysLeft, fetchMySeason, type SeasonReward as PendingReward } from "../api/seasons";
 import PlayerMessage from "./PlayerMessage";
 import Goals, { claimableGoals } from "./Goals";
@@ -82,6 +84,17 @@ export default function MainMenu(props: Props) {
     fetchMySeason(username).then((m) => setRewards(m.rewards), () => {});
   }, [guest, username]);
   const seasonDays = daysLeft(currentSeason().end);
+  // Seasons explained once at launch (after the daily reward), and again from the ranking.
+  const [intro, setIntro] = useState<"auto" | "manual" | null>(null);
+  useEffect(() => {
+    storage.getItem(SEASON_INTRO_KEY, false).then((seen) => {
+      if (!seen) setIntro("auto");
+    });
+  }, []);
+  const closeIntro = () => {
+    markSeasonIntroSeen();
+    setIntro(null);
+  };
   const { progress } = props;
   const dailyReady = dailyStatus(progress.dailyLast, progress.dailyStreak).canClaim;
   const [showDaily, setShowDaily] = useState(() => {
@@ -92,7 +105,7 @@ export default function MainMenu(props: Props) {
 
   const { next: message, dismiss } = useMessageQueue(props.messages);
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
-  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins;
+  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || intro !== null;
   const goalsReady = claimableGoals(progress);
 
   const play = () => {
@@ -231,6 +244,20 @@ export default function MainMenu(props: Props) {
           onClose={() => setShowGoals(false)}
         />
       )}
+      {intro && (intro === "manual" || !(showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins)) && (
+        <SeasonIntro
+          guest={guest}
+          onClose={closeIntro}
+          onOpenBoard={
+            intro === "auto"
+              ? () => {
+                  closeIntro();
+                  setShowLeaderboard(true);
+                }
+              : undefined
+          }
+        />
+      )}
       {rewards.length > 0 && !overlayOpen && (
         <SeasonReward
           reward={rewards[0]}
@@ -250,7 +277,9 @@ export default function MainMenu(props: Props) {
           onClose={() => setShowDaily(false)}
         />
       )}
-      {showLeaderboard && <Leaderboard username={username} guest={guest} onClose={() => setShowLeaderboard(false)} />}
+      {showLeaderboard && (
+        <Leaderboard username={username} guest={guest} onSeasonInfo={() => setIntro("manual")} onClose={() => setShowLeaderboard(false)} />
+      )}
       {showSettings && (
         <Settings
           lookSensitivity={props.lookSensitivity}

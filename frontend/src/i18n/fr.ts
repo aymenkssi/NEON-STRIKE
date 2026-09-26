@@ -354,6 +354,17 @@ export const fr = {
   "reward.badge": "Badge de champion à côté de ton pseudo",
   "reward.claim": "RÉCUPÉRER",
   "reward.error": "Impossible de récupérer la récompense pour l'instant. Réessaie plus tard.",
+
+  "intro.title": "NOUVEAU : LES SAISONS",
+  "intro.monthly": "Chaque mois, une nouvelle saison : le classement repart de zéro le 1er du mois. Ton meilleur score du mois compte.",
+  "intro.rewards": "À la fin du mois, les 100 meilleurs sont récompensés : 1er 5 000 crédits, 2e 3 000, 3e 2 000, 4e et 5e 1 000, 6e à 20e 500, 21e à 100e 200.",
+  "intro.champion": "Top 5 : le skin exclusif « Champion », introuvable en boutique, et un trophée à côté de ton pseudo.",
+  "intro.giftcards": "Bientôt : dès 10 000 joueurs, le top 5 de chaque mois gagnera aussi des cartes cadeaux !",
+  "intro.giftcards.note": "Selon le règlement qui sera publié à ce moment-là. Participation gratuite.",
+  "intro.fair": "Jeu équitable : les meilleurs scores sont vérifiés chaque mois et les scores suspects sont exclus.",
+  "intro.guest": "Crée un compte (Réglages) pour participer aux saisons.",
+  "intro.go": "C'EST PARTI !",
+  "intro.board": "VOIR LE CLASSEMENT",
 } as const;
 
 export type Key = keyof typeof fr;
