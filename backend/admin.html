@@ -104,7 +104,7 @@
       <button type="button" role="tab" data-tab="stats" aria-selected="true">Statistiques</button>
       <button type="button" role="tab" data-tab="players" aria-selected="false">Joueurs</button>
       <button type="button" role="tab" data-tab="seasons" aria-selected="false">Saisons <span id="season-badge" class="pill sched" hidden></span></button>
-      <button type="button" role="tab" data-tab="liveops" aria-selected="false">Packs et messages</button>
+      <button type="button" role="tab" data-tab="liveops" aria-selected="false">Boutique et messages</button>
       <button type="button" role="tab" data-tab="suggestions" aria-selected="false">Suggestions <span id="sugg-badge" class="pill live" hidden></span></button>
     </nav>
 
@@ -182,6 +182,18 @@
     </div>
 
     <div id="tab-liveops" hidden>
+
+    <h2>Armurerie : prix des armes</h2>
+    <p class="hint">Prix en crédits des armes vendues dans l'Armurerie du jeu. Prix 0 = arme gratuite pour tout le monde. Décoche « En vente » pour la retirer de l'Armurerie : les joueurs qui l'ont déjà la gardent. Les changements s'appliquent au prochain lancement du jeu.</p>
+    <section class="panel">
+      <div class="table-wrap">
+        <table class="compact">
+          <thead><tr><th>Arme</th><th>ID</th><th>Prix (crédits)</th><th>En vente</th><th></th></tr></thead>
+          <tbody id="weapons"></tbody>
+        </table>
+      </div>
+      <div id="weapons-status" class="status"></div>
+    </section>
 
     <h2>Packs de crédits</h2>
     <p class="hint">Les crédits, étiquettes et l'ordre s'appliquent au prochain lancement du jeu. Le <strong>prix en euros</strong> se règle dans Play Console (Monétiser → Produits intégrés) : l'app affiche toujours le prix de Google. Un nouveau pack doit aussi être créé dans Play Console avec le même ID produit.</p>
@@ -280,7 +292,7 @@
       await loadPacks();
       try { sessionStorage.setItem(KEY, token); } catch (e2) {}
       $("login").hidden = true; $("app").hidden = false;
-      loadMessages(); loadStats(); loadSuggestions(); loadSeasons();
+      loadMessages(); loadStats(); loadSuggestions(); loadSeasons(); loadWeapons();
     } catch (err) {
       if (err.message !== "401") say($("login-status"), err.message, false);
     }
@@ -293,6 +305,28 @@
     const i = document.createElement("input"); i.type = type;
     if (type === "checkbox") i.checked = !!value; else i.value = value ?? "";
     Object.assign(i, attrs || {}); return i;
+  }
+
+  async function loadWeapons() {
+    const list = await api("GET", "/weapons");
+    const tbody = $("weapons"); tbody.replaceChildren();
+    for (const w of list) {
+      const tr = document.createElement("tr");
+      const key = document.createElement("code"); key.textContent = w.key;
+      const name = document.createElement("strong"); name.textContent = w.name;
+      const price = input("number", w.price, { min: 0 }); price.setAttribute("aria-label", "Prix " + w.name);
+      const onSale = input("checkbox", w.on_sale); onSale.setAttribute("aria-label", "En vente " + w.name);
+      const save = document.createElement("button"); save.textContent = "Enregistrer"; save.className = "primary"; save.type = "button";
+      save.onclick = async () => {
+        try {
+          await api("PUT", "/weapons/" + w.key, { price: Number(price.value), on_sale: onSale.checked });
+          say($("weapons-status"), w.name + " : " + nf.format(Number(price.value)) + " crédits" + (onSale.checked ? "" : " (retirée de la vente)") + ".", true); loadWeapons();
+        } catch (err) { say($("weapons-status"), err.message, false); }
+      };
+      const c = cell(price); c.className = "num";
+      tr.append(cell(name), cell(key), c, cell(onSale), cell(save));
+      tbody.appendChild(tr);
+    }
   }
 
   async function loadPacks() {
@@ -698,7 +732,7 @@
   }
 
   if (token) {
-    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); loadSuggestions(); loadSeasons(); }).catch(() => {});
+    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); loadSuggestions(); loadSeasons(); loadWeapons(); }).catch(() => {});
   }
 })();
 </script>

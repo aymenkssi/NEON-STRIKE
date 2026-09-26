@@ -27,6 +27,23 @@ DEFAULT_PACKS = [
     {"sku": "coins_8000", "credits": 8000, "bonus": "+60 %", "tag": "MEILLEURE OFFRE", "tag_en": "BEST VALUE", "sort": 40, "active": True},
 ]
 
+# Armory: weapons bought with credits in the app. The models and stats live in the app; the
+# admin page only sets the price and whether a weapon is on sale. Price 0 = free for everyone.
+WEAPONS = [
+    ("pistol", "Pistolet", 0),
+    ("shotgun", "Fusil à pompe", 0),
+    ("mp5", "MP5", 800),
+    ("m16", "M16", 1500),
+    ("m4", "M4", 2200),
+    ("ak47", "AK-47", 2800),
+    ("sniper", "Sniper .50", 4000),
+    ("launcher", "Lance-grenades", 5000),
+    ("minigun", "Minigun M134", 6000),
+    ("rpg", "Lance-roquettes RPG-7", 8000),
+]
+WEAPON_KEYS = [k for k, _, _ in WEAPONS]
+WEAPON_PATTERN = "^(" + "|".join(WEAPON_KEYS) + ")$"
+
 # Play Console product ID rules: lowercase letters, digits, "_" and ".", starting with a letter or digit.
 SKU_PATTERN = r"^[a-z0-9][a-z0-9_.]{0,63}$"
 
@@ -91,9 +108,20 @@ class PublicMessage(BaseModel):
     kind: str
 
 
+class WeaponPriceIn(BaseModel):
+    price: int = Field(..., ge=0, le=1_000_000)
+    on_sale: bool = True
+
+
+class WeaponPrice(WeaponPriceIn):
+    key: str
+    name: str = ""
+
+
 class RemoteConfig(BaseModel):
     packs: List[Pack]
     messages: List[PublicMessage]
+    weapons: List[WeaponPrice] = []
 
 
 # ------------------------ Helpers ------------------------
@@ -113,7 +141,18 @@ def message_is_live(m: dict, now: datetime) -> bool:
     return m.get("active", False) and (starts is None or starts <= now) and (ends is None or ends > now)
 
 
+async def weapon_prices() -> List[WeaponPrice]:
+    """Every weapon of the app with its price: the stored one, else the default."""
+    stored = {w["key"]: w async for w in db.weapon_prices.find({}, {"_id": 0})}
+    out = []
+    for key, name, price in WEAPONS:
+        w = stored.get(key, {})
+        out.append(WeaponPrice(key=key, name=name, price=w.get("price", price), on_sale=w.get("on_sale", True)))
+    return out
+
+
 async def setup():
+    await db.weapon_prices.create_index("key", unique=True)
     await db.packs.create_index("sku", unique=True)
     await db.messages.create_index("id", unique=True)
     if await db.packs.count_documents({}) == 0:
@@ -131,7 +170,7 @@ async def remote_config():
     now = utcnow()
     msgs = await db.messages.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(50)
     live = [PublicMessage(**m) for m in msgs if message_is_live(m, now)][:5]
-    return RemoteConfig(packs=[Pack(**p) for p in packs], messages=live)
+    return RemoteConfig(packs=[Pack(**p) for p in packs], messages=live, weapons=await weapon_prices())
 
 
 # ------------------------ Admin API ------------------------
@@ -191,6 +230,17 @@ async def update_message(message_id: str, payload: MessageIn):
     if not doc:
         raise HTTPException(404, "Unknown message")
     return Message(**doc)
+
+
+@admin.get("/weapons", response_model=List[WeaponPrice])
+async def list_weapons():
+    return await weapon_prices()
+
+
+@admin.put("/weapons/{key}", response_model=WeaponPrice)
+async def set_weapon(payload: WeaponPriceIn, key: str = PathParam(..., pattern=WEAPON_PATTERN)):
+    await db.weapon_prices.update_one({"key": key}, {"$set": payload.model_dump()}, upsert=True)
+    return next(w for w in await weapon_prices() if w.key == key)
 
 
 @admin.delete("/messages/{message_id}")

@@ -17,12 +17,16 @@ import { formatNumber, useT } from "@/src/i18n";
 const POWERUP_ICONS = { rage: "fire", haste: "run-fast", infinite: "infinity" } as const;
 const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 const WEAPON_ICONS: Record<string, string> = {
-  SG: "pistol",
-  SMG: "pistol",
-  AR: "pistol",
-  RG: "flash",
-  MG: "fan",
-  GL: "bomb",
+  pistol: "pistol",
+  shotgun: "pistol",
+  mp5: "pistol",
+  m16: "pistol",
+  m4: "pistol",
+  ak47: "pistol",
+  sniper: "crosshairs-gps",
+  launcher: "bomb",
+  minigun: "fan",
+  rpg: "rocket-launch",
 };
 
 type Props = {
@@ -121,36 +125,19 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       <View style={[styles.weaponRow, { top: padT }]} pointerEvents="box-none">
         {stats.weapons.map((w, i) => {
           const selected = i === stats.weaponIndex;
-          // Unlocked weapons + only the next locked one, so the row fits on small screens.
-          const firstLocked = stats.weapons.findIndex((x) => !x.unlocked);
-          if (!w.unlocked && i !== firstLocked) return null;
           return (
             <Pressable
-              key={w.short}
+              key={w.key}
               testID={`weapon-${w.short}`}
-              disabled={!w.unlocked}
               onPress={() => onSwitchWeapon(i)}
-              style={[
-                styles.weaponChip,
-                selected && styles.weaponChipActive,
-                !w.unlocked && styles.weaponChipLocked,
-              ]}
+              style={[styles.weaponChip, selected && styles.weaponChipActive]}
             >
-              {w.unlocked ? (
-                <>
-                  <MaterialCommunityIcons
-                    name={(WEAPON_ICONS[w.short] ?? "pistol") as any}
-                    size={16}
-                    color={selected ? colors.onBrand : colors.onSurfaceSecondary}
-                  />
-                  <Text style={[styles.weaponChipText, selected && { color: colors.onBrand }]}>{w.short}</Text>
-                </>
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="lock" size={14} color={colors.onSurfaceTertiary} />
-                  <Text style={styles.weaponLockText}>NIV{w.unlockLevel}</Text>
-                </>
-              )}
+              <MaterialCommunityIcons
+                name={(WEAPON_ICONS[w.key] ?? "pistol") as any}
+                size={16}
+                color={selected ? colors.onBrand : colors.onSurfaceSecondary}
+              />
+              <Text style={[styles.weaponChipText, selected && { color: colors.onBrand }]}>{w.short}</Text>
             </Pressable>
           );
         })}
@@ -295,7 +282,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
   },
   weaponChipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
-  weaponChipLocked: { opacity: 0.5 },
   weaponChipText: { color: colors.onSurfaceSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1 },
-  weaponLockText: { color: colors.onSurfaceTertiary, fontFamily: fonts.displayMed, fontSize: 11, letterSpacing: 1 },
 });

@@ -143,3 +143,24 @@ class TestEnglish:
         packs = {p["sku"]: p for p in api.get("/api/config").json()["packs"]}
         assert packs["coins_500"]["tag_en"] == "NEW"
         assert packs["coins_3500"]["tag_en"] == "POPULAR"
+
+
+class TestWeaponPrices:
+    def test_defaults_in_config(self, api):
+        weapons = {w["key"]: w for w in api.get("/api/config").json()["weapons"]}
+        assert list(weapons)[:2] == ["pistol", "shotgun"] and weapons["pistol"]["price"] == 0
+        assert weapons["ak47"]["price"] == 2800 and weapons["rpg"]["on_sale"] is True
+
+    def test_admin_sets_price_and_sale(self, api):
+        from conftest import ADMIN
+        r = api.put("/api/admin/weapons/ak47", json={"price": 3500, "on_sale": False}, headers=ADMIN)
+        assert r.status_code == 200 and r.json()["price"] == 3500
+        ak = next(w for w in api.get("/api/config").json()["weapons"] if w["key"] == "ak47")
+        assert ak == {"key": "ak47", "name": "AK-47", "price": 3500, "on_sale": False}
+        assert api.get("/api/admin/weapons", headers=ADMIN).json()[5]["price"] == 3500
+
+    def test_validation(self, api):
+        from conftest import ADMIN
+        assert api.put("/api/admin/weapons/laser", json={"price": 10}, headers=ADMIN).status_code == 422
+        assert api.put("/api/admin/weapons/m4", json={"price": -1}, headers=ADMIN).status_code == 422
+        assert api.put("/api/admin/weapons/m4", json={"price": 10}).status_code == 401

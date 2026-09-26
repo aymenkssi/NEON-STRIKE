@@ -4,11 +4,11 @@ import type { ExpoWebGLRenderingContext } from "expo-gl";
 import { buildWorld, type World, type WorldQuality } from "./world";
 import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
-import { MUZZLE, buildWeaponModel } from "./weapons";
+import { MUZZLE, VIEW, buildWeaponModel } from "./weapons";
+import { WEAPONS, weaponOf, type FireMode, type WeaponConfig } from "./armory";
 import {
   CREDITS_PER_BOSS,
   CREDITS_PER_HEADSHOT,
-  WEAPON_UNLOCK_LEVEL,
   getLevelConfig,
   modifiersFrom,
   NO_UPGRADES,
@@ -53,64 +53,15 @@ const CONFIG = {
 };
 
 // SINGLE: one round per tap. BURST: 3 rounds per tap. AUTO: fires while the trigger is held.
-export type FireMode = "single" | "burst" | "auto";
+export type { FireMode } from "./armory";
 export const FIRE_MODE_LABEL: Record<FireMode, Key> = { single: "fire.single", burst: "fire.burst", auto: "fire.auto" };
 const BURST_ROUNDS = 3;
 
-type WeaponConfig = {
-  key: string;
-  name: string;
-  short: string;
-  pellets: number;
-  spread: number;
-  maxAmmo: number;
-  reloadMs: number;
-  bodyDmg: number;
-  headDmg: number;
-  recoil: number;
-  fireRate: number; // ms between shots (auto) or between taps / bursts
-  modes: FireMode[]; // the first one is the default
-  burstGap?: number; // ms between the rounds of a burst
-  flashZ: number;
-  sound?: string; // defaults to key
-  pierce?: number; // railgun: zombies hit by one shot
-  projectile?: boolean; // grenade launcher
+// Projectiles: grenades arc and bounce off nothing; rockets fly straight and hit harder.
+const PROJECTILE = {
+  grenade: { speed: 32, lift: 6, gravity: 22, damage: 14, radius: 4.5, fuseMs: 3000 },
+  rocket: { speed: 55, lift: 0.5, gravity: 2, damage: 30, radius: 7, fuseMs: 3000 },
 };
-
-const WEAPONS: WeaponConfig[] = [
-  {
-    key: "shotgun", name: "SHOTGUN", short: "SG",
-    pellets: 8, spread: 0.06, maxAmmo: 5, reloadMs: 1500,
-    bodyDmg: 1, headDmg: 2, recoil: 0.18, fireRate: 400, modes: ["single"], flashZ: 0,
-  },
-  {
-    key: "smg", name: "SMG", short: "SMG",
-    pellets: 1, spread: 0.02, maxAmmo: 30, reloadMs: 1200,
-    bodyDmg: 1, headDmg: 2, recoil: 0.09, fireRate: 95, modes: ["auto", "burst", "single"], burstGap: 70, flashZ: 0,
-  },
-  {
-    key: "rifle", name: "ASSAULT RIFLE", short: "AR",
-    pellets: 1, spread: 0.004, maxAmmo: 10, reloadMs: 1500,
-    bodyDmg: 3, headDmg: 5, recoil: 0.22, fireRate: 320, modes: ["single", "burst"], burstGap: 90, flashZ: 0,
-  },
-  {
-    key: "railgun", name: "RAILGUN", short: "RG",
-    pellets: 1, spread: 0, maxAmmo: 4, reloadMs: 1800,
-    bodyDmg: 6, headDmg: 10, recoil: 0.3, fireRate: 900, modes: ["single"], flashZ: 0, pierce: 5,
-  },
-  {
-    key: "minigun", name: "MINIGUN", short: "MG", sound: "smg",
-    pellets: 1, spread: 0.035, maxAmmo: 120, reloadMs: 2800,
-    bodyDmg: 1, headDmg: 2, recoil: 0.05, fireRate: 55, modes: ["auto"], flashZ: 0,
-  },
-  {
-    key: "launcher", name: "LANCE-GRENADES", short: "GL",
-    pellets: 1, spread: 0, maxAmmo: 3, reloadMs: 2200,
-    bodyDmg: 0, headDmg: 0, recoil: 0.35, fireRate: 700, modes: ["single"], flashZ: 0, projectile: true,
-  },
-];
-
-const GRENADE = { speed: 32, lift: 6, gravity: 22, damage: 14, fuseMs: 3000 };
 
 // Soft star-shaped glow for the muzzle flash (generated: no image file needed on the phone).
 let flashTex: THREE.DataTexture | null = null;
@@ -133,15 +84,7 @@ function flashTexture() {
   return flashTex;
 }
 
-const WEAPON_SCALE = 0.8;
-const WEAPON_Z = -0.14;
-
-// Muzzle positions come from the weapon models.
-WEAPONS.forEach((w) => (w.flashZ = MUZZLE[w.key] ?? -0.6));
-
-const unlockLevelOf = (w: WeaponConfig) => WEAPON_UNLOCK_LEVEL[w.key] ?? 1;
-
-export type WeaponInfo = { short: string; name: string; unlocked: boolean; unlockLevel: number };
+export type WeaponInfo = { key: string; short: string };
 
 export type GameStats = {
   health: number;
@@ -157,7 +100,7 @@ export type GameStats = {
   credits: number; // credits picked up during the current level
   boss: { health: number; max: number } | null;
   weaponIndex: number;
-  weapons: WeaponInfo[];
+  weapons: WeaponInfo[]; // the loadout (weapons carried in this game)
   fireMode: FireMode;
   fireModes: FireMode[]; // modes of the current weapon (MODE button hidden when only one)
   sector: { index: number; name: string };
@@ -166,6 +109,7 @@ export type GameStats = {
 };
 
 export type EngineOptions = {
+  loadout?: string[]; // weapon keys chosen in the Armory (up to 4)
   aimAssist: boolean;
   invertY: boolean;
   quality: WorldQuality;
@@ -247,13 +191,14 @@ export class GameEngine {
   private health = 100;
   private weaponIndex = 0;
   // Trigger: shots are timed by the game loop so every fire mode respects the weapon's rate.
-  private fireModeByWeapon: number[] = WEAPONS.map(() => 0);
+  private arms: WeaponConfig[] = [WEAPONS[1]]; // the loadout
+  private fireModeByWeapon: number[] = [0];
   private triggerHeld = false;
   private queuedShot = false; // tap during the cooldown: fired as soon as the weapon is ready
   private nextShotAt = 0;
   private burstLeft = 0;
   private nextBurstAt = 0;
-  private ammoByWeapon: number[] = WEAPONS.map((w) => w.maxAmmo);
+  private ammoByWeapon: number[] = [0];
   private reloading = false;
   private reloadStart = 0;
   private score = 0;
@@ -280,7 +225,7 @@ export class GameEngine {
   private shake = 0;
   private shakeOffset = new THREE.Vector3();
   private flashes: { light: THREE.PointLight; ring: THREE.Mesh; life: number }[] = [];
-  private grenades: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number }[] = [];
+  private grenades: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number; kind: "grenade" | "rocket" }[] = [];
   private beams: { line: THREE.Line; life: number }[] = [];
 
   private prevTime = 0;
@@ -311,17 +256,17 @@ export class GameEngine {
     this.levelCfg = getLevelConfig(opts?.level ?? 1, this.difficulty);
     this.unlockedLevel = Math.max(opts?.unlockedLevel ?? 1, this.levelCfg.level);
     this.health = this.mods.maxHealth;
-    this.ammoByWeapon = WEAPONS.map((_, i) => this.maxAmmoOf(i));
+    this.setLoadout(this.opts.loadout);
     this.init();
     this.prevTime = Date.now();
     this.loop();
   }
 
   private get weapon() {
-    return WEAPONS[this.weaponIndex];
+    return this.arms[this.weaponIndex] ?? this.arms[0];
   }
   private maxAmmoOf(i: number) {
-    return Math.round(WEAPONS[i].maxAmmo * this.mods.ammoMult);
+    return Math.round(this.arms[i].maxAmmo * this.mods.ammoMult);
   }
   private get reloadMs() {
     return this.weapon.reloadMs * this.mods.reloadMult;
@@ -490,10 +435,13 @@ export class GameEngine {
   private equipModel() {
     this.modelHolder.clear();
     this.modelHolder.add(buildWeaponModel(this.weapon.key, this.opts.weaponSkin, this.opts.outfit));
-    // Models are in metres; held a bit smaller and further out so the stock stays in view.
-    this.modelHolder.scale.setScalar(WEAPON_SCALE);
-    this.modelHolder.position.set(0.03, -0.02, WEAPON_Z);
-    this.muzzleFlash.position.set(0.03, -0.02 + 0.02 * WEAPON_SCALE, WEAPON_Z + this.weapon.flashZ * WEAPON_SCALE);
+    // Models are in metres; each weapon has its own hold (a pistol closer, a sniper further).
+    const v = VIEW[this.weapon.key] ?? VIEW.m4;
+    this.modelHolder.scale.setScalar(v.scale);
+    this.modelHolder.position.set(v.x, v.y, v.z);
+    const muzzleY = this.weapon.key === "pistol" ? 0.016 : this.weapon.key === "minigun" || this.weapon.key === "launcher" ? 0 : 0.03;
+    this.muzzleFlash.position.set(v.x, v.y + muzzleY * v.scale, v.z + (MUZZLE[this.weapon.key] ?? -0.6) * v.scale);
+    this.showWarhead();
   }
 
   // Idle: dim light just above the weapon, tinted by the sector, too short to reach the arena.
@@ -504,10 +452,25 @@ export class GameEngine {
     this.muzzleLight.position.set(0.05, 0.3, 0.05);
   }
 
+  // Weapons carried in game: the Armory loadout (unknown keys ignored, shotgun if empty).
+  private setLoadout(keys?: string[]) {
+    const arms = (keys ?? []).map((k) => weaponOf(k)).filter((w): w is WeaponConfig => !!w);
+    this.arms = arms.length ? arms : [weaponOf("shotgun")!];
+    this.weaponIndex = 0;
+    this.fireModeByWeapon = this.arms.map(() => 0);
+    this.ammoByWeapon = this.arms.map((_, i) => this.maxAmmoOf(i));
+  }
+
+  // RPG: the rocket is visible in the tube only when loaded.
+  private showWarhead() {
+    const w = this.modelHolder?.getObjectByName("warhead");
+    if (w) w.visible = this.ammo > 0 && !this.reloading;
+  }
+
   switchWeapon(index: number) {
     if (index === this.weaponIndex) return;
-    const cfg = WEAPONS[index];
-    if (!cfg || unlockLevelOf(cfg) > this.unlockedLevel) return;
+    const cfg = this.arms[index];
+    if (!cfg) return;
     this.weaponIndex = index;
     this.reloading = false;
     this.cancelTrigger();
@@ -662,13 +625,14 @@ export class GameEngine {
     const rage = this.powerActive("rage") ? RAGE_MULT : 1;
 
     if (wpn.projectile) {
-      this.launchGrenade(origin, baseDir);
+      this.launchGrenade(origin, baseDir, wpn.projectile);
+      this.showWarhead();
       if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
       return true;
     }
 
     if (wpn.pierce) {
-      // Railgun: one straight beam that goes through up to `pierce` zombies, stopped by walls.
+      // Sniper: one heavy bullet that goes through up to `pierce` zombies, stopped by walls.
       const hits = new THREE.Raycaster(origin, baseDir).intersectObjects(candidates, true);
       const done = new Set<THREE.Object3D>();
       let end = origin.clone().addScaledVector(baseDir, 70);
@@ -798,14 +762,16 @@ export class GameEngine {
   }
 
   // cause: "contact" (exploder reached the player), "shot" (exploder killed), "grenade" (player's own).
-  private explode(center: THREE.Vector3, cause: "contact" | "shot" | "grenade") {
+  private explode(center: THREE.Vector3, cause: "contact" | "shot" | "grenade" | "rocket") {
+    const blast = cause === "rocket" ? PROJECTILE.rocket : cause === "grenade" ? PROJECTILE.grenade : null;
+    const radius = blast?.radius ?? EXPLOSION.radius;
     const triggeredByContact = cause === "contact";
     this.createExplosion(center);
     this.cb.playSound("explosion");
     const dPlayer = Math.hypot(this.camera.position.x - center.x, this.camera.position.z - center.z);
     this.addShake(Math.max(0.15, 0.7 - dPlayer * 0.06));
     // The player is hurt by contact explosions, and by shot exploders that were too close.
-    if (cause !== "grenade" && dPlayer < EXPLOSION.radius && !this.gameOver) {
+    if (!blast && dPlayer < EXPLOSION.radius && !this.gameOver) {
       const full = EXPLOSION.playerDamage(this.levelCfg.level) * this.levelCfg.damageMult;
       this.health -= triggeredByContact ? full : Math.round(full * (1 - dPlayer / EXPLOSION.radius));
       this.cb.onDamage();
@@ -817,8 +783,8 @@ export class GameEngine {
     // Chain reaction on nearby zombies (a copy: kills mutate the list).
     for (const z of [...this.enemies]) {
       if (z.userData.dead) continue;
-      if (z.position.distanceTo(center) < EXPLOSION.radius) {
-        const base = cause === "grenade" ? GRENADE.damage * this.mods.damageMult * (this.powerActive("rage") ? RAGE_MULT : 1) : EXPLOSION.zombieDamage;
+      if (z.position.distanceTo(center) < radius) {
+        const base = blast ? blast.damage * this.mods.damageMult * (this.powerActive("rage") ? RAGE_MULT : 1) : EXPLOSION.zombieDamage;
         z.userData.health -= base * (z.userData.boss ? 0.5 : 1);
         if (z.userData.health <= 0) this.killZombie(z, false, true);
       }
@@ -832,33 +798,45 @@ export class GameEngine {
     return p;
   }
 
-  private launchGrenade(origin: THREE.Vector3, dir: THREE.Vector3) {
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 10, 8),
-      new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 0.8 })
-    );
+  private launchGrenade(origin: THREE.Vector3, dir: THREE.Vector3, kind: "grenade" | "rocket") {
+    const P = PROJECTILE[kind];
+    let mesh: THREE.Mesh;
+    if (kind === "rocket") {
+      // Olive rocket with a bright exhaust flame, pointing where it flies.
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x4f5d2f }));
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffb13b }));
+      flame.position.z = 0.3;
+      mesh.add(flame);
+    } else {
+      mesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), new THREE.MeshStandardMaterial({ color: 0x3b4032, metalness: 0.4, roughness: 0.5 }));
+    }
     mesh.position.copy(this.muzzleWorldPosition());
-    const vel = dir.clone().multiplyScalar(GRENADE.speed);
-    vel.y += GRENADE.lift;
+    const vel = dir.clone().multiplyScalar(P.speed);
+    vel.y += P.lift;
+    if (kind === "rocket") mesh.lookAt(mesh.position.clone().sub(vel));
     this.scene.add(mesh);
-    this.grenades.push({ mesh, vel, born: Date.now() });
+    this.grenades.push({ mesh, vel, born: Date.now(), kind });
   }
 
   private updateGrenades(delta: number, time: number) {
     for (let i = this.grenades.length - 1; i >= 0; i--) {
       const g = this.grenades[i];
-      g.vel.y -= GRENADE.gravity * delta;
+      const P = PROJECTILE[g.kind];
+      g.vel.y -= P.gravity * delta;
       g.mesh.position.addScaledVector(g.vel, delta);
       const p = g.mesh.position;
-      let hit = p.y <= 0.15 || time - g.born > GRENADE.fuseMs;
+      if (g.kind === "rocket" && Math.random() < 0.6) this.createDeath(p.clone().addScaledVector(g.vel, -0.02).setY(p.y - 1), 0x9a9a9a); // smoke
+      let hit = p.y <= 0.15 || time - g.born > P.fuseMs;
       if (!hit) hit = this.enemies.some((z) => !z.userData.dead && Math.hypot(z.position.x - p.x, z.position.z - p.z) < 0.9 * z.scale.x && p.y < 2.2 * z.scale.y);
       if (!hit) hit = this.objects.some((o) => (o.userData.aabb as THREE.Box3).containsPoint(p));
       if (hit) {
         this.scene.remove(g.mesh);
-        g.mesh.geometry.dispose();
-        (g.mesh.material as THREE.Material).dispose();
+        g.mesh.traverse((o: any) => {
+          o.geometry?.dispose();
+          o.material?.dispose();
+        });
         this.grenades.splice(i, 1);
-        this.explode(new THREE.Vector3(p.x, 0, p.z), "grenade");
+        this.explode(new THREE.Vector3(p.x, 0, p.z), g.kind);
         if (this.gameOver) return;
       }
     }
@@ -868,7 +846,7 @@ export class GameEngine {
     const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
     const line = new THREE.Line(
       geo,
-      new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false })
+      new THREE.LineBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false })
     );
     this.scene.add(line);
     this.beams.push({ line, life: 1 });
@@ -1002,8 +980,7 @@ export class GameEngine {
     this.grenades = [];
     this.unlockedLevel = Math.max(opts.unlockedLevel ?? this.unlockedLevel, this.levelCfg.level);
     this.health = this.mods.maxHealth;
-    if (unlockLevelOf(this.weapon) > this.unlockedLevel) this.weaponIndex = 0;
-    this.ammoByWeapon = WEAPONS.map((_, i) => this.maxAmmoOf(i));
+    this.ammoByWeapon = this.arms.map((_, i) => this.maxAmmoOf(i));
     this.reloading = false;
     if (!opts.keepRun) {
       this.score = 0;
@@ -1077,12 +1054,7 @@ export class GameEngine {
       weaponIndex: this.weaponIndex,
       fireMode: this.fireMode,
       fireModes: this.weapon.modes,
-      weapons: WEAPONS.map((w) => ({
-        short: w.short,
-        name: w.name,
-        unlocked: unlockLevelOf(w) <= this.unlockedLevel,
-        unlockLevel: unlockLevelOf(w),
-      })),
+      weapons: this.arms.map((w) => ({ key: w.key, short: w.short })),
       sector: { index: this.sector.index, name: t(CITIES[this.sector.city].name) },
       powerups: (Object.keys(this.powerUntil) as PowerUpKind[])
         .map((kind) => ({ kind, remaining: Math.ceil(((this.powerUntil[kind] ?? 0) - Date.now()) / 1000) }))
@@ -1455,6 +1427,7 @@ export class GameEngine {
     if (this.reloading && time - this.reloadStart >= this.reloadMs) {
       this.reloading = false;
       this.ammo = this.maxAmmoOf(this.weaponIndex);
+      this.showWarhead();
       this.emitStats();
     }
 

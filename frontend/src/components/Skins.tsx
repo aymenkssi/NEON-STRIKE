@@ -1,15 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
-import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
-import { Renderer } from "expo-three";
-import * as THREE from "three";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { buildWeaponModel } from "../game/weapons";
 import { OUTFITS, WEAPON_SKINS, isExclusive, ownsSkin, type SkinState } from "../game/skins";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 import Panel from "./Panel";
+import WeaponPreview from "./WeaponPreview";
 
 type Props = {
   credits: number;
@@ -21,56 +18,8 @@ type Props = {
 };
 
 type Tab = "weapons" | "outfits";
-const PREVIEW_WEAPONS = ["rifle", "shotgun", "smg", "railgun", "minigun", "launcher"];
+const PREVIEW_WEAPONS = ["ak47", "m4", "pistol", "shotgun", "mp5", "sniper", "rpg"];
 const hex = (n: number) => "#" + n.toString(16).padStart(6, "0");
-
-// Rotating 3D view of a weapon held in the gloved hand, with the previewed skin and outfit.
-function SkinPreview({ weaponSkin, outfit, weapon }: { weaponSkin: string; outfit: string; weapon: string }) {
-  const holder = useRef<THREE.Group | null>(null);
-  const raf = useRef<any>(null);
-  const current = useRef({ weaponSkin, outfit, weapon });
-  current.current = { weaponSkin, outfit, weapon };
-
-  const show = () => {
-    const h = holder.current;
-    if (!h) return;
-    h.clear();
-    const { weaponSkin: s, outfit: o, weapon: w } = current.current;
-    const model = buildWeaponModel(w, s, o);
-    model.position.set(0, 0.06, 0.24); // turn around the middle of the weapon
-    h.add(model);
-  };
-  useEffect(show, [weaponSkin, outfit, weapon]);
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
-
-  const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
-    const { drawingBufferWidth: w, drawingBufferHeight: h } = gl;
-    const renderer = new Renderer({ gl });
-    renderer.setSize(w, h);
-    renderer.setClearColor(0x14171d, 1);
-    const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.3));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-    sun.position.set(2, 3, 2);
-    scene.add(sun);
-    const camera = new THREE.PerspectiveCamera(32, w / h, 0.05, 20);
-    camera.position.set(0, 0.22, 1.55);
-    camera.lookAt(0, -0.03, 0);
-    const g = new THREE.Group();
-    scene.add(g);
-    holder.current = g;
-    show();
-    const loop = () => {
-      raf.current = requestAnimationFrame(loop);
-      g.rotation.y += 0.012;
-      renderer.render(scene, camera);
-      gl.endFrameEXP();
-    };
-    loop();
-  };
-
-  return <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />;
-}
 
 export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onClose }: Props) {
   const t = useT();
@@ -113,7 +62,7 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
       <View style={styles.body}>
         <View style={styles.left}>
           <Pressable style={styles.preview} onPress={() => setWeapon((w) => (w + 1) % PREVIEW_WEAPONS.length)} testID="skin-preview">
-            <SkinPreview
+            <WeaponPreview
               weapon={PREVIEW_WEAPONS[weapon]}
               weaponSkin={isWeaponSkin ? item.id : skins.weapon}
               outfit={isWeaponSkin ? skins.outfit : item.id}
