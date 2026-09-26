@@ -5,8 +5,8 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } fro
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { showRewarded } from "../ads";
-import { MAX_LEVEL, WEAPON_UNLOCK_LEVEL, levelReward, type LevelResult } from "../game/progression";
-import { useT, type Key } from "@/src/i18n";
+import { DIFFICULTY, MAX_LEVEL, WEAPON_UNLOCK_LEVEL, levelReward, type LevelResult } from "../game/progression";
+import { formatNumber, useT, type Key } from "@/src/i18n";
 
 type Props = {
   result: LevelResult;
@@ -75,11 +75,22 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
             <RewardRow label={t("complete.combat")} value={reward.combat} />
             <RewardRow label={t("complete.levelBonus")} value={reward.bonus} />
             <RewardRow label={t("complete.starBonus")} value={reward.starBonus} />
+            {result.difficulty && result.difficulty !== "normal" && (
+              <Text style={[styles.diffNote, { color: DIFFICULTY[result.difficulty].color }]} testID="complete-difficulty">
+                {t("complete.difficulty", { name: t(`difficulty.${result.difficulty}`), m: formatNumber(reward.mult) })}
+              </Text>
+            )}
             <View style={styles.divider} />
             <RewardRow label={doubled ? t("complete.totalX2") : t("complete.total")} value={doubled ? reward.total * 2 : reward.total} strong />
           </View>
         </View>
 
+        {result.difficulty === "nightmare" && (
+          <View style={styles.unlockNote} testID="complete-skull">
+            <MaterialCommunityIcons name="skull" size={16} color={colors.error} />
+            <Text style={[styles.unlockText, { color: colors.error }]}>{t("complete.skull")}</Text>
+          </View>
+        )}
         {newWeapon && (
           <View style={styles.unlockNote}>
             <MaterialCommunityIcons name="pistol" size={16} color={colors.brandSecondary} />
@@ -164,6 +175,7 @@ const styles = StyleSheet.create({
   rewardValue: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 16, fontVariant: ["tabular-nums"] },
   rewardStrong: { color: colors.warning, fontSize: 20 },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: 2 },
+  diffNote: { fontFamily: fonts.displaySemi, fontSize: 12, letterSpacing: 0.5, textAlign: "right", marginTop: 2 },
   unlockNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm },
   unlockText: { color: colors.brandSecondary, fontFamily: fonts.displaySemi, fontSize: 14, letterSpacing: 0.5 },
   actions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md, flexWrap: "wrap", justifyContent: "center" },

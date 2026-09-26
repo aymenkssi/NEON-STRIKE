@@ -11,6 +11,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts } from "../theme";
 import type { GameStats } from "../game/GameEngine";
 import { POWERUPS } from "../game/content";
+import { DIFFICULTY } from "../game/progression";
 import { formatNumber, useT } from "@/src/i18n";
 
 const POWERUP_ICONS = { rage: "fire", haste: "run-fast", infinite: "infinity" } as const;
@@ -69,7 +70,13 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       {/* Top-left: health + wave */}
       <View style={[styles.topLeft, { left: padL, top: padT }]} pointerEvents="none">
         <View style={styles.waveRow}>
-          <MaterialCommunityIcons name="skull" size={16} color={colors.brand} />
+          {/* Easy / Nightmare: the difficulty's icon and colour instead of the plain skull. */}
+          <MaterialCommunityIcons
+            name={stats.difficulty === "normal" ? "skull" : (DIFFICULTY[stats.difficulty].icon as any)}
+            size={16}
+            color={stats.difficulty === "normal" ? colors.brand : DIFFICULTY[stats.difficulty].color}
+            testID={`hud-difficulty-${stats.difficulty}`}
+          />
           <Text style={styles.waveText}>
             {t("hud.levelWave", { n: stats.level, w: stats.wave, max: stats.totalWaves })}
           </Text>

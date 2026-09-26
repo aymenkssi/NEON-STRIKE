@@ -1,15 +1,18 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { MAX_LEVEL, WEAPON_UNLOCK_LEVEL } from "../game/progression";
+import { DIFFICULTIES, DIFFICULTY, MAX_LEVEL, WEAPON_UNLOCK_LEVEL, type Difficulty } from "../game/progression";
 import Panel from "./Panel";
 import { useT } from "@/src/i18n";
 
 type Props = {
   unlockedLevel: number;
   stars: Record<string, number>;
+  nightmare: Record<string, boolean>;
+  difficulty: Difficulty;
+  onDifficulty: (d: Difficulty) => void;
   credits: number;
   onSelect: (level: number) => void;
   onClose: () => void;
@@ -17,8 +20,10 @@ type Props = {
 
 const WEAPON_AT = Object.fromEntries(Object.entries(WEAPON_UNLOCK_LEVEL).map(([k, v]) => [v, k]));
 
-export default function LevelSelect({ unlockedLevel, stars, credits, onSelect, onClose }: Props) {
+export default function LevelSelect({ unlockedLevel, stars, nightmare, difficulty, onDifficulty, credits, onSelect, onClose }: Props) {
   const totalStars = Object.values(stars).reduce((a, b) => a + b, 0);
+  const skulls = Object.values(nightmare).filter(Boolean).length;
+  const diff = DIFFICULTY[difficulty];
   const t = useT();
   const levels = Array.from({ length: MAX_LEVEL }, (_, i) => i + 1);
 
@@ -29,6 +34,30 @@ export default function LevelSelect({ unlockedLevel, stars, credits, onSelect, o
 
   return (
     <Panel title={t("levels.title")} icon="map-marker-path" credits={credits} onClose={onClose} testID="level-select">
+      <View style={styles.diffRow} testID="difficulty">
+        <Text style={styles.diffLabel}>{t("levels.difficulty")}</Text>
+        {DIFFICULTIES.map((d) => {
+          const on = d === difficulty;
+          const c = DIFFICULTY[d].color;
+          return (
+            <Pressable
+              key={d}
+              testID={`difficulty-${d}`}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                onDifficulty(d);
+              }}
+              style={[styles.diffBtn, { borderColor: on ? c : colors.border }, on && { backgroundColor: c + "22" }]}
+            >
+              <MaterialCommunityIcons name={DIFFICULTY[d].icon as any} size={16} color={on ? c : colors.onSurfaceTertiary} />
+              <Text style={[styles.diffText, { color: on ? c : colors.onSurfaceSecondary }]}>{t(`difficulty.${d}`)}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={[styles.diffDesc, { color: diff.color }]} testID="difficulty-desc">
+        {t(`difficulty.${difficulty}.desc`)}
+      </Text>
       <View style={styles.summary}>
         <Text style={styles.summaryText}>
           {t("levels.unlocked", { n: unlockedLevel, max: MAX_LEVEL })}
@@ -38,6 +67,12 @@ export default function LevelSelect({ unlockedLevel, stars, credits, onSelect, o
           <Text style={styles.summaryText}>
             {totalStars}/{MAX_LEVEL * 3}
           </Text>
+          {skulls > 0 && (
+            <>
+              <MaterialCommunityIcons name="skull" size={15} color={colors.error} style={{ marginLeft: 8 }} />
+              <Text style={styles.summaryText}>{t("levels.skulls", { n: skulls })}</Text>
+            </>
+          )}
         </View>
       </View>
       <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
@@ -68,6 +103,7 @@ export default function LevelSelect({ unlockedLevel, stars, credits, onSelect, o
                   />
                 ))}
               </View>
+              {nightmare[lvl] && <MaterialCommunityIcons name="skull" size={12} color={colors.error} style={styles.skullMark} />}
               {WEAPON_AT[lvl] && lvl > 1 && (
                 <MaterialCommunityIcons name="pistol" size={12} color={colors.brandSecondary} style={styles.weaponMark} />
               )}
@@ -100,4 +136,18 @@ const styles = StyleSheet.create({
   num: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 22, lineHeight: 24 },
   tileStars: { flexDirection: "row", gap: 1 },
   weaponMark: { position: "absolute", top: 4, right: 4 },
+  skullMark: { position: "absolute", top: 4, left: 4 },
+  diffRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  diffLabel: { color: colors.onSurfaceSecondary, fontFamily: fonts.displaySemi, fontSize: 13, letterSpacing: 1, marginRight: 2 },
+  diffBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+  },
+  diffText: { fontFamily: fonts.display, fontSize: 13, letterSpacing: 1 },
+  diffDesc: { fontFamily: fonts.textMed, fontSize: 12, marginTop: 6, marginBottom: spacing.sm },
 });

@@ -18,6 +18,7 @@ export const colors = {
   borderStrong: "#39FF14",
   divider: "#1F242C",
   overlay: "rgba(5,7,10,0.82)",
+  skins: "#FF5CD6", // cosmetics (skins button and panel)
 };
 
 export const spacing = {

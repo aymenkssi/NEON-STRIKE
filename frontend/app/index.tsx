@@ -5,6 +5,7 @@ import MainMenu from "@/src/components/MainMenu";
 import GameScreen from "@/src/components/GameScreen";
 import { useProgress } from "@/src/hooks/use-progress";
 import { useAccount } from "@/src/hooks/use-account";
+import { useGameSettings } from "@/src/hooks/use-game-settings";
 import { logoutAccount } from "@/src/api/account";
 import Welcome from "@/src/components/Welcome";
 import type { AuthMode } from "@/src/components/AuthForm";
@@ -32,6 +33,7 @@ export default function Index() {
   const [musicVolume, setMusicVolume] = useState(0.5);
   const [level, setLevel] = useState(1);
   const { account, loaded: accountLoaded, playAsGuest, signedIn, signedOut } = useAccount();
+  const { settings: gameSettings, loaded: settingsLoaded, update: updateGameSettings } = useGameSettings();
   const isGuest = account.mode !== "account";
   const t = useT();
   const {
@@ -47,6 +49,8 @@ export default function Index() {
     recordSession,
     claimMission,
     claimAchievement,
+    buySkin,
+    equipSkin,
   } = useProgress(account.mode === "account");
 
   useEffect(() => {
@@ -133,7 +137,7 @@ export default function Index() {
     setScreen("game");
   };
 
-  if (!ready || !loaded || !accountLoaded) return <View style={styles.root} />;
+  if (!ready || !loaded || !accountLoaded || !settingsLoaded) return <View style={styles.root} />;
 
   if (account.mode === "unset") {
     return (
@@ -172,6 +176,10 @@ export default function Index() {
           onClaimAchievement={claimAchievement}
           onPlay={startGame}
           messages={messages}
+          gameSettings={gameSettings}
+          onGameSettings={updateGameSettings}
+          onBuySkin={buySkin}
+          onEquipSkin={equipSkin}
         />
       ) : (
         <GameScreen
@@ -182,6 +190,14 @@ export default function Index() {
           startLevel={level}
           unlockedLevel={progress.unlockedLevel}
           modifiers={modifiersFrom(progress.upgrades)}
+          difficulty={gameSettings.difficulty}
+          options={{
+            aimAssist: gameSettings.aimAssist,
+            invertY: gameSettings.invertY,
+            quality: gameSettings.quality,
+            weaponSkin: progress.skins.weapon,
+            outfit: progress.skins.outfit,
+          }}
           onLevelDone={completeLevel}
           onAddCredits={addCredits}
           onSession={recordSession}

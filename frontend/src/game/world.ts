@@ -497,9 +497,8 @@ function stars(r: Rnd) {
 }
 
 // Weather around the player: rain (London), sand dust (Cairo), petals (Tokyo), leaves (Paris).
-function weather(city: CityDef, camera: THREE.Camera) {
-  if (city.weather === "none") return null;
-  const N = 380;
+function weather(city: CityDef, camera: THREE.Camera, N: number) {
+  if (city.weather === "none" || N <= 0) return null;
   const B = { x: 60, y: 24, z: 60 };
   const positions = new Float32Array(N * 3);
   for (let i = 0; i < N; i++) positions.set([(Math.random() * 2 - 1) * B.x, Math.random() * B.y, (Math.random() * 2 - 1) * B.z], i * 3);
@@ -535,7 +534,16 @@ function weather(city: CityDef, camera: THREE.Camera) {
 }
 
 // ---------------------------------------------------------------- city
-export function buildWorld(level: number, camera: THREE.Camera): World {
+// Graphics quality: "low" draws a lighter skyline, no clouds and less weather (older phones).
+export type WorldQuality = "low" | "normal" | "high";
+const DETAIL: Record<WorldQuality, { skyline: number; clouds: boolean; weather: number }> = {
+  low: { skyline: 25, clouds: false, weather: 120 },
+  normal: { skyline: 70, clouds: true, weather: 380 },
+  high: { skyline: 110, clouds: true, weather: 650 },
+};
+
+export function buildWorld(level: number, camera: THREE.Camera, quality: WorldQuality = "normal"): World {
+  const detail = DETAIL[quality];
   const city = cityOfLevel(level);
   const time = timeOfLevel(level);
   const lighting = LIGHTING[time];
@@ -624,7 +632,7 @@ export function buildWorld(level: number, camera: THREE.Camera): World {
   }
 
   // Background skyline beyond the rows (no collisions: out of reach).
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < detail.skyline; i++) {
     const a = r() * Math.PI * 2;
     const d = between(r, 95, 190);
     const x = Math.cos(a) * d;
@@ -712,10 +720,10 @@ export function buildWorld(level: number, camera: THREE.Camera): World {
   colliders.forEach((c) => group.add(c));
   const skyMesh = sky(lighting);
   group.add(skyMesh, sunDisc(lighting));
-  const cloudMesh = clouds(r, lighting);
-  group.add(cloudMesh);
+  const cloudMesh = detail.clouds ? clouds(r, lighting) : null;
+  if (cloudMesh) group.add(cloudMesh);
   if (night) group.add(stars(r));
-  const w = weather(city, camera);
+  const w = weather(city, camera, detail.weather);
   if (w) group.add(w.points);
 
   return {
@@ -726,7 +734,7 @@ export function buildWorld(level: number, camera: THREE.Camera): World {
     city,
     time,
     update(delta, t) {
-      cloudMesh.rotation.y += delta * 0.004;
+      if (cloudMesh) cloudMesh.rotation.y += delta * 0.004;
       w?.update(delta, t);
     },
   };

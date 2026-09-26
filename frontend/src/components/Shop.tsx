@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Image } from "react-native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { getPacks, onPacksChange } from "../iap/catalog";
 import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange, retryUnfinishedPurchases } from "../iap";

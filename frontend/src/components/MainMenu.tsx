@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import AdBanner from "../ads/AdBanner";
 import Leaderboard from "./Leaderboard";
@@ -15,6 +15,7 @@ import Arsenal from "./Arsenal";
 import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
+import Skins from "./Skins";
 import PlayerMessage from "./PlayerMessage";
 import Goals, { claimableGoals } from "./Goals";
 import { useMessageQueue } from "../hooks/use-message-queue";
@@ -22,6 +23,7 @@ import type { RemoteMessage } from "../api/config";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
 import type { CloudStatus, Progress } from "../hooks/use-progress";
 import type { AccountState } from "../hooks/use-account";
+import type { GameSettings } from "../hooks/use-game-settings";
 import type { AuthMode } from "./AuthForm";
 import { useT } from "@/src/i18n";
 
@@ -47,6 +49,10 @@ type Props = {
   onClaimAchievement: (id: string) => number;
   onPlay: (level: number) => void;
   messages: RemoteMessage[];
+  gameSettings: GameSettings;
+  onGameSettings: (patch: Partial<GameSettings>) => void;
+  onBuySkin: (id: string) => boolean;
+  onEquipSkin: (id: string) => void;
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -65,6 +71,7 @@ export default function MainMenu(props: Props) {
   const [showArsenal, setShowArsenal] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
+  const [showSkins, setShowSkins] = useState(false);
   const { progress } = props;
   const dailyReady = dailyStatus(progress.dailyLast, progress.dailyStreak).canClaim;
   const [showDaily, setShowDaily] = useState(() => {
@@ -75,7 +82,7 @@ export default function MainMenu(props: Props) {
 
   const { next: message, dismiss } = useMessageQueue(props.messages);
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
-  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals;
+  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins;
   const goalsReady = claimableGoals(progress);
 
   const play = () => {
@@ -113,6 +120,10 @@ export default function MainMenu(props: Props) {
         <Pressable testID="open-arsenal" style={[styles.topBtn, styles.arsenalBtn]} onPress={() => setShowArsenal(true)}>
           <MaterialCommunityIcons name="store" size={18} color={colors.brandSecondary} />
           <Text style={styles.arsenalText}>{t("menu.arsenal")}</Text>
+        </Pressable>
+        <Pressable testID="open-skins" style={[styles.topBtn, styles.skinsBtn]} onPress={() => setShowSkins(true)}>
+          <MaterialCommunityIcons name="tshirt-crew" size={18} color={colors.skins} />
+          <Text style={styles.skinsText}>{t("menu.skins")}</Text>
         </Pressable>
       </View>
 
@@ -165,6 +176,9 @@ export default function MainMenu(props: Props) {
         <LevelSelect
           unlockedLevel={progress.unlockedLevel}
           stars={progress.stars}
+          nightmare={progress.nightmare}
+          difficulty={props.gameSettings.difficulty}
+          onDifficulty={(difficulty) => props.onGameSettings({ difficulty })}
           credits={progress.credits}
           onSelect={(lvl) => {
             setShowLevels(false);
@@ -180,6 +194,16 @@ export default function MainMenu(props: Props) {
           onBuy={props.onBuyUpgrade}
           onOpenShop={() => setShowShop(true)}
           onClose={() => setShowArsenal(false)}
+        />
+      )}
+      {showSkins && (
+        <Skins
+          credits={progress.credits}
+          skins={progress.skins}
+          onBuy={props.onBuySkin}
+          onEquip={props.onEquipSkin}
+          onOpenShop={() => setShowShop(true)}
+          onClose={() => setShowSkins(false)}
         />
       )}
       {showShop && <Shop credits={progress.credits} onClose={() => setShowShop(false)} />}
@@ -219,6 +243,8 @@ export default function MainMenu(props: Props) {
           onSignedIn={props.onSignedIn}
           onLogout={props.onLogout}
           onDeleted={props.onDeleted}
+          gameSettings={props.gameSettings}
+          onGameSettings={props.onGameSettings}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -302,6 +328,8 @@ const styles = StyleSheet.create({
   countText: { color: "#fff", fontFamily: fonts.display, fontSize: 11 },
   arsenalBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(0,255,255,0.45)" },
   arsenalText: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
+  skinsBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(255,92,214,0.5)" },
+  skinsText: { color: colors.skins, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
   dot: { position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },
   iconBtn: {
     width: 50,
