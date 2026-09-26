@@ -232,6 +232,7 @@ async def verify_purchase(payload: PurchaseVerify, player: dict = Depends(curren
 
 app.include_router(api)
 app.include_router(accounts.router)
+app.include_router(accounts.admin)
 app.include_router(stats.public)
 app.include_router(stats.admin)
 app.include_router(suggestions.public)

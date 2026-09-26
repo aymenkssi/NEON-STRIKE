@@ -1,12 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Image } from "react-native";
 import * as Haptics from "expo-haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { getPacks, onPacksChange } from "../iap/catalog";
 import { buyPack, getLocalizedPrice, getStoreStatus, onStoreChange, retryUnfinishedPurchases } from "../iap";
 import Panel from "./Panel";
 import { formatNumber, useLang, useT } from "@/src/i18n";
+
+// Pack artwork grows with the amount (coin, stacks, pile, chest), so packs added later from the
+// admin page get a matching picture without a new app version.
+const PACK_ART = [
+  { min: 6000, src: require("../../assets/images/packs/coins_8000.png") },
+  { min: 2500, src: require("../../assets/images/packs/coins_3500.png") },
+  { min: 800, src: require("../../assets/images/packs/coins_1200.png") },
+  { min: 0, src: require("../../assets/images/packs/coins_500.png") },
+];
+const packArt = (credits: number) => (PACK_ART.find((a) => credits >= a.min) ?? PACK_ART[PACK_ART.length - 1]).src;
 
 type Props = {
   credits: number;
@@ -61,7 +70,7 @@ export default function Shop({ credits, onClose }: Props) {
               ) : (
                 <View style={styles.tagSpacer} />
               )}
-              <MaterialCommunityIcons name="circle-multiple" size={34} color={colors.warning} />
+              <Image source={packArt(pack.credits)} style={styles.art} resizeMode="contain" />
               <Text style={styles.amount}>{formatNumber(pack.credits)}</Text>
               <Text style={styles.unit}>{t("shop.credits")}</Text>
               <Text style={styles.bonus}>{pack.bonus ? t("shop.bonus", { b: pack.bonus }) : " "}</Text>
@@ -138,6 +147,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   tagSpacer: { height: 25 },
+  art: { width: 72, height: 72, marginVertical: -4 },
   amount: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 26, lineHeight: 28, fontVariant: ["tabular-nums"] },
   unit: { color: colors.onSurfaceSecondary, fontFamily: fonts.displaySemi, fontSize: 11, letterSpacing: 2 },
   bonus: { color: colors.brand, fontFamily: fonts.displaySemi, fontSize: 13, minHeight: 18 },

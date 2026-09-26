@@ -1,0 +1,87 @@
+<!doctype html><html><body style="margin:0;background:transparent">
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"></svg>
+<script>
+const OUT = "#4a2600";
+const defs = `
+<defs>
+ <radialGradient id="face" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff3a0"/><stop offset=".45" stop-color="#ffd23a"/><stop offset="1" stop-color="#f09a12"/></radialGradient>
+ <linearGradient id="side" x1="0" x2="1"><stop offset="0" stop-color="#c46a00"/><stop offset=".3" stop-color="#f0a21a"/><stop offset=".7" stop-color="#d9800a"/><stop offset="1" stop-color="#9a4e00"/></linearGradient>
+ <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8672e"/><stop offset="1" stop-color="#7a3d17"/></linearGradient>
+ <linearGradient id="band" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa6b8"/><stop offset="1" stop-color="#5b6576"/></linearGradient>
+ <radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff6b0" stop-opacity=".85"/><stop offset=".55" stop-color="#ffc83a" stop-opacity=".35"/><stop offset="1" stop-color="#ffb000" stop-opacity="0"/></radialGradient>
+ <linearGradient id="gemB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9fe8ff"/><stop offset="1" stop-color="#1c7fe0"/></linearGradient>
+ <linearGradient id="gemP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f0b8ff"/><stop offset="1" stop-color="#9a32e0"/></linearGradient>
+ <linearGradient id="gemG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c8ffb0"/><stop offset="1" stop-color="#34b52a"/></linearGradient>
+</defs>`;
+function star(cx, cy, R, ry = 1) {
+  let p = [];
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? R * .45 : R; p.push(`${cx + Math.cos(a) * r},${cy + Math.sin(a) * r * ry}`); }
+  return p.join(" ");
+}
+// Front-facing coin, slightly tilted (ry < 1 squashes it), with a thickness edge below.
+function coin(cx, cy, r, ry = 0.92, rot = 0) {
+  const t = r * 0.16, ryr = r * ry;
+  return `<g transform="rotate(${rot} ${cx} ${cy})">
+   <ellipse cx="${cx}" cy="${cy + t}" rx="${r}" ry="${ryr}" fill="url(#side)" stroke="${OUT}" stroke-width="${r*.09}"/>
+   <rect x="${cx - r}" y="${cy}" width="${2*r}" height="${t}" fill="url(#side)"/>
+   <ellipse cx="${cx}" cy="${cy}" rx="${r}" ry="${ryr}" fill="url(#face)" stroke="${OUT}" stroke-width="${r*.09}"/>
+   <ellipse cx="${cx}" cy="${cy}" rx="${r*.74}" ry="${ryr*.74}" fill="none" stroke="#e08a0a" stroke-width="${r*.07}"/>
+   <polygon points="${star(cx, cy + r*.02, r*.46, ry)}" fill="#fff0a0" stroke="#d27a00" stroke-width="${r*.06}" stroke-linejoin="round"/>
+   <path d="M ${cx - r*.62} ${cy - ryr*.35} A ${r*.7} ${ryr*.7} 0 0 1 ${cx - r*.1} ${cy - ryr*.72}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="${r*.1}" stroke-linecap="round"/>
+  </g>`;
+}
+// Flat coin seen from the side (for stacks): top ellipse + band.
+function flat(cx, cy, r, ry = .32) {
+  const h = r * .26;
+  return `<path d="M ${cx-r} ${cy} v ${h} a ${r} ${r*ry} 0 0 0 ${2*r} 0 v ${-h}" fill="url(#side)" stroke="${OUT}" stroke-width="${r*.08}" stroke-linejoin="round"/>
+   <path d="M ${cx-r*.8} ${cy+h*.35} v ${h*.4} M ${cx-r*.4} ${cy+h*.55} v ${h*.5} M ${cx} ${cy+h*.6} v ${h*.5} M ${cx+r*.4} ${cy+h*.55} v ${h*.5} M ${cx+r*.8} ${cy+h*.35} v ${h*.4}" stroke="#8a4400" stroke-width="${r*.05}" stroke-linecap="round"/>
+   <ellipse cx="${cx}" cy="${cy}" rx="${r}" ry="${r*ry}" fill="url(#face)" stroke="${OUT}" stroke-width="${r*.08}"/>
+   <ellipse cx="${cx}" cy="${cy}" rx="${r*.7}" ry="${r*ry*.7}" fill="none" stroke="#e08a0a" stroke-width="${r*.06}"/>`;
+}
+function stack(cx, baseY, r, n) {
+  let s = ""; const step = r * .26;
+  for (let i = 0; i < n; i++) s += flat(cx, baseY - i * step, r);
+  return s;
+}
+function sparkle(x, y, s) {
+  return `<path d="M ${x} ${y-s} Q ${x} ${y} ${x+s} ${y} Q ${x} ${y} ${x} ${y+s} Q ${x} ${y} ${x-s} ${y} Q ${x} ${y} ${x} ${y-s} Z" fill="#fff" stroke="#ffd23a" stroke-width="${s*.12}"/>`;
+}
+function gem(x, y, s, fill) {
+  return `<polygon points="${x},${y-s} ${x+s*.9},${y-s*.2} ${x},${y+s} ${x-s*.9},${y-s*.2}" fill="url(#${fill})" stroke="${OUT}" stroke-width="${s*.14}" stroke-linejoin="round"/>
+   <polyline points="${x-s*.9},${y-s*.2} ${x},${y} ${x+s*.9},${y-s*.2}" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="${s*.1}"/>`;
+}
+function shadow(cx, cy, rx) { return `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${rx*.16}" fill="#000" opacity=".22"/>`; }
+const glow = (r) => `<circle cx="256" cy="250" r="${r}" fill="url(#glow)"/>`;
+
+const T = {
+  coins_500: () => glow(200) + shadow(256, 440, 150) + coin(256, 250, 170, .95, -8) + sparkle(400, 110, 34) + sparkle(110, 380, 22),
+  coins_1200: () => glow(220) + shadow(256, 450, 200) + stack(190, 400, 105, 6) + coin(330, 290, 120, .93, 10) + sparkle(420, 110, 30) + sparkle(100, 160, 22),
+  coins_3500: () => glow(235) + shadow(256, 456, 225) +
+    stack(140, 420, 88, 5) + stack(350, 420, 88, 8) + stack(245, 440, 92, 3) +
+    coin(250, 250, 110, .93, -6) + coin(120, 300, 70, .9, -18) + sparkle(430, 100, 32) + sparkle(80, 130, 24) + sparkle(420, 330, 18),
+  coins_8000: () => glow(245) + shadow(256, 462, 230) + chest() + sparkle(450, 90, 34) + sparkle(70, 120, 26) + sparkle(460, 300, 20),
+};
+function chest() {
+  const x = 96, w = 320, y = 270, h = 170;
+  let s = "";
+  // lid (open, behind)
+  s += `<path d="M ${x+10} ${y-10} L ${x+30} ${y-120} Q ${x+w/2} ${y-175} ${x+w-30} ${y-120} L ${x+w-10} ${y-10} Z" fill="url(#wood)" stroke="${OUT}" stroke-width="12" stroke-linejoin="round"/>`;
+  s += `<path d="M ${x+48} ${y-40} L ${x+60} ${y-110} Q ${x+w/2} ${y-150} ${x+w-60} ${y-110} L ${x+w-48} ${y-40} Z" fill="#3a1a08" opacity=".55"/>`;
+  // coins heap inside
+  s += `<path d="M ${x+12} ${y+8} Q ${x+60} ${y-80} ${x+w/2} ${y-95} Q ${x+w-60} ${y-80} ${x+w-12} ${y+8} Z" fill="url(#face)" stroke="${OUT}" stroke-width="10" stroke-linejoin="round"/>`;
+  for (const [cx, cy, r, rot] of [[150,235,40,-15],[215,205,44,8],[290,208,42,-6],[355,240,38,14],[250,160,46,4],[180,170,34,-20],[330,172,34,18]]) s += coin(cx, cy, r, .9, rot);
+  s += gem(200, 120, 26, "gemB") + gem(305, 118, 24, "gemP") + gem(372, 200, 20, "gemG") + gem(138, 200, 18, "gemP");
+  // box
+  s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="18" fill="url(#wood)" stroke="${OUT}" stroke-width="12"/>`;
+  s += `<path d="M ${x+10} ${y+58} H ${x+w-10} M ${x+10} ${y+112} H ${x+w-10}" stroke="#5c2c0e" stroke-width="7" stroke-linecap="round" opacity=".7"/>`;
+  s += `<rect x="${x+22}" y="${y}" width="34" height="${h}" fill="url(#band)" stroke="${OUT}" stroke-width="8"/>`;
+  s += `<rect x="${x+w-56}" y="${y}" width="34" height="${h}" fill="url(#band)" stroke="${OUT}" stroke-width="8"/>`;
+  s += `<rect x="${x-6}" y="${y-6}" width="${w+12}" height="30" rx="10" fill="url(#band)" stroke="${OUT}" stroke-width="10"/>`;
+  s += `<rect x="${x+w/2-30}" y="${y+18}" width="60" height="70" rx="12" fill="url(#face)" stroke="${OUT}" stroke-width="9"/>`;
+  s += `<circle cx="${x+w/2}" cy="${y+46}" r="9" fill="${OUT}"/><rect x="${x+w/2-4}" y="${y+48}" width="8" height="22" fill="${OUT}"/>`;
+  // spilled coins in front
+  s += coin(88, 420, 42, .85, -20) + coin(430, 412, 46, .85, 16) + flat(160, 455, 36) + flat(365, 460, 32);
+  return s;
+}
+window.draw = (k) => { document.getElementById("s").innerHTML = defs + T[k](); };
+</script></body></html>

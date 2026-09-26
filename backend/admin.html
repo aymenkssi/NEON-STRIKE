@@ -14,7 +14,7 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 0 16px; }
-  main { max-width: 1040px; margin: 0 auto; padding: 28px 0 64px; }
+  main { max-width: 1240px; margin: 0 auto; padding: 28px 0 64px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: 22px; letter-spacing: .06em; margin: 0; }
   h1 span { color: var(--green); }
@@ -55,7 +55,7 @@
   .kind-promo { border-left: 4px solid var(--amber); }
   .kind-warning { border-left: 4px solid var(--red); }
   #login { max-width: 420px; margin: 12vh auto 0; }
-  nav.tabs { display: flex; gap: 8px; margin-top: 20px; border-bottom: 1px solid var(--line); }
+  nav.tabs { display: flex; gap: 8px; margin-top: 20px; border-bottom: 1px solid var(--line); overflow-x: auto; }
   nav.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 4px; margin-right: 12px; }
   nav.tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--green); }
   .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -77,6 +77,9 @@
   table.compact { min-width: 560px; }
   .muted { color: var(--muted); }
   .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  #pl-table { min-width: 1000px; font-size: 14px; }
+  #pl-table td, #pl-table th { white-space: nowrap; padding: 7px 8px; }
+  #pl-table button { padding: 4px 10px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -99,6 +102,7 @@
     </header>
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="stats" aria-selected="true">Statistiques</button>
+      <button type="button" role="tab" data-tab="players" aria-selected="false">Joueurs</button>
       <button type="button" role="tab" data-tab="liveops" aria-selected="false">Packs et messages</button>
       <button type="button" role="tab" data-tab="suggestions" aria-selected="false">Suggestions <span id="sugg-badge" class="pill live" hidden></span></button>
     </nav>
@@ -129,6 +133,24 @@
       <h2>Langue, version et plateforme</h2>
       <div class="charts" id="shares"></div>
       <p class="hint" style="margin-top:18px">Pays : base <a href="https://db-ip.com" style="color:var(--cyan)">IP Geolocation by DB-IP</a> (CC BY 4.0) quand elle est installée, sinon la région du téléphone.</p>
+    </div>
+
+    <div id="tab-players" hidden>
+      <h2>Joueurs</h2>
+      <p class="hint">Tous les joueurs connus du serveur. Un <strong>invité</strong> apparaît dès qu'il utilise une fonction en ligne (achat…) ; ses crédits et niveaux restent sur son téléphone. Recherche par nom d'utilisateur ou début d'identifiant.</p>
+      <div class="row" style="margin-bottom:12px">
+        <label for="pl-q">Rechercher<input id="pl-q" type="search" placeholder="Nom ou identifiant" autocomplete="off"></label>
+        <label for="pl-kind" style="flex:0 0 190px">Type<select id="pl-kind"><option value="all">Tous</option><option value="account">Comptes</option><option value="guest">Invités</option></select></label>
+        <label for="pl-sort" style="flex:0 0 210px">Trier par<select id="pl-sort"><option value="last_seen">Dernière visite</option><option value="created">Arrivée la plus récente</option><option value="sessions">Nombre de sessions</option><option value="name">Nom (A → Z)</option></select></label>
+      </div>
+      <div class="kpis" id="pl-kpis" style="margin-bottom:12px"></div>
+      <section class="panel"><div class="table-wrap"><table id="pl-table"></table></div>
+        <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px">
+          <span class="muted" id="pl-info"></span>
+          <div class="row"><button type="button" id="pl-prev">← Précédent</button><button type="button" id="pl-next">Suivant →</button></div>
+        </div>
+      </section>
+      <div id="pl-status" class="status"></div>
     </div>
 
     <div id="tab-suggestions" hidden>
@@ -393,8 +415,9 @@
   // ---------------- Statistiques ----------------
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("nav.tabs button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
-    ["stats", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    ["stats", "players", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
     if (b.dataset.tab === "suggestions") loadSuggestions();
+    if (b.dataset.tab === "players") loadPlayers();
   }));
   $("stats-refresh").addEventListener("click", () => loadStats());
   $("stats-days").addEventListener("change", () => loadStats());
@@ -544,6 +567,53 @@
       card.append(meta, body, actions);
       box.append(card);
     }
+  }
+
+  // ---------------- Joueurs ----------------
+  let plPage = 1, plTimer = null;
+  const when = (iso) => iso ? new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+  const num = (v) => v == null ? "—" : nf.format(v);
+  $("pl-q").addEventListener("input", () => { clearTimeout(plTimer); plTimer = setTimeout(() => { plPage = 1; loadPlayers(); }, 300); });
+  $("pl-kind").addEventListener("change", () => { plPage = 1; loadPlayers(); });
+  $("pl-sort").addEventListener("change", () => { plPage = 1; loadPlayers(); });
+  $("pl-prev").addEventListener("click", () => { if (plPage > 1) { plPage--; loadPlayers(); } });
+  $("pl-next").addEventListener("click", () => { plPage++; loadPlayers(); });
+
+  async function loadPlayers() {
+    const qs = new URLSearchParams({ q: $("pl-q").value.trim(), kind: $("pl-kind").value, sort: $("pl-sort").value, page: plPage });
+    let r;
+    try { r = await api("GET", "/players?" + qs); } catch (err) { say($("pl-status"), err.message, false); return; }
+    if (plPage > r.pages) { plPage = r.pages; return loadPlayers(); }
+    kpis($("pl-kpis"), [["Joueurs", nf.format(r.counts.all)], ["Comptes", nf.format(r.counts.account)], ["Invités", nf.format(r.counts.guest)]]);
+    const heads = [["Joueur"], ["Pays"], ["Appareil"], ["Arrivé le"], ["Dernière visite"], ["Sessions", 1], ["Meilleur score", 1], ["Niveau", 1], ["Crédits", 1], ["Achats", 1], ["Dépensé", 1], [""]];
+    const head = el("tr"); heads.forEach(([h, n]) => head.append(el("th", n ? "n" : null, h)));
+    const thead = el("thead"); thead.append(head); const tbody = el("tbody");
+    if (!r.items.length) { const tr = el("tr"); const td = el("td", "muted", "Aucun joueur."); td.colSpan = heads.length; tr.append(td); tbody.append(tr); }
+    for (const p of r.items) {
+      const tr = el("tr");
+      const who = el("td"); who.title = p.id;
+      if (p.username) who.append(el("strong", null, p.username));
+      else who.append(el("span", "pill off", "INVITÉ"), el("span", "muted", " " + p.id.slice(0, 8)));
+      const device = [p.lang ? p.lang.toUpperCase() : null, p.app_version ? "v" + p.app_version : null, p.platform].filter(Boolean).join(" · ") || "—";
+      const buys = p.purchases + (p.test_purchases ? " (+" + p.test_purchases + " test)" : "");
+      const level = p.unlocked_level ?? p.best_level;
+      tr.append(who, el("td", null, p.country ? flag(p.country) + p.country : "—"), el("td", "muted", device),
+        el("td", null, when(p.registered_at || p.created_at)), el("td", null, when(p.last_seen_at)),
+        el("td", "n", num(p.sessions)), el("td", "n", num(p.best_score)), el("td", "n", num(level)), el("td", "n", num(p.credits)),
+        el("td", "n", buys), el("td", "n", money(p.spent)));
+      const del = el("button", "danger", "✕"); del.type = "button"; del.title = "Supprimer ce joueur et ses données";
+      del.setAttribute("aria-label", "Supprimer " + (p.username || "l'invité " + p.id.slice(0, 8)));
+      del.onclick = async () => {
+        if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Supprimer ?"; return; }
+        try { await api("DELETE", "/players/" + p.id); say($("pl-status"), "Joueur supprimé.", true); loadPlayers(); }
+        catch (err) { say($("pl-status"), err.message, false); }
+      };
+      const td = el("td"); td.append(del); tr.append(td);
+      tbody.append(tr);
+    }
+    $("pl-table").replaceChildren(thead, tbody);
+    $("pl-info").textContent = nf.format(r.total) + " joueur" + (r.total > 1 ? "s" : "") + " · page " + r.page + " / " + r.pages;
+    $("pl-prev").disabled = r.page <= 1; $("pl-next").disabled = r.page >= r.pages;
   }
 
   if (token) {
