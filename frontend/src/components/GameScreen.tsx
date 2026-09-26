@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
-import * as Haptics from "expo-haptics";
-import { GameEngine, type GameStats, type RunResult } from "../game/GameEngine";
-import { levelReward, type LevelResult, type PlayerModifiers } from "../game/progression";
+import * as Haptics from "@/src/utils/haptics";
+import { GameEngine, type EngineOptions, type GameStats, type RunResult } from "../game/GameEngine";
+import { levelReward, type Difficulty, type LevelResult, type PlayerModifiers } from "../game/progression";
 import { applyEvent, emptyStats, type MetaEvent, type PlayerStats } from "../game/meta";
 import { sound } from "../audio/sound";
 import { showInterstitialAtBreak, showRewarded } from "../ads";
@@ -22,8 +22,10 @@ type Props = {
   startLevel: number;
   unlockedLevel: number;
   modifiers: PlayerModifiers;
+  difficulty: Difficulty;
+  options: EngineOptions; // aim assist, invert Y, graphics quality, skins
   // Persists a finished level (stars + credits) and unlocks the next one.
-  onLevelDone: (level: number, stars: number, credits: number) => void;
+  onLevelDone: (level: number, stars: number, credits: number, difficulty: Difficulty) => void;
   onAddCredits: (credits: number) => void;
   // Stats of the play session (kills, levels…) for missions and achievements.
   onSession: (session: PlayerStats) => void;
@@ -49,6 +51,7 @@ const INITIAL: GameStats = {
   fireModes: ["single"],
   sector: { index: 1, name: "PARIS" },
   powerups: [],
+  difficulty: "normal",
 };
 
 export default function GameScreen({
@@ -59,6 +62,8 @@ export default function GameScreen({
   startLevel,
   unlockedLevel,
   modifiers,
+  difficulty,
+  options,
   onLevelDone,
   onAddCredits,
   onSession,
@@ -94,7 +99,7 @@ export default function GameScreen({
   const notify = useCallback((msg: string) => {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 1600);
+    toastTimer.current = setTimeout(() => setToast(null), Math.max(1600, msg.length * 60));
   }, []);
 
   useEffect(() => {
@@ -135,7 +140,7 @@ export default function GameScreen({
           },
           onLevelComplete: (r) => {
             const reward = levelReward(r);
-            latest.current.onLevelDone(r.level, reward.stars, reward.total);
+            latest.current.onLevelDone(r.level, reward.stars, reward.total, r.difficulty ?? "normal");
             track({ type: "level", stars: reward.stars });
             flushSession();
             setLevelResult(r);
@@ -146,7 +151,7 @@ export default function GameScreen({
           playSound: (n) => sound.play(n),
           onEvent: track,
         },
-        { lookSensitivity, level: startLevel, unlockedLevel, modifiers }
+        { lookSensitivity, level: startLevel, unlockedLevel, modifiers, difficulty, options }
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

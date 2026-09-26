@@ -1,5 +1,6 @@
 // Cartoon zombies: rounded shapes, big heads, glowing eyes, one look per kind.
-// Each zombie is 6 or 7 meshes (head, eyes, torso, 2 arms, 2 legs, + a glow for exploders).
+// Each zombie is 6 to 8 meshes (head, eyes, torso, 2 arms, 2 legs, + a glow for exploders and
+// spitters, + a riot shield). Hits on the mesh named "Shield" are blocked by the engine.
 // Geometry is built once per kind and shared; each zombie gets its own material so a hit can
 // flash it red. Every head part is named "Head": the engine counts hits on it as headshots.
 import * as THREE from "three";
@@ -15,7 +16,7 @@ type Look = {
   pants: number;
   shoes: number;
   eyes: number;
-  extra?: "hood" | "helmet" | "belly" | "crown";
+  extra?: "hood" | "helmet" | "belly" | "crown" | "sac" | "riot";
   bulk: number; // torso/limb thickness
 };
 
@@ -24,12 +25,22 @@ const LOOKS: Record<CharacterKind, Look> = {
   runner: { skin: 0xa3d88d, shirt: 0xff7a2f, pants: 0x2d3a48, shoes: 0xf2f2f2, eyes: 0x6dfaff, extra: "hood", bulk: 0.85 },
   tank: { skin: 0x8f7fd4, shirt: 0x5b5f66, pants: 0x3a2f55, shoes: 0x1e1e24, eyes: 0xff5a36, extra: "helmet", bulk: 1.3 },
   exploder: { skin: 0xc6d65a, shirt: 0x7a5a3a, pants: 0x4a3a2a, shoes: 0x2a2320, eyes: 0xff9b1f, extra: "belly", bulk: 1.15 },
+  spitter: { skin: 0xb5d94a, shirt: 0x6b4fa0, pants: 0x3a3350, shoes: 0x2a2320, eyes: 0xd4ff3a, extra: "sac", bulk: 0.95 },
+  shield: { skin: 0x9bb7c4, shirt: 0x243447, pants: 0x1f2a38, shoes: 0x111418, eyes: 0x6dfaff, extra: "riot", bulk: 1.1 },
   boss: { skin: 0x7b4fd0, shirt: 0x1f1b2e, pants: 0x2a1f3f, shoes: 0x111111, eyes: 0xff2d55, extra: "crown", bulk: 1.2 },
 };
 
 const rbox = (w: number, h: number, d: number, r = 0.08) => new RoundedBoxGeometry(w, h, d, 1, r);
 
-type Parts = { head: THREE.BufferGeometry; eyes: THREE.BufferGeometry; torso: THREE.BufferGeometry; arm: THREE.BufferGeometry; leg: THREE.BufferGeometry; glow?: THREE.BufferGeometry };
+type Parts = {
+  head: THREE.BufferGeometry;
+  eyes: THREE.BufferGeometry;
+  torso: THREE.BufferGeometry;
+  arm: THREE.BufferGeometry;
+  leg: THREE.BufferGeometry;
+  glow?: THREE.BufferGeometry;
+  shield?: THREE.BufferGeometry;
+};
 const cache = new Map<CharacterKind, Parts>();
 
 function build(kind: CharacterKind): Parts {
@@ -50,6 +61,11 @@ function build(kind: CharacterKind): Parts {
   if (L.extra === "helmet") {
     head.push(paint(rbox(0.64, 0.26, 0.6, 0.12), 0x6d7480, { y: 2.02 }));
     head.push(paint(box(0.66, 0.05, 0.3), 0x4a505a, { y: 1.93, z: 0.2 }));
+  }
+  if (L.extra === "riot") {
+    // Police helmet with a raised visor (the face stays open for headshots).
+    head.push(paint(rbox(0.66, 0.34, 0.62, 0.15), 0x1f2a38, { y: 2.0 }));
+    head.push(paint(box(0.6, 0.06, 0.22), 0x6dfaff, { y: 2.18, z: 0.2, rx: -0.5 }));
   }
   if (L.extra === "crown") {
     head.push(paint(cyl(0.3, 0.3, 0.16, 10), 0xffc233, { y: 2.11 }));
@@ -75,6 +91,17 @@ function build(kind: CharacterKind): Parts {
   ];
   let glow: THREE.BufferGeometry | undefined;
   if (L.extra === "belly") glow = merge([paint(sphere(0.3, 10, 7), 0xffb13b, { y: 1.1, z: 0.12, sz: 0.8 })]);
+  // Spitter: swollen glowing throat sac full of acid.
+  if (L.extra === "sac") glow = merge([paint(sphere(0.22, 10, 7), 0x9dff2e, { y: 1.5, z: 0.16, sy: 0.8 })]);
+  // Riot shield held in front: from the knees to the chin, the head stays above it.
+  let shield: THREE.BufferGeometry | undefined;
+  if (L.extra === "riot")
+    shield = merge([
+      paint(rbox(0.92, 1.12, 0.07, 0.03), 0x39434f, { y: 1.02, z: 0.52 }),
+      paint(rbox(0.7, 0.3, 0.02, 0.02), 0x8fd8ff, { y: 1.36, z: 0.565 }), // window
+      paint(box(0.8, 0.06, 0.02), 0xffd23a, { y: 0.72, z: 0.565 }), // yellow stripe
+      paint(box(0.8, 0.06, 0.02), 0xffd23a, { y: 0.62, z: 0.565 }),
+    ]);
 
   // Arm (pivot at the shoulder, hanging down along -y; the engine raises it to point forward).
   const arm = merge([
@@ -87,7 +114,7 @@ function build(kind: CharacterKind): Parts {
     paint(capsule(0.12 * b, 0.5, 5), L.pants, { y: -0.36 }),
     paint(rbox(0.2 * b, 0.12, 0.3, 0.05), L.shoes, { y: -0.74, z: 0.05 }),
   ]);
-  return { head: merge(head), eyes, torso: merge(torso), arm, leg, glow };
+  return { head: merge(head), eyes, torso: merge(torso), arm, leg, glow, shield };
 }
 
 function parts(kind: CharacterKind) {
@@ -115,7 +142,16 @@ export function buildZombie(kind: CharacterKind) {
   eyes.name = "Head";
   const torso = new THREE.Mesh(p.torso, mat);
   g.add(head, eyes, torso);
-  if (p.glow) g.add(new THREE.Mesh(p.glow, new THREE.MeshBasicMaterial({ vertexColors: true })));
+  if (p.glow) {
+    const glow = new THREE.Mesh(p.glow, new THREE.MeshBasicMaterial({ vertexColors: true }));
+    glow.name = "Glow"; // the spitter's sac swells before it spits
+    g.add(glow);
+  }
+  if (p.shield) {
+    const shield = new THREE.Mesh(p.shield, mat);
+    shield.name = "Shield";
+    g.add(shield);
+  }
 
   const b = LOOKS[kind].bulk;
   const leftArm = new THREE.Mesh(p.arm, mat);

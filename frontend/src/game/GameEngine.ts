@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Renderer } from "expo-three";
 import type { ExpoWebGLRenderingContext } from "expo-gl";
-import { buildWorld, type World } from "./world";
+import { buildWorld, type World, type WorldQuality } from "./world";
 import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
 import { MUZZLE, buildWeaponModel } from "./weapons";
@@ -12,6 +12,7 @@ import {
   getLevelConfig,
   modifiersFrom,
   NO_UPGRADES,
+  type Difficulty,
   type LevelConfig,
   type LevelResult,
   type PlayerModifiers,
@@ -23,6 +24,7 @@ import {
   POWERUPS,
   POWERUP_DROP_CHANCE,
   RAGE_MULT,
+  SPIT,
   ZOMBIES,
   comboBonus,
   comboLabel,
@@ -160,6 +162,24 @@ export type GameStats = {
   fireModes: FireMode[]; // modes of the current weapon (MODE button hidden when only one)
   sector: { index: number; name: string };
   powerups: { kind: PowerUpKind; remaining: number }[]; // seconds left, active ones only
+  difficulty: Difficulty;
+};
+
+export type EngineOptions = {
+  aimAssist: boolean;
+  invertY: boolean;
+  quality: WorldQuality;
+  weaponSkin?: string;
+  outfit?: string;
+};
+
+// Aim assist: a light slow-down on targets and a gentle pull while the player aims or fires.
+const ASSIST = {
+  frictionAngle: 0.06, // radians around the crosshair where the view slows down
+  friction: 0.55,
+  pullAngle: 0.1, // radians where the view is pulled toward the target
+  strength: 4, // pull speed (per second)
+  range: 45, // metres
 };
 
 export type RunResult = { score: number; level: number; kills: number; credits: number };
@@ -214,6 +234,12 @@ export class GameEngine {
   private swayY = 0;
 
   lookSensitivity = 0.008;
+  // Options from the Settings panel (see use-game-settings.ts) and the equipped skins.
+  private opts: EngineOptions = { aimAssist: true, invertY: false, quality: "normal", weaponSkin: undefined, outfit: undefined };
+  private difficulty: Difficulty = "normal";
+  private lastLookAt = 0;
+  private lastFrameAt = 0;
+  private spits: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number; damage: number }[] = [];
 
   private mods: PlayerModifiers = modifiersFrom(NO_UPGRADES);
   private unlockedLevel = 1;
@@ -267,13 +293,22 @@ export class GameEngine {
   constructor(
     gl: ExpoWebGLRenderingContext,
     cb: EngineCallbacks,
-    opts?: { lookSensitivity?: number; level?: number; unlockedLevel?: number; modifiers?: PlayerModifiers }
+    opts?: {
+      lookSensitivity?: number;
+      level?: number;
+      unlockedLevel?: number;
+      modifiers?: PlayerModifiers;
+      difficulty?: Difficulty;
+      options?: Partial<EngineOptions>;
+    }
   ) {
     this.gl = gl;
     this.cb = cb;
     if (opts?.lookSensitivity) this.lookSensitivity = opts.lookSensitivity;
     if (opts?.modifiers) this.mods = opts.modifiers;
-    this.levelCfg = getLevelConfig(opts?.level ?? 1);
+    if (opts?.options) this.opts = { ...this.opts, ...opts.options };
+    this.difficulty = opts?.difficulty ?? "normal";
+    this.levelCfg = getLevelConfig(opts?.level ?? 1, this.difficulty);
     this.unlockedLevel = Math.max(opts?.unlockedLevel ?? 1, this.levelCfg.level);
     this.health = this.mods.maxHealth;
     this.ammoByWeapon = WEAPONS.map((_, i) => this.maxAmmoOf(i));
@@ -332,6 +367,12 @@ export class GameEngine {
     // First level of a sector: show the sector name instead of the level number.
     const city = t(CITIES[this.sector.city].name);
     this.cb.onNotify((l - 1) % 5 === 0 ? t("game.sector", { n: this.sector.index, name: city }) : `${t("menu.levelN", { n: l })} · ${city}`);
+    // First level with a new zombie: a tip on how to beat it, after the level name.
+    const tip = l === ZOMBIES.spitter.fromLevel ? "game.newSpitter" : l === ZOMBIES.shield.fromLevel ? "game.newShield" : null;
+    if (tip)
+      setTimeout(() => {
+        if (!this.disposed && this.levelCfg.level === l) this.cb.onNotify(t(tip));
+      }, 2200);
   }
 
   // Builds the city of a level (a new time of day each level, a new city each sector).
@@ -344,7 +385,7 @@ export class GameEngine {
       });
     }
     this.sector = sectorOf(level);
-    const world = buildWorld(level, this.camera);
+    const world = buildWorld(level, this.camera, this.opts.quality);
     this.worldInfo = world;
     this.world = world.group;
     this.objects = world.colliders;
@@ -389,7 +430,7 @@ export class GameEngine {
     const scale = isBoss ? 2.2 : def.scale;
     g.scale.set(scale, scale, scale);
 
-    const speed = 1.6 + Math.random() * 1.2 + cfg.zombieSpeedBonus;
+    const speed = (1.6 + Math.random() * 1.2 + cfg.zombieSpeedBonus) * cfg.speedMult;
     const hp = isBoss ? cfg.bossHealth : Math.max(1, Math.round(cfg.zombieHealth * def.hpMult));
     g.userData = {
       type: "zombie",
@@ -403,6 +444,10 @@ export class GameEngine {
       walkProgress: Math.random() * 100,
       bias: Math.random() < 0.5 ? 1 : -1,
       lastBite: 0,
+      nextSpitAt: Date.now() + 1500 + Math.random() * 1500,
+      spitWindup: 0,
+      nextSightCheck: 0,
+      canSee: false,
       limbs,
     };
 
@@ -444,7 +489,7 @@ export class GameEngine {
 
   private equipModel() {
     this.modelHolder.clear();
-    this.modelHolder.add(buildWeaponModel(this.weapon.key));
+    this.modelHolder.add(buildWeaponModel(this.weapon.key, this.opts.weaponSkin, this.opts.outfit));
     // Models are in metres; held a bit smaller and further out so the stock stays in view.
     this.modelHolder.scale.setScalar(WEAPON_SCALE);
     this.modelHolder.position.set(0.03, -0.02, WEAPON_Z);
@@ -534,8 +579,12 @@ export class GameEngine {
 
   applyLook(dx: number, dy: number) {
     if (this.paused || this.gameOver || this.levelComplete) return;
-    this.camera.rotation.y -= dx * this.lookSensitivity;
-    this.camera.rotation.x -= dy * this.lookSensitivity;
+    if (this.opts.invertY) dy = -dy;
+    this.lastLookAt = Date.now();
+    // Aim assist "friction": the view slows down while the crosshair is on a zombie.
+    const slow = this.opts.aimAssist && this.assistTarget(ASSIST.frictionAngle) ? ASSIST.friction : 1;
+    this.camera.rotation.y -= dx * this.lookSensitivity * slow;
+    this.camera.rotation.x -= dy * this.lookSensitivity * slow;
     this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
     const maxSway = 0.15;
     this.swayX = Math.max(-maxSway, Math.min(maxSway, -dx * CONFIG.swayAmount));
@@ -609,6 +658,7 @@ export class GameEngine {
     const up = new THREE.Vector3().crossVectors(right, baseDir).normalize();
     const candidates = [...this.objects, ...this.enemies];
     let hitZombie = false;
+    let blocked = false;
     const rage = this.powerActive("rage") ? RAGE_MULT : 1;
 
     if (wpn.projectile) {
@@ -662,6 +712,10 @@ export class GameEngine {
       if (hits.length > 0) {
         const hit = hits[0];
         this.createImpact(hit.point, (hit.face as any).normal);
+        if (hit.object.name === "Shield") {
+          blocked = true; // riot shield: the bullet stops, no damage
+          continue;
+        }
         let target: any = hit.object;
         const headshot = hit.object.name === "Head";
         const dmg = (headshot ? wpn.headDmg : wpn.bodyDmg) * this.mods.damageMult * rage;
@@ -686,7 +740,7 @@ export class GameEngine {
     if (hitZombie) {
       this.cb.onHitMarker();
       if (this.boss) this.emitStats();
-    }
+    } else if (blocked) this.cb.playSound("clank");
     if (this.ammo <= 0) setTimeout(() => this.reload(), 200);
     return true;
   }
@@ -719,7 +773,8 @@ export class GameEngine {
     this.levelKills++;
     if (headshot) this.levelHeadshots++;
     this.score += (isBoss ? 1000 : def.score + (headshot ? 50 : 0)) + bonus.score;
-    this.levelCredits += (isBoss ? CREDITS_PER_BOSS : def.credits + (headshot ? CREDITS_PER_HEADSHOT : 0)) + bonus.credits;
+    const earned = (isBoss ? CREDITS_PER_BOSS : def.credits + (headshot ? CREDITS_PER_HEADSHOT : 0)) + bonus.credits;
+    this.levelCredits += Math.round(earned * this.levelCfg.creditMult);
     this.cb.onEvent?.({ type: "kill", kind, headshot, combo: this.combo, byExplosion });
     if (isBoss) {
       this.boss = null;
@@ -751,7 +806,7 @@ export class GameEngine {
     this.addShake(Math.max(0.15, 0.7 - dPlayer * 0.06));
     // The player is hurt by contact explosions, and by shot exploders that were too close.
     if (cause !== "grenade" && dPlayer < EXPLOSION.radius && !this.gameOver) {
-      const full = EXPLOSION.playerDamage(this.levelCfg.level);
+      const full = EXPLOSION.playerDamage(this.levelCfg.level) * this.levelCfg.damageMult;
       this.health -= triggeredByContact ? full : Math.round(full * (1 - dPlayer / EXPLOSION.radius));
       this.cb.onDamage();
       if (this.health <= 0) {
@@ -850,6 +905,7 @@ export class GameEngine {
       health: Math.max(0, Math.round(this.health)),
       maxHealth: this.mods.maxHealth,
       credits: this.levelCredits,
+      difficulty: this.difficulty,
     });
   }
 
@@ -897,6 +953,7 @@ export class GameEngine {
   }
 
   revive() {
+    this.clearSpits();
     this.health = this.mods.maxHealth;
     this.gameOver = false;
     this.paused = false;
@@ -935,8 +992,9 @@ export class GameEngine {
     this.pickups.forEach((p) => this.scene.remove(p));
     this.pickups = [];
     if (opts.modifiers) this.mods = opts.modifiers;
-    this.levelCfg = getLevelConfig(level);
+    this.levelCfg = getLevelConfig(level, this.difficulty);
     this.buildWorld(this.levelCfg.level);
+    this.clearSpits();
     this.combo = 0;
     this.powerUntil = {};
     this.shake = 0;
@@ -1029,6 +1087,7 @@ export class GameEngine {
       powerups: (Object.keys(this.powerUntil) as PowerUpKind[])
         .map((kind) => ({ kind, remaining: Math.ceil(((this.powerUntil[kind] ?? 0) - Date.now()) / 1000) }))
         .filter((p) => p.remaining > 0),
+      difficulty: this.difficulty,
     });
   }
 
@@ -1124,9 +1183,154 @@ export class GameEngine {
     this.cb.onGameOver({ score: this.score, level: this.levelCfg.level, kills: this.kills, credits: this.levelCredits });
   }
 
+  // ---------------- Aim assist ----------------
+  // True when nothing blocks the straight line from a to b (buildings, cars, the centrepiece).
+  private clearLine(a: THREE.Vector3, b: THREE.Vector3) {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length();
+    const ray = new THREE.Ray(a, dir.normalize());
+    const hit = new THREE.Vector3();
+    for (const o of this.objects) {
+      if (ray.intersectBox(o.userData.aabb as THREE.Box3, hit) && hit.distanceTo(a) < len) return false;
+    }
+    return true;
+  }
+
+  private aimPoint(z: THREE.Object3D) {
+    return new THREE.Vector3(z.position.x, z.position.y + 1.2 * z.scale.y, z.position.z);
+  }
+
+  // The visible zombie closest to the crosshair, within `maxAngle` radians.
+  private assistTarget(maxAngle: number): THREE.Object3D | null {
+    const eye = this.camera.position;
+    const fwd = new THREE.Vector3();
+    this.camera.getWorldDirection(fwd);
+    let best: THREE.Object3D | null = null;
+    let bestAngle = maxAngle;
+    for (const z of this.enemies) {
+      if (z.userData.dead) continue;
+      const to = this.aimPoint(z).sub(eye);
+      if (to.length() > ASSIST.range) continue;
+      const angle = fwd.angleTo(to);
+      if (angle < bestAngle) {
+        bestAngle = angle;
+        best = z;
+      }
+    }
+    return best && this.clearLine(eye, this.aimPoint(best)) ? best : null;
+  }
+
+  private updateAimAssist(delta: number, time: number) {
+    if (!this.opts.aimAssist) return;
+    const aiming = time - this.lastLookAt < 300 || this.triggerHeld || this.moveVec.x !== 0 || this.moveVec.y !== 0;
+    if (!aiming) return;
+    const target = this.assistTarget(ASSIST.pullAngle);
+    if (!target) return;
+    const dir = this.aimPoint(target).sub(this.camera.position);
+    const yaw = Math.atan2(-dir.x, -dir.z);
+    const pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
+    let dYaw = yaw - this.camera.rotation.y;
+    dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw)); // shortest way round
+    const k = 1 - Math.exp(-ASSIST.strength * delta);
+    this.camera.rotation.y += dYaw * k;
+    this.camera.rotation.x += (pitch - this.camera.rotation.x) * k * 0.6;
+  }
+
+  // ---------------- Spitter ----------------
+  // Returns true when the spitter stands still this frame (in range and aiming, or winding up).
+  private spitterHolds(z: THREE.Group, distance: number, time: number) {
+    const ud = z.userData as any;
+    if (distance > SPIT.range) {
+      ud.spitWindup = 0;
+      return false;
+    }
+    if (time >= ud.nextSightCheck) {
+      ud.nextSightCheck = time + 400;
+      const mouth = new THREE.Vector3(z.position.x, 1.5 * z.scale.y, z.position.z);
+      ud.canSee = this.clearLine(mouth, this.camera.position);
+    }
+    const sac = z.getObjectByName("Glow");
+    if (!ud.canSee) {
+      ud.spitWindup = 0;
+      sac?.scale.setScalar(1);
+      return false;
+    }
+    if (!ud.spitWindup && time >= ud.nextSpitAt) ud.spitWindup = time;
+    if (ud.spitWindup) {
+      // Wind-up: the sac swells for a moment (the cue to sidestep), then the acid flies.
+      const t = Math.min(1, (time - ud.spitWindup) / 450);
+      sac?.scale.setScalar(1 + t * 0.6);
+      if (t >= 1) {
+        this.spit(z);
+        ud.spitWindup = 0;
+        ud.nextSpitAt = time + SPIT.cooldownMs * (0.8 + Math.random() * 0.4);
+        sac?.scale.setScalar(1);
+      }
+      return true;
+    }
+    if (distance > SPIT.keepAway) return false;
+    const { leftLeg, rightLeg } = ud.limbs;
+    leftLeg.rotation.x = rightLeg.rotation.x = 0;
+    return true;
+  }
+
+  private spit(z: THREE.Group) {
+    const origin = new THREE.Vector3(z.position.x, 1.5 * z.scale.y, z.position.z);
+    const target = new THREE.Vector3(this.camera.position.x, this.camera.position.y - 0.5, this.camera.position.z);
+    const vel = target.sub(origin).normalize().multiplyScalar(SPIT.speed);
+    origin.addScaledVector(vel, 0.5 / SPIT.speed);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0x9dff2e }));
+    mesh.position.copy(origin);
+    this.scene.add(mesh);
+    const damage = Math.max(1, Math.round(SPIT.damage(this.levelCfg.level) * this.levelCfg.damageMult));
+    this.spits.push({ mesh, vel, born: Date.now(), damage });
+    this.cb.playSound("spit");
+  }
+
+  private removeSpit(i: number) {
+    const s = this.spits[i];
+    this.scene.remove(s.mesh);
+    s.mesh.geometry.dispose();
+    (s.mesh.material as THREE.Material).dispose();
+    this.spits.splice(i, 1);
+  }
+
+  private clearSpits() {
+    for (let i = this.spits.length - 1; i >= 0; i--) this.removeSpit(i);
+  }
+
+  private updateSpits(delta: number, time: number) {
+    const body = new THREE.Vector3(this.camera.position.x, this.camera.position.y - 0.5, this.camera.position.z);
+    for (let i = this.spits.length - 1; i >= 0; i--) {
+      const s = this.spits[i];
+      s.mesh.position.addScaledVector(s.vel, delta);
+      const p = s.mesh.position;
+      if (p.distanceTo(body) < SPIT.radius) {
+        this.removeSpit(i); // no splash particles in the player's face: the red vignette shows the hit
+        this.health -= s.damage;
+        this.addShake(0.2);
+        this.cb.onDamage();
+        this.emitStats();
+        if (this.health <= 0) {
+          this.triggerGameOver();
+          return;
+        }
+        continue;
+      }
+      if (p.y < 0.1 || time - s.born > 2500 || this.objects.some((o) => (o.userData.aabb as THREE.Box3).containsPoint(p))) {
+        this.createDeath(p, 0x9dff2e);
+        this.removeSpit(i);
+      }
+    }
+  }
+
   private loop = () => {
     if (this.disposed) return;
     this.rafId = requestAnimationFrame(this.loop);
+    // "Economy" graphics: 30 frames per second saves battery on older phones.
+    const now = Date.now();
+    if (this.opts.quality === "low" && now - this.lastFrameAt < 30) return;
+    this.lastFrameAt = now;
     this.update();
     // Screen shake: offset the camera only for rendering, never for physics.
     this.camera.position.add(this.shakeOffset);
@@ -1210,6 +1414,9 @@ export class GameEngine {
     this.updateTrigger(time);
     this.updateGrenades(delta, time);
     if (this.gameOver) return;
+    this.updateSpits(delta, time);
+    if (this.gameOver) return;
+    this.updateAimAssist(delta, time);
 
     // Refresh power-up timers in the HUD a few times per second while one is active.
     if (Object.keys(this.powerUntil).length && time - this.lastPowerEmit > 250) {
@@ -1343,6 +1550,11 @@ export class GameEngine {
       // Horizontal distance: the camera sits at eye height, so a 3D distance never drops below ~2m.
       const distance = Math.hypot(this.camera.position.x - z.position.x, this.camera.position.z - z.position.z);
       const ud = z.userData as any;
+
+      if (ud.kind === "spitter" && distance > ud.reach && this.spitterHolds(z, distance, time)) {
+        z.position.y = 0;
+        continue;
+      }
 
       if (distance > ud.reach) {
         const direction = new THREE.Vector3().subVectors(this.camera.position, z.position);

@@ -20,7 +20,7 @@ export type PlayerStats = {
 
 export const EMPTY_STATS: PlayerStats = {
   kills: 0, headshots: 0, bosses: 0, levels: 0, threeStars: 0, deaths: 0, powerups: 0,
-  explosionKills: 0, bestCombo: 0, byKind: { walker: 0, runner: 0, tank: 0, exploder: 0 },
+  explosionKills: 0, bestCombo: 0, byKind: { walker: 0, runner: 0, tank: 0, exploder: 0, spitter: 0, shield: 0 },
 };
 
 // Everything the game reports; "level" is added by the game screen when a level is won.

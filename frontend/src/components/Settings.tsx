@@ -9,6 +9,7 @@ import AccountSection from "./AccountSection";
 import type { AuthMode } from "./AuthForm";
 import type { CloudStatus } from "../hooks/use-progress";
 import type { AccountState } from "../hooks/use-account";
+import { QUALITIES, type GameSettings } from "../hooks/use-game-settings";
 import { LANGS, LANG_NAMES, setLang, useLang, useT } from "@/src/i18n";
 
 type Props = {
@@ -25,6 +26,8 @@ type Props = {
   onSignedIn: (username: string, mode: AuthMode) => Promise<void>;
   onLogout: () => Promise<void>;
   onDeleted: () => Promise<void>;
+  gameSettings: GameSettings;
+  onGameSettings: (patch: Partial<GameSettings>) => void;
   onClose: () => void;
 };
 
@@ -45,6 +48,8 @@ export default function Settings({
   onSignedIn,
   onLogout,
   onDeleted,
+  gameSettings,
+  onGameSettings,
   onClose,
 }: Props) {
   const pct = Math.round(((lookSensitivity - MIN) / (MAX - MIN)) * 100);
@@ -143,6 +148,59 @@ export default function Settings({
 
 
 
+        <Text style={styles.section}>{t("settings.gameplay")}</Text>
+        <View style={[styles.row, styles.toggleRow]}>
+          <View style={styles.toggleLabel}>
+            <Text style={styles.label}>{t("settings.aimAssist")}</Text>
+            <Text style={styles.hint}>{t("settings.aimAssist.hint")}</Text>
+          </View>
+          <Switch
+            testID="aim-assist-toggle"
+            value={gameSettings.aimAssist}
+            onValueChange={(v) => onGameSettings({ aimAssist: v })}
+            trackColor={{ false: colors.surfaceTertiary, true: colors.brandTertiary }}
+            thumbColor={gameSettings.aimAssist ? colors.brand : colors.onSurfaceTertiary}
+          />
+        </View>
+        <View style={[styles.row, styles.toggleRow]}>
+          <Text style={styles.label}>{t("settings.invertY")}</Text>
+          <Switch
+            testID="invert-y-toggle"
+            value={gameSettings.invertY}
+            onValueChange={(v) => onGameSettings({ invertY: v })}
+            trackColor={{ false: colors.surfaceTertiary, true: colors.brandTertiary }}
+            thumbColor={gameSettings.invertY ? colors.brand : colors.onSurfaceTertiary}
+          />
+        </View>
+        <View style={[styles.row, styles.toggleRow]}>
+          <Text style={styles.label}>{t("settings.vibration")}</Text>
+          <Switch
+            testID="vibration-toggle"
+            value={gameSettings.vibration}
+            onValueChange={(v) => onGameSettings({ vibration: v })}
+            trackColor={{ false: colors.surfaceTertiary, true: colors.brandTertiary }}
+            thumbColor={gameSettings.vibration ? colors.brand : colors.onSurfaceTertiary}
+          />
+        </View>
+        <View style={styles.row}>
+          <View style={[styles.toggleRow, { gap: spacing.sm, flexWrap: "wrap" }]}>
+            <Text style={styles.label}>{t("settings.quality")}</Text>
+            <View style={styles.langs}>
+              {QUALITIES.map((q) => (
+                <Pressable
+                  key={q}
+                  testID={`quality-${q}`}
+                  onPress={() => onGameSettings({ quality: q })}
+                  style={[styles.langBtn, gameSettings.quality === q && styles.langActive]}
+                >
+                  <Text style={[styles.langText, gameSettings.quality === q && { color: colors.onBrand }]}>{t(`quality.${q}`)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          <Text style={[styles.hint, { marginTop: 4 }]}>{t("settings.quality.hint")}</Text>
+        </View>
+
         {isPrivacyOptionsRequired() && (
           <Pressable testID="privacy-options" onPress={showPrivacyOptions} style={[styles.row, styles.toggleRow]}>
             <Text style={styles.label}>{t("settings.adPrivacy")}</Text>
@@ -204,6 +262,9 @@ const styles = StyleSheet.create({
   rowLabel: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.xs },
   toggleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { color: colors.onSurface, fontFamily: fonts.textMed, fontSize: 15 },
+  toggleLabel: { flex: 1, paddingRight: spacing.sm },
+  hint: { color: colors.onSurfaceSecondary, fontFamily: fonts.text, fontSize: 12, lineHeight: 16 },
+  section: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 2, marginTop: spacing.xs, marginBottom: spacing.sm },
   value: { color: colors.brand, fontFamily: fonts.display, fontSize: 16 },
   backBtn: {
     height: 48,

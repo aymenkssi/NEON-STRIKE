@@ -6,6 +6,10 @@ export const MAX_LEVEL = 30;
 
 export type LevelConfig = {
   level: number;
+  difficulty: Difficulty;
+  speedMult: number;
+  damageMult: number;
+  creditMult: number;
   waves: number;
   zombiesPerWave: (waveInLevel: number) => number;
   zombieHealth: number;
@@ -15,16 +19,42 @@ export type LevelConfig = {
   completionBonus: number;
 };
 
-export function getLevelConfig(level: number): LevelConfig {
+// ---------------- Difficulty ----------------
+// Chosen before each level. Nightmare pays double credits and earns a red skull on the level.
+export type Difficulty = "easy" | "normal" | "nightmare";
+export const DIFFICULTIES: Difficulty[] = ["easy", "normal", "nightmare"];
+
+export type DifficultyDef = {
+  hp: number; // zombie and boss health
+  speed: number; // zombie speed
+  damage: number; // bites, explosions, acid
+  count: number; // zombies per wave
+  credits: number; // every credit earned during and after the level
+  icon: string;
+  color: string;
+};
+
+export const DIFFICULTY: Record<Difficulty, DifficultyDef> = {
+  easy: { hp: 0.7, speed: 0.85, damage: 0.6, count: 0.8, credits: 0.75, icon: "emoticon-happy-outline", color: "#39FF14" },
+  normal: { hp: 1, speed: 1, damage: 1, count: 1, credits: 1, icon: "sword-cross", color: "#00FFFF" },
+  nightmare: { hp: 1.5, speed: 1.2, damage: 1.5, count: 1.25, credits: 2, icon: "skull", color: "#FF003C" },
+};
+
+export function getLevelConfig(level: number, difficulty: Difficulty = "normal"): LevelConfig {
   const l = Math.max(1, Math.min(level, MAX_LEVEL));
+  const d = DIFFICULTY[difficulty];
   return {
     level: l,
+    difficulty,
     waves: l <= 2 ? 2 : 3,
-    zombiesPerWave: (w) => Math.min(3 + l + w * 2, 20),
-    zombieHealth: 3 + Math.floor(l / 2),
+    zombiesPerWave: (w) => Math.max(2, Math.round(Math.min(3 + l + w * 2, 20) * d.count)),
+    zombieHealth: Math.max(1, Math.round((3 + Math.floor(l / 2)) * d.hp)),
     zombieSpeedBonus: l * 0.15,
-    biteDamage: 8 + Math.floor(l / 3),
-    bossHealth: 20 + l * 8,
+    speedMult: d.speed,
+    damageMult: d.damage,
+    creditMult: d.credits,
+    biteDamage: Math.max(1, Math.round((8 + Math.floor(l / 3)) * d.damage)),
+    bossHealth: Math.round((20 + l * 8) * d.hp),
     completionBonus: 50 + l * 25,
   };
 }
@@ -53,7 +83,8 @@ export type LevelResult = {
   headshots: number;
   health: number;
   maxHealth: number;
-  credits: number; // credits picked up during the level (kills, boss)
+  credits: number; // credits picked up during the level (kills, boss), difficulty included
+  difficulty?: Difficulty;
 };
 
 export function computeStars(r: Pick<LevelResult, "health" | "maxHealth" | "kills" | "headshots">): number {
@@ -65,9 +96,10 @@ export function computeStars(r: Pick<LevelResult, "health" | "maxHealth" | "kill
 
 export function levelReward(r: LevelResult) {
   const stars = computeStars(r);
-  const bonus = getLevelConfig(r.level).completionBonus;
-  const starBonus = STAR_BONUS[stars];
-  return { stars, combat: r.credits, bonus, starBonus, total: r.credits + bonus + starBonus };
+  const mult = DIFFICULTY[r.difficulty ?? "normal"].credits;
+  const bonus = Math.round(getLevelConfig(r.level).completionBonus * mult);
+  const starBonus = Math.round(STAR_BONUS[stars] * mult);
+  return { stars, combat: r.credits, bonus, starBonus, total: r.credits + bonus + starBonus, mult };
 }
 
 // ---------------- Upgrades (Arsenal) ----------------

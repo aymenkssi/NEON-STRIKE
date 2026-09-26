@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { useAnimatedStyle, useSharedValue, runOnJS, withTiming } from "react-native-reanimated";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts } from "../theme";
 import type { FireMode, GameEngine } from "../game/GameEngine";
 import { useT, type Key } from "@/src/i18n";

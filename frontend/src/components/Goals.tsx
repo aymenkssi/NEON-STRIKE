@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { achievementView, missionView, missionsForDay } from "../game/meta";
 import { dayKey } from "../game/progression";
@@ -169,6 +169,8 @@ function StatsGrid({ progress }: { progress: Progress }) {
     ["flash", t("stats.powerups"), String(s.powerups)],
     ["run-fast", t("stats.runners"), String(s.byKind.runner)],
     ["shield", t("stats.tanks"), String(s.byKind.tank)],
+    ["water", t("stats.spitters"), String(s.byKind.spitter ?? 0)],
+    ["shield-half-full", t("stats.shields"), String(s.byKind.shield ?? 0)],
     ["grave-stone", t("stats.deaths"), String(s.deaths)],
     ["map-marker", t("stats.reached"), `${progress.unlockedLevel} / 30`],
   ];

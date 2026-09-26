@@ -9,9 +9,11 @@ import {
   dailyStatus,
   dayKey,
   upgradeCost,
+  type Difficulty,
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/src/game/progression";
+import { DEFAULT_SKINS, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
 import {
   ACHIEVEMENTS,
   advanceMissions,
@@ -37,6 +39,8 @@ export type Progress = {
   stats: PlayerStats;
   missions: MissionState | null;
   achievementsClaimed: string[];
+  nightmare: Record<string, boolean>; // levels cleared in Nightmare (red skull)
+  skins: SkinState;
   updatedAt: number; // ms of the last change, decides which save wins when syncing
 };
 
@@ -50,6 +54,8 @@ const DEFAULT: Progress = {
   stats: emptyStats(),
   missions: null,
   achievementsClaimed: [],
+  nightmare: {},
+  skins: DEFAULT_SKINS,
   updatedAt: 0,
 };
 
@@ -71,7 +77,9 @@ function fromObject(p: any): Progress {
     // Older saves have no stats/missions: fill every missing field from the defaults.
     const stats = { ...emptyStats(), ...(p.stats || {}) };
     stats.byKind = { ...emptyStats().byKind, ...(p.stats?.byKind || {}) };
-    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats };
+    const skins = { ...DEFAULT_SKINS, ...(p.skins || {}) };
+    skins.owned = Array.isArray(skins.owned) ? skins.owned.filter((id: unknown) => typeof id === "string") : [];
+    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats, nightmare: { ...(p.nightmare || {}) }, skins };
   } catch {
     return DEFAULT;
   }
@@ -178,13 +186,36 @@ export function useProgress(cloudEnabled: boolean) {
   );
 
   const completeLevel = useCallback(
-    (level: number, stars: number, credits: number) =>
+    (level: number, stars: number, credits: number, difficulty: Difficulty = "normal") =>
       update((p) => ({
         ...p,
         credits: p.credits + credits,
         unlockedLevel: Math.max(p.unlockedLevel, Math.min(level + 1, MAX_LEVEL)),
         stars: { ...p.stars, [level]: Math.max(p.stars[level] || 0, stars) },
+        nightmare: difficulty === "nightmare" ? { ...p.nightmare, [level]: true } : p.nightmare,
       })),
+    [update]
+  );
+
+  // Skins: buying equips at once; returns false when the player cannot afford it.
+  const buySkin = useCallback(
+    (id: string) => {
+      const price = skinPrice(id);
+      const cur = ref.current;
+      if (price === null) return false;
+      if (ownsSkin(cur.skins, id)) return true;
+      if (cur.credits < price) return false;
+      update((p) => ({ ...p, credits: p.credits - price, skins: equipped({ ...p.skins, owned: [...p.skins.owned, id] }, id) }));
+      return true;
+    },
+    [update]
+  );
+
+  const equipSkin = useCallback(
+    (id: string) => {
+      if (!ownsSkin(ref.current.skins, id)) return;
+      update((p) => ({ ...p, skins: equipped(p.skins, id) }));
+    },
     [update]
   );
 
@@ -254,5 +285,11 @@ export function useProgress(cloudEnabled: boolean) {
     recordSession,
     claimMission,
     claimAchievement,
+    buySkin,
+    equipSkin,
   };
+}
+
+function equipped(s: SkinState, id: string): SkinState {
+  return OUTFITS.some((o) => o.id === id) ? { ...s, outfit: id } : { ...s, weapon: id };
 }

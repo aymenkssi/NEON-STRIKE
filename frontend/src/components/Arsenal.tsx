@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { UPGRADES, UPGRADE_MAX, upgradeCost, type UpgradeKey, type UpgradeLevels } from "../game/progression";
 import Panel from "./Panel";

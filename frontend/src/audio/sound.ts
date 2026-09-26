@@ -16,6 +16,8 @@ const FILES: Record<string, number> = {
   powerup: require("../../assets/sounds/powerup.wav"),
   railgun: require("../../assets/sounds/railgun.wav"),
   launcher: require("../../assets/sounds/launcher.wav"),
+  spit: require("../../assets/sounds/spit.wav"),
+  clank: require("../../assets/sounds/clank.wav"),
 };
 
 const VOLUMES: Record<string, number> = {
@@ -34,6 +36,8 @@ const VOLUMES: Record<string, number> = {
   powerup: 0.75,
   railgun: 0.85,
   launcher: 0.9,
+  spit: 0.75,
+  clank: 0.55,
 };
 
 // Rapid-fire sounds need several players so overlapping shots each start
@@ -45,6 +49,7 @@ const POOL_SIZE: Record<string, number> = {
   hit: 3,
   explosion: 3,
   launcher: 2,
+  clank: 3,
 };
 
 class SoundManager {

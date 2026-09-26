@@ -3,7 +3,7 @@
 import { CITY_ORDER, type CityId } from "./cities";
 
 // ---------------- Zombies ----------------
-export type ZombieKind = "walker" | "runner" | "tank" | "exploder";
+export type ZombieKind = "walker" | "runner" | "tank" | "exploder" | "spitter" | "shield";
 
 export type ZombieDef = {
   kind: ZombieKind;
@@ -38,20 +38,45 @@ export const ZOMBIES: Record<ZombieKind, ZombieDef> = {
     kind: "exploder", name: "Explosif", hpMult: 0.8, speedMult: 1.2, biteMult: 0, scale: 1.05,
     skin: 0x2c7a3a, shirt: 0x1f5a2a, eyes: 0xb6ff00, glow: 0x39ff14, score: 150, credits: 8, fromLevel: 7,
   },
+  // Keeps its distance and spits acid balls that can be dodged.
+  spitter: {
+    kind: "spitter", name: "Cracheur", hpMult: 0.9, speedMult: 1.1, biteMult: 0.8, scale: 1,
+    skin: 0x9acd32, shirt: 0x4b3a6b, eyes: 0xd4ff3a, glow: 0x9dff2e, score: 180, credits: 9, fromLevel: 9,
+  },
+  // Riot shield in front: bullets stop on it. Aim for the head, go round it or use explosives.
+  shield: {
+    kind: "shield", name: "Bouclier", hpMult: 1.6, speedMult: 0.8, biteMult: 1.2, scale: 1.1,
+    skin: 0x7fa0b0, shirt: 0x243447, eyes: 0x6dfaff, score: 220, credits: 11, fromLevel: 12,
+  },
+};
+
+export const SPIT = {
+  keepAway: 14, // metres: stops here when it can see the player
+  range: 22,
+  cooldownMs: 2600,
+  speed: 16, // m/s: fast, but a sidestep dodges it
+  radius: 1.1, // hit radius around the player
+  damage: (level: number) => 8 + Math.floor(level / 3),
 };
 
 // Share of each special kind in a wave; walkers fill the rest.
+export const SPECIAL_KINDS: ZombieKind[] = ["runner", "tank", "exploder", "spitter", "shield"];
+
 export function zombieWeights(level: number): Record<ZombieKind, number> {
-  const runner = level >= ZOMBIES.runner.fromLevel ? Math.min(0.35, (level - 2) * 0.07) : 0;
-  const tank = level >= ZOMBIES.tank.fromLevel ? Math.min(0.2, (level - 4) * 0.04) : 0;
-  const exploder = level >= ZOMBIES.exploder.fromLevel ? Math.min(0.2, (level - 6) * 0.04) : 0;
-  return { walker: 1 - runner - tank - exploder, runner, tank, exploder };
+  const share = (kind: ZombieKind, perLevel: number, max: number) =>
+    level >= ZOMBIES[kind].fromLevel ? Math.min(max, (level - ZOMBIES[kind].fromLevel + 1) * perLevel) : 0;
+  const runner = share("runner", 0.07, 0.3);
+  const tank = share("tank", 0.04, 0.15);
+  const exploder = share("exploder", 0.04, 0.15);
+  const spitter = share("spitter", 0.04, 0.12);
+  const shield = share("shield", 0.04, 0.12);
+  return { walker: 1 - runner - tank - exploder - spitter - shield, runner, tank, exploder, spitter, shield };
 }
 
 export function pickZombieKind(level: number, rnd: number = Math.random()): ZombieKind {
   const w = zombieWeights(level);
   let acc = 0;
-  for (const kind of ["runner", "tank", "exploder"] as ZombieKind[]) {
+  for (const kind of SPECIAL_KINDS) {
     acc += w[kind];
     if (rnd < acc) return kind;
   }
