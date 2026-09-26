@@ -164,7 +164,7 @@ async def delete_account(payload: DeleteRequest, request: Request, player: dict 
 
 async def erase_player(player: dict) -> None:
     pid = player["id"]
-    for name in ("scores", "saves", "activity", "suggestions"):
+    for name in ("scores", "saves", "activity", "suggestions", "season_scores", "season_rewards"):
         await db[name].delete_many({"player_id": pid})
     # Random placeholder: sales stats still count distinct buyers, without any link to the player.
     await db.purchases.update_many({"player_id": pid}, {"$set": {"player_id": f"deleted-{uuid.uuid4()}"}})

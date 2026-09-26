@@ -174,6 +174,8 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `GET /api/admin/stats` | Statistiques de la page d'administration. |
 | `POST /api/suggestions` | Suggestion d'un joueur connecté (idée, bug, autre), 5 par jour au plus. |
 | `GET /api/admin/players` · `DELETE /api/admin/players/{id}` | Onglet « Joueurs » de la page d'administration : liste des comptes et des invités (recherche, filtre, tri, 50 par page) avec pays, appareil, dates, sessions, meilleur score, niveau, crédits, achats et montant dépensé ; suppression d'un joueur et de ses données. |
+| `GET /api/seasons/current` · `GET /api/seasons/me` · `POST /api/seasons/rewards/{id}/claim` | Saisons mensuelles : classement du mois (remis à zéro le 1er, heure UTC), rang du joueur et récompenses à récupérer dans le jeu. |
+| `GET /api/admin/seasons` · `PUT /api/admin/seasons/{mois}/players/{id}` · `POST /api/admin/seasons/{mois}/validate` | Onglet « Saisons » : exclure un score suspect, valider les récompenses d'un mois terminé (sinon validation automatique 3 jours après la fin du mois), historique des champions. |
 | `GET/PUT/DELETE /api/admin/suggestions` | Onglet « Suggestions » de la page d'administration (liste, statut nouvelle / lue / traitée, suppression). |
 | `GET /api/config` | Packs visibles et messages en ligne, lus par l'app au démarrage. |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |

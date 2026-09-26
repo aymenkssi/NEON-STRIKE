@@ -211,6 +211,17 @@ export function useProgress(cloudEnabled: boolean) {
     [update]
   );
 
+  // Season rewards: the Champion skin is added (and equipped) with the credits.
+  const grantSeasonReward = useCallback(
+    (credits: number, skin: string | null) =>
+      update((p) => {
+        const owned = skin && !p.skins.owned.includes(skin) ? [...p.skins.owned, skin] : p.skins.owned;
+        const skins = skin ? equipped({ ...p.skins, owned }, skin) : p.skins;
+        return { ...p, credits: p.credits + Math.max(0, Math.round(credits)), skins };
+      }),
+    [update]
+  );
+
   const equipSkin = useCallback(
     (id: string) => {
       if (!ownsSkin(ref.current.skins, id)) return;
@@ -287,6 +298,7 @@ export function useProgress(cloudEnabled: boolean) {
     claimAchievement,
     buySkin,
     equipSkin,
+    grantSeasonReward,
   };
 }
 

@@ -103,6 +103,7 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="stats" aria-selected="true">Statistiques</button>
       <button type="button" role="tab" data-tab="players" aria-selected="false">Joueurs</button>
+      <button type="button" role="tab" data-tab="seasons" aria-selected="false">Saisons <span id="season-badge" class="pill sched" hidden></span></button>
       <button type="button" role="tab" data-tab="liveops" aria-selected="false">Packs et messages</button>
       <button type="button" role="tab" data-tab="suggestions" aria-selected="false">Suggestions <span id="sugg-badge" class="pill live" hidden></span></button>
     </nav>
@@ -151,6 +152,18 @@
         </div>
       </section>
       <div id="pl-status" class="status"></div>
+    </div>
+
+    <div id="tab-seasons" hidden>
+      <h2>Saisons mensuelles</h2>
+      <p class="hint" id="season-rules"></p>
+      <div id="season-status" class="status"></div>
+      <div id="season-pending"></div>
+      <h2 id="season-current-title">Saison en cours</h2>
+      <p class="hint">Le classement se remet à zéro le 1er de chaque mois (heure UTC). Tu peux exclure un score suspect à tout moment : le joueur reste dans la liste, barré, et ne reçoit pas de récompense.</p>
+      <section class="panel"><div class="table-wrap"><table class="compact" id="season-current"></table></div></section>
+      <h2>Historique des champions</h2>
+      <div id="season-history"></div>
     </div>
 
     <div id="tab-suggestions" hidden>
@@ -267,7 +280,7 @@
       await loadPacks();
       try { sessionStorage.setItem(KEY, token); } catch (e2) {}
       $("login").hidden = true; $("app").hidden = false;
-      loadMessages(); loadStats(); loadSuggestions();
+      loadMessages(); loadStats(); loadSuggestions(); loadSeasons();
     } catch (err) {
       if (err.message !== "401") say($("login-status"), err.message, false);
     }
@@ -415,7 +428,8 @@
   // ---------------- Statistiques ----------------
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("nav.tabs button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
-    ["stats", "players", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    ["stats", "players", "seasons", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    if (b.dataset.tab === "seasons") loadSeasons();
     if (b.dataset.tab === "suggestions") loadSuggestions();
     if (b.dataset.tab === "players") loadPlayers();
   }));
@@ -616,8 +630,75 @@
     $("pl-prev").disabled = r.page <= 1; $("pl-next").disabled = r.page >= r.pages;
   }
 
+  // ---------------- Saisons ----------------
+  const monthName = (season) => { const [y, m] = season.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString("fr-FR", { month: "long", year: "numeric" }); };
+  const seasonTitle = (season) => { const m = monthName(season); return (/^[aeiouâéèêîôû]/i.test(m) ? "Saison d'" : "Saison de ") + m; };
+  const medalOf = (r) => r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : r ? "🏅" : "";
+
+  function seasonTable(t, season, rows, editable) {
+    const heads = [["Rang"], ["Joueur"], ["Score", 1], ["Niveau", 1], ["Kills", 1], ["Meilleure partie"], [""]];
+    const head = el("tr"); heads.forEach(([h, n]) => head.append(el("th", n ? "n" : null, h)));
+    const thead = el("thead"); thead.append(head); const tbody = el("tbody");
+    if (!rows.length) { const tr = el("tr"); const td = el("td", "muted", "Aucun score pour l'instant."); td.colSpan = heads.length; tr.append(td); tbody.append(tr); }
+    for (const r of rows) {
+      const tr = el("tr"); if (r.excluded) tr.style.opacity = ".55";
+      const name = el("td"); const strong = el("strong", null, r.name); if (r.excluded) strong.style.textDecoration = "line-through"; name.append(strong);
+      if (r.excluded) name.append(el("span", "pill off", " EXCLU"));
+      tr.append(el("td", null, r.rank ? medalOf(r.rank <= 5 ? r.rank : 0) + " #" + r.rank : "—"), name,
+        el("td", "n", nf.format(r.score)), el("td", "n", r.level ?? "—"), el("td", "n", r.kills ?? "—"), el("td", "muted", when(r.updated_at)));
+      const td = el("td");
+      if (editable) {
+        const b = el("button", r.excluded ? null : "danger", r.excluded ? "Réintégrer" : "Exclure"); b.type = "button";
+        b.onclick = async () => {
+          try { await api("PUT", `/seasons/${season}/players/${r.player_id}`, { excluded: !r.excluded }); loadSeasons(); }
+          catch (err) { say($("season-status"), err.message, false); }
+        };
+        td.append(b);
+      }
+      tr.append(td); tbody.append(tr);
+    }
+    t.replaceChildren(thead, tbody);
+  }
+
+  async function loadSeasons() {
+    let r;
+    try { r = await api("GET", "/seasons"); } catch (err) { say($("season-status"), err.message, false); return; }
+    const tiers = r.rewards.map((x) => (x.first === x.last ? x.first + "e" : x.first + "e–" + x.last + "e") + " : " + nf.format(x.credits) + " crédits" + (x.champion ? " + skin Champion + badge" : "")).join(" · ");
+    $("season-rules").textContent = "Récompenses : " + tiers.replace("1e ", "1er ") + ". Quand un mois se termine, vérifie son top ci-dessous puis clique sur « Valider les récompenses ». Sans action de ta part, la saison est validée automatiquement 3 jours après sa fin. Les joueurs récupèrent ensuite leur récompense au lancement du jeu.";
+    const badge = $("season-badge"); badge.hidden = !r.pending.length; badge.textContent = r.pending.length ? "À VALIDER" : "";
+
+    const box = $("season-pending"); box.replaceChildren();
+    for (const p of r.pending) {
+      const sec = el("section", "panel"); sec.style.marginTop = "14px"; sec.style.borderColor = "var(--amber)";
+      const h = el("h3", null, seasonTitle(p.season) + " · à valider"); h.style.margin = "0 0 4px";
+      const note = el("p", "hint", "Validation automatique le " + new Date(p.auto_at).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }) + " si tu ne le fais pas avant. Vérifie les scores du top 5 : un score anormalement élevé (beaucoup de points pour peu de kills) est suspect.");
+      const wrap = el("div", "table-wrap"); const t = el("table", "compact"); wrap.append(t); seasonTable(t, p.season, p.top, true);
+      const btn = el("button", "primary", "Valider les récompenses"); btn.type = "button"; btn.style.marginTop = "10px";
+      btn.onclick = async () => {
+        if (btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = "Confirmer la validation ?"; return; }
+        try { await api("POST", `/seasons/${p.season}/validate`); say($("season-status"), seasonTitle(p.season) + " validée : récompenses distribuées.", true); loadSeasons(); }
+        catch (err) { say($("season-status"), err.message, false); }
+      };
+      sec.append(h, note, wrap, btn); box.append(sec);
+    }
+
+    const days = Math.max(0, Math.ceil((new Date(r.current.ends_at) - Date.now()) / 86400000));
+    $("season-current-title").textContent = seasonTitle(r.current.season) + " · en cours (fin dans " + days + " j)";
+    seasonTable($("season-current"), r.current.season, r.current.top, true);
+
+    const hist = $("season-history"); hist.replaceChildren();
+    if (!r.history.length) hist.append(el("p", "hint", "Aucune saison terminée pour l'instant."));
+    for (const h of r.history) {
+      const card = el("article", "msg");
+      const meta = el("div", "meta");
+      meta.append(el("strong", null, seasonTitle(h.season)), el("span", null, nf.format(h.players) + " joueurs récompensés · " + nf.format(h.claimed) + " récompenses récupérées · validée " + (h.validated_by === "auto" ? "automatiquement" : "par toi") + " le " + new Date(h.validated_at).toLocaleDateString("fr-FR")));
+      const list = el("div", "body", h.champions.map((c) => medalOf(c.rank) + " " + c.name + " — " + nf.format(c.score) + " pts").join("\n") || "—");
+      card.append(meta, list); hist.append(card);
+    }
+  }
+
   if (token) {
-    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); loadSuggestions(); }).catch(() => {});
+    loadPacks().then(() => { $("login").hidden = true; $("app").hidden = false; loadMessages(); loadStats(); loadSuggestions(); loadSeasons(); }).catch(() => {});
   }
 })();
 </script>

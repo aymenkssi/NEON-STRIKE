@@ -8,6 +8,7 @@ export type LeaderboardRow = {
   level: number;
   kills: number;
   created_at: string;
+  badge?: number | null; // best monthly season rank (1-5)
 };
 
 export type SubmitResult = { rank: number; best: number; is_high_score: boolean };
