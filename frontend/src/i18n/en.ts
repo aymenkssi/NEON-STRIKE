@@ -356,4 +356,15 @@ export const en: Record<Key, string> = {
   "reward.badge": "Champion badge next to your name",
   "reward.claim": "CLAIM",
   "reward.error": "Could not claim the reward right now. Try again later.",
+
+  "intro.title": "NEW: SEASONS",
+  "intro.monthly": "Every month is a new season: the ranking starts over on the 1st. Your best score of the month counts.",
+  "intro.rewards": "At the end of the month, the top 100 are rewarded: 1st 5,000 credits, 2nd 3,000, 3rd 2,000, 4th-5th 1,000, 6th-20th 500, 21st-100th 200.",
+  "intro.champion": "Top 5: the exclusive “Champion” skin, never sold in the shop, and a trophy next to your name.",
+  "intro.giftcards": "Coming soon: once we reach 10,000 players, each month's top 5 will also win gift cards!",
+  "intro.giftcards.note": "Under the official rules published at that time. Free to enter.",
+  "intro.fair": "Fair play: top scores are checked every month and suspicious ones are excluded.",
+  "intro.guest": "Create an account (Settings) to join the seasons.",
+  "intro.go": "LET'S GO!",
+  "intro.board": "SEE THE RANKING",
 };

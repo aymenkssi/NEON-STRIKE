@@ -8,7 +8,7 @@ import { currentSeason, daysLeft, fetchMySeason, fetchSeason, type MySeason } fr
 import { formatNumber, useT, type Key } from "@/src/i18n";
 
 type Tab = "season" | "all";
-type Props = { username: string; guest: boolean; initialTab?: Tab; onClose: () => void };
+type Props = { username: string; guest: boolean; initialTab?: Tab; onSeasonInfo?: () => void; onClose: () => void };
 type Row = { key: string; rank: number; name: string; level: number; score: number; badge: number | null; mine: boolean };
 
 // Trophy of the players who finished in the top 5 of a monthly season.
@@ -18,7 +18,7 @@ export function SeasonBadge({ rank, size = 14 }: { rank: number | null | undefin
   return <MaterialCommunityIcons name="trophy" size={size} color={color} testID={`badge-${rank}`} />;
 }
 
-export default function Leaderboard({ username, guest, initialTab = "season", onClose }: Props) {
+export default function Leaderboard({ username, guest, initialTab = "season", onSeasonInfo, onClose }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [state, setState] = useState<"loading" | "done" | "error">("loading");
   const [rows, setRows] = useState<Row[]>([]);
@@ -83,7 +83,14 @@ export default function Leaderboard({ username, guest, initialTab = "season", on
         {tab === "season" && (
           <View style={styles.seasonBox} testID="season-info">
             <View style={styles.seasonHead}>
-              <Text style={styles.seasonName}>{t(`season.m${cur.month}` as Key)}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.seasonName}>{t(`season.m${cur.month}` as Key)}</Text>
+                {onSeasonInfo && (
+                  <Pressable testID="season-info-open" onPress={onSeasonInfo} hitSlop={10}>
+                    <MaterialCommunityIcons name="help-circle-outline" size={18} color={colors.warning} />
+                  </Pressable>
+                )}
+              </View>
               <Text style={styles.seasonLeft}>{left <= 1 ? t("season.lastDay") : t("season.endsIn", { n: left })}</Text>
             </View>
             <Text style={styles.seasonRewards}>{t("season.rewardsLine")}</Text>
