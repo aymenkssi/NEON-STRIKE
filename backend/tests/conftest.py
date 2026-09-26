@@ -29,7 +29,7 @@ def api(monkeypatch):
     monkeypatch.setenv("ADMIN_TOKEN", ADMIN_TOKEN)
     with TestClient(server.app) as c:
         cloudsave._attempts.clear()
-        for name in ("players", "scores", "purchases", "packs", "messages", "saves", "activity", "suggestions"):
+        for name in ("players", "scores", "purchases", "packs", "messages", "saves", "activity", "suggestions", "season_scores", "season_rewards", "seasons"):
             c.portal.call(server.db[name].delete_many, {})
         c.portal.call(server.liveops.setup)  # re-seed default packs
         yield c

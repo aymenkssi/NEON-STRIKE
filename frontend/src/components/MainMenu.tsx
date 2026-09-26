@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,6 +16,8 @@ import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
 import Skins from "./Skins";
+import SeasonReward from "./SeasonReward";
+import { currentSeason, daysLeft, fetchMySeason, type SeasonReward as PendingReward } from "../api/seasons";
 import PlayerMessage from "./PlayerMessage";
 import Goals, { claimableGoals } from "./Goals";
 import { useMessageQueue } from "../hooks/use-message-queue";
@@ -53,6 +55,7 @@ type Props = {
   onGameSettings: (patch: Partial<GameSettings>) => void;
   onBuySkin: (id: string) => boolean;
   onEquipSkin: (id: string) => void;
+  onSeasonReward: (credits: number, skin: string | null) => void;
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -72,6 +75,13 @@ export default function MainMenu(props: Props) {
   const [showShop, setShowShop] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
   const [showSkins, setShowSkins] = useState(false);
+  // Rewards of finished seasons waiting for this account (shown one at a time).
+  const [rewards, setRewards] = useState<PendingReward[]>([]);
+  useEffect(() => {
+    if (guest) return;
+    fetchMySeason(username).then((m) => setRewards(m.rewards), () => {});
+  }, [guest, username]);
+  const seasonDays = daysLeft(currentSeason().end);
   const { progress } = props;
   const dailyReady = dailyStatus(progress.dailyLast, progress.dailyStreak).canClaim;
   const [showDaily, setShowDaily] = useState(() => {
@@ -158,8 +168,14 @@ export default function MainMenu(props: Props) {
               </View>
             </Pressable>
 
-            <Pressable testID="open-leaderboard" style={styles.iconBtn} onPress={() => setShowLeaderboard(true)}>
-              <MaterialCommunityIcons name="trophy" size={24} color={colors.brand} />
+            <Pressable testID="open-leaderboard" style={[styles.iconBtn, styles.seasonBtn]} onPress={() => setShowLeaderboard(true)}>
+              <MaterialCommunityIcons name="trophy" size={24} color={colors.warning} />
+              <View>
+                <Text style={styles.seasonTitle}>{t("board.season")}</Text>
+                <Text style={styles.seasonLeft} testID="season-countdown">
+                  {seasonDays <= 1 ? t("season.lastDay") : t("season.daysShort", { n: seasonDays })}
+                </Text>
+              </View>
             </Pressable>
             <Pressable testID="open-settings" style={styles.iconBtn} onPress={() => setShowSettings(true)}>
               <MaterialCommunityIcons name="cog" size={24} color={colors.onSurface} />
@@ -215,7 +231,14 @@ export default function MainMenu(props: Props) {
           onClose={() => setShowGoals(false)}
         />
       )}
-      {message && !overlayOpen && (
+      {rewards.length > 0 && !overlayOpen && (
+        <SeasonReward
+          reward={rewards[0]}
+          onClaimed={props.onSeasonReward}
+          onClose={() => setRewards((r) => r.slice(1))}
+        />
+      )}
+      {message && !overlayOpen && rewards.length === 0 && (
         <PlayerMessage message={message} onClose={() => dismiss(message.id)} onOpenShop={() => setShowShop(true)} />
       )}
       {showDaily && (
@@ -342,4 +365,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   adWrap: { alignItems: "center" },
+  seasonBtn: { width: "auto", flexDirection: "row", gap: 6, paddingHorizontal: 10, borderColor: "rgba(255,176,0,0.5)" },
+  seasonTitle: { color: colors.warning, fontFamily: fonts.display, fontSize: 13, letterSpacing: 1.5, lineHeight: 15 },
+  seasonLeft: { color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: 12, lineHeight: 14 },
 });

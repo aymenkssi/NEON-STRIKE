@@ -51,6 +51,7 @@ export default function Index() {
     claimAchievement,
     buySkin,
     equipSkin,
+    grantSeasonReward,
   } = useProgress(account.mode === "account");
 
   useEffect(() => {
@@ -180,6 +181,7 @@ export default function Index() {
           onGameSettings={updateGameSettings}
           onBuySkin={buySkin}
           onEquipSkin={equipSkin}
+          onSeasonReward={grantSeasonReward}
         />
       ) : (
         <GameScreen

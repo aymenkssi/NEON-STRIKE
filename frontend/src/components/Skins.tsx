@@ -7,7 +7,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
 import { buildWeaponModel } from "../game/weapons";
-import { OUTFITS, WEAPON_SKINS, ownsSkin, type SkinState } from "../game/skins";
+import { OUTFITS, WEAPON_SKINS, isExclusive, ownsSkin, type SkinState } from "../game/skins";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 import Panel from "./Panel";
 
@@ -84,6 +84,7 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
   const isWeaponSkin = WEAPON_SKINS.some((w) => w.id === item.id);
   const owned = ownsSkin(skins, item.id);
   const equipped = skins.weapon === item.id || skins.outfit === item.id;
+  const reward = !owned && isExclusive(item.id); // season reward: cannot be bought
 
   const switchTab = (next: Tab) => {
     setTab(next);
@@ -92,7 +93,7 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
   };
 
   const act = () => {
-    if (equipped) return;
+    if (equipped || reward) return;
     if (owned) {
       onEquip(item.id);
       Haptics.selectionAsync().catch(() => {});
@@ -126,10 +127,15 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
           <Pressable
             testID="skin-action"
             onPress={act}
-            disabled={equipped}
-            style={[styles.action, equipped ? styles.actionDone : owned ? styles.actionEquip : styles.actionBuy]}
+            disabled={equipped || reward}
+            style={[styles.action, equipped ? styles.actionDone : reward ? styles.actionReward : owned ? styles.actionEquip : styles.actionBuy]}
           >
-            {equipped ? (
+            {reward ? (
+              <>
+                <MaterialCommunityIcons name="trophy" size={18} color={colors.warning} />
+                <Text style={[styles.actionText, { color: colors.warning, fontSize: 13 }]}>{t("skins.seasonOnly")}</Text>
+              </>
+            ) : equipped ? (
               <>
                 <MaterialCommunityIcons name="check" size={18} color={colors.brand} />
                 <Text style={[styles.actionText, { color: colors.brand }]}>{t("skins.equipped")}</Text>
@@ -183,6 +189,11 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
                   <Text style={styles.cardName} numberOfLines={1}>{t(it.name)}</Text>
                   {on ? (
                     <MaterialCommunityIcons name="check-circle" size={16} color={colors.brand} />
+                  ) : !mine && isExclusive(it.id) ? (
+                    <View style={styles.priceRow}>
+                      <MaterialCommunityIcons name="trophy" size={12} color={colors.warning} />
+                      <Text style={styles.price}>{t("skins.top5")}</Text>
+                    </View>
                   ) : mine ? (
                     <Text style={styles.cardOwned}>{it.price === 0 ? t("skins.free") : "✓"}</Text>
                   ) : (
@@ -212,6 +223,7 @@ const styles = StyleSheet.create({
   actionBuy: { backgroundColor: colors.warning, borderColor: colors.warning },
   actionEquip: { backgroundColor: colors.brand, borderColor: colors.brand },
   actionDone: { borderColor: colors.brand },
+  actionReward: { borderColor: colors.warning },
   actionText: { fontFamily: fonts.display, fontSize: 16, letterSpacing: 1.5 },
   notice: { fontFamily: fonts.textMed, fontSize: 12, textAlign: "center" },
   right: { flex: 1, minHeight: 0 },

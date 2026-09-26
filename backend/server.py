@@ -16,6 +16,7 @@ from starlette.middleware.cors import CORSMiddleware
 import accounts
 import cloudsave
 import liveops
+import seasons
 import stats
 import suggestions
 from auth import current_player, hash_token
@@ -75,6 +76,7 @@ class ScoreRow(BaseModel):
     level: int
     kills: int
     created_at: str
+    badge: Optional[int] = None  # best monthly season rank (1-5): trophy next to the name
 
 
 class SubmitResult(BaseModel):
@@ -153,6 +155,7 @@ async def submit_score(payload: ScoreCreate, player: dict = Depends(current_play
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
+    await seasons.record(player, payload.score, payload.level, payload.kills)
     rank = await db.scores.count_documents({"score": {"$gt": payload.score}}) + 1
     return SubmitResult(rank=rank, best=doc["score"], is_high_score=is_high)
 
@@ -160,8 +163,9 @@ async def submit_score(payload: ScoreCreate, player: dict = Depends(current_play
 @api.get("/leaderboard", response_model=List[ScoreRow])
 async def leaderboard(limit: int = 50):
     limit = max(1, min(limit, 100))
-    rows = await db.scores.find({}, {"_id": 0, "player_id": 0}).sort("score", -1).limit(limit).to_list(limit)
-    return [ScoreRow(rank=i + 1, **r) for i, r in enumerate(rows)]
+    rows = await db.scores.find({}, {"_id": 0}).sort("score", -1).limit(limit).to_list(limit)
+    badges = await seasons.badge_ranks([r["player_id"] for r in rows])
+    return [ScoreRow(rank=i + 1, badge=badges.get(r.pop("player_id")), **r) for i, r in enumerate(rows)]
 
 
 @api.get("/leaderboard/me", response_model=Optional[ScoreRow])
@@ -170,7 +174,8 @@ async def my_rank(player: dict = Depends(current_player)):
     if not doc:
         return None
     rank = await db.scores.count_documents({"score": {"$gt": doc["score"]}}) + 1
-    return ScoreRow(rank=rank, **doc)
+    badges = await seasons.badge_ranks([player["id"]])
+    return ScoreRow(rank=rank, badge=badges.get(player["id"]), **doc)
 
 
 @api.post("/purchases/verify", response_model=PurchaseResult)
@@ -235,6 +240,8 @@ app.include_router(accounts.router)
 app.include_router(accounts.admin)
 app.include_router(stats.public)
 app.include_router(stats.admin)
+app.include_router(seasons.public)
+app.include_router(seasons.admin)
 app.include_router(suggestions.public)
 app.include_router(suggestions.admin)
 app.include_router(cloudsave.router)
@@ -262,6 +269,7 @@ async def create_indexes():
     await liveops.setup()
     await stats.setup()
     await suggestions.setup()
+    await seasons.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
 

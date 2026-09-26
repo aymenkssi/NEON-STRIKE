@@ -13,6 +13,7 @@ export type WeaponSkin = {
   tube: number; // launcher tube
   accent: number | null; // stripes and rings (null: the weapon's rarity colour)
   glow?: boolean; // accents are drawn unlit (they glow in the dark)
+  exclusive?: boolean; // not for sale: season reward (top 5 of a monthly season)
 };
 
 export type Outfit = {
@@ -32,6 +33,7 @@ export const WEAPON_SKINS: WeaponSkin[] = [
   { id: "w_candy", name: "skin.w_candy", price: 800, body: 0xff7ac8, metal: 0x6a5acd, furniture: 0x7fe3ff, light: 0xffc2e6, tube: 0xff9ad6, accent: 0xfff35c },
   { id: "w_neon", name: "skin.w_neon", price: 1000, body: 0x1a1a2e, metal: 0x0f0f1a, furniture: 0x2a1a3e, light: 0x2b2b44, tube: 0x1f1f33, accent: 0x39ff14, glow: true },
   { id: "w_lava", name: "skin.w_lava", price: 1200, body: 0x2a1a14, metal: 0x140c0a, furniture: 0x4a2414, light: 0x3a221a, tube: 0x33180f, accent: 0xff5a1f, glow: true },
+  { id: "w_champion", name: "skin.w_champion", price: 0, exclusive: true, body: 0x1b1b24, metal: 0x0c0c12, furniture: 0x2b2238, light: 0x2a2a36, tube: 0x1f1a2a, accent: 0xffc233, glow: true },
   { id: "w_gold", name: "skin.w_gold", price: 1500, body: 0xd4a017, metal: 0x8f6206, furniture: 0xe8bf4a, light: 0xf0cf6a, tube: 0xc08a12, accent: 0xfff1a8 },
 ];
 
@@ -49,5 +51,7 @@ export const DEFAULT_SKINS: SkinState = { owned: [], weapon: "w_default", outfit
 
 export const weaponSkin = (id?: string) => WEAPON_SKINS.find((s) => s.id === id) ?? WEAPON_SKINS[0];
 export const outfit = (id?: string) => OUTFITS.find((s) => s.id === id) ?? OUTFITS[0];
-export const skinPrice = (id: string) => (WEAPON_SKINS.find((s) => s.id === id) ?? OUTFITS.find((s) => s.id === id))?.price ?? null;
-export const ownsSkin = (s: SkinState, id: string) => skinPrice(id) === 0 || s.owned.includes(id);
+export const isExclusive = (id: string) => !!WEAPON_SKINS.find((s) => s.id === id)?.exclusive;
+// null: unknown or not for sale (exclusive rewards).
+export const skinPrice = (id: string) => (isExclusive(id) ? null : ((WEAPON_SKINS.find((s) => s.id === id) ?? OUTFITS.find((s) => s.id === id))?.price ?? null));
+export const ownsSkin = (s: SkinState, id: string) => s.owned.includes(id) || (!isExclusive(id) && skinPrice(id) === 0);
