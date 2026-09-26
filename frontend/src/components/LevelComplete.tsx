@@ -5,7 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } fro
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { showRewarded } from "../ads";
-import { DIFFICULTY, MAX_LEVEL, WEAPON_UNLOCK_LEVEL, levelReward, type LevelResult } from "../game/progression";
+import { DIFFICULTY, MAX_LEVEL, levelReward, type LevelResult } from "../game/progression";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 
 type Props = {
@@ -22,7 +22,6 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
   const [doubled, setDoubled] = useState(false);
   const [doubling, setDoubling] = useState(false);
   const isLast = result.level >= MAX_LEVEL;
-  const newWeapon = Object.keys(WEAPON_UNLOCK_LEVEL).find((k) => WEAPON_UNLOCK_LEVEL[k] === result.level + 1);
 
   const criteria = [
     { label: t("complete.crit1"), ok: true },
@@ -89,12 +88,6 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
           <View style={styles.unlockNote} testID="complete-skull">
             <MaterialCommunityIcons name="skull" size={16} color={colors.error} />
             <Text style={[styles.unlockText, { color: colors.error }]}>{t("complete.skull")}</Text>
-          </View>
-        )}
-        {newWeapon && (
-          <View style={styles.unlockNote}>
-            <MaterialCommunityIcons name="pistol" size={16} color={colors.brandSecondary} />
-            <Text style={styles.unlockText}>{t("complete.newWeapon", { name: t(`weapon.${newWeapon}` as Key) })}</Text>
           </View>
         )}
 

@@ -1,4 +1,4 @@
-// Remote configuration edited from the admin page: shop packs and messages to players.
+// Remote configuration edited from the admin page: shop packs, weapon prices and messages.
 // The last config received is cached so the shop keeps the admin's packs when offline.
 import { storage } from "@/src/utils/storage";
 import { backendConfigured, get } from "./client";
@@ -13,7 +13,8 @@ export type RemoteMessage = {
   body_en?: string | null;
   kind: "info" | "promo" | "warning";
 };
-export type RemoteConfig = { packs: RemotePack[]; messages: RemoteMessage[] };
+export type RemoteWeaponPrice = { key: string; price: number; on_sale: boolean };
+export type RemoteConfig = { packs: RemotePack[]; messages: RemoteMessage[]; weapons?: RemoteWeaponPrice[] };
 
 const CACHE_KEY = "np_remote_config";
 
@@ -32,8 +33,8 @@ export async function fetchRemoteConfig(): Promise<RemoteConfig | null> {
   try {
     const cfg = await get<RemoteConfig>("/config");
     if (!Array.isArray(cfg?.packs) || !Array.isArray(cfg?.messages)) return null;
-    // Messages are time-limited: cache only the packs.
-    await storage.setItem(CACHE_KEY, JSON.stringify({ packs: cfg.packs, messages: [] }));
+    // Messages are time-limited: cache only the packs and weapon prices.
+    await storage.setItem(CACHE_KEY, JSON.stringify({ packs: cfg.packs, messages: [], weapons: cfg.weapons ?? [] }));
     return cfg;
   } catch {
     return null;

@@ -13,6 +13,7 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/src/game/progression";
+import { LOADOUT_SIZE, cleanArmory, initialArmory, onSale, priceOf, type ArmoryState } from "@/src/game/armory";
 import { DEFAULT_SKINS, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
 import {
   ACHIEVEMENTS,
@@ -41,6 +42,7 @@ export type Progress = {
   achievementsClaimed: string[];
   nightmare: Record<string, boolean>; // levels cleared in Nightmare (red skull)
   skins: SkinState;
+  armory: ArmoryState; // weapons bought in the Armory and the 4 carried in game
   updatedAt: number; // ms of the last change, decides which save wins when syncing
 };
 
@@ -56,6 +58,7 @@ const DEFAULT: Progress = {
   achievementsClaimed: [],
   nightmare: {},
   skins: DEFAULT_SKINS,
+  armory: initialArmory(1),
   updatedAt: 0,
 };
 
@@ -79,7 +82,8 @@ function fromObject(p: any): Progress {
     stats.byKind = { ...emptyStats().byKind, ...(p.stats?.byKind || {}) };
     const skins = { ...DEFAULT_SKINS, ...(p.skins || {}) };
     skins.owned = Array.isArray(skins.owned) ? skins.owned.filter((id: unknown) => typeof id === "string") : [];
-    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats, nightmare: { ...(p.nightmare || {}) }, skins };
+    const armory = cleanArmory(p.armory, Number(p.unlockedLevel) || 1);
+    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats, nightmare: { ...(p.nightmare || {}) }, skins, armory };
   } catch {
     return DEFAULT;
   }
@@ -211,6 +215,39 @@ export function useProgress(cloudEnabled: boolean) {
     [update]
   );
 
+  // Armory: buying adds the weapon to the loadout when a slot is free.
+  const buyWeapon = useCallback(
+    (key: string) => {
+      const cur = ref.current;
+      if (cur.armory.owned.includes(key)) return true;
+      const price = priceOf(key);
+      if (!onSale(key) || cur.credits < price) return false;
+      update((p) => {
+        const loadout = p.armory.loadout.length < LOADOUT_SIZE ? [...p.armory.loadout, key] : p.armory.loadout;
+        return { ...p, credits: p.credits - price, armory: { owned: [...p.armory.owned, key], loadout } };
+      });
+      return true;
+    },
+    [update]
+  );
+
+  // Adds or removes a weapon from the loadout (at least one weapon, at most LOADOUT_SIZE).
+  const toggleLoadout = useCallback(
+    (key: string) => {
+      const a = ref.current.armory;
+      if (!a.owned.includes(key)) return false;
+      if (a.loadout.includes(key)) {
+        if (a.loadout.length <= 1) return false;
+        update((p) => ({ ...p, armory: { ...p.armory, loadout: p.armory.loadout.filter((k) => k !== key) } }));
+        return true;
+      }
+      if (a.loadout.length >= LOADOUT_SIZE) return false;
+      update((p) => ({ ...p, armory: { ...p.armory, loadout: [...p.armory.loadout, key] } }));
+      return true;
+    },
+    [update]
+  );
+
   // Season rewards: the Champion skin is added (and equipped) with the credits.
   const grantSeasonReward = useCallback(
     (credits: number, skin: string | null) =>
@@ -299,6 +336,8 @@ export function useProgress(cloudEnabled: boolean) {
     buySkin,
     equipSkin,
     grantSeasonReward,
+    buyWeapon,
+    toggleLoadout,
   };
 }
 

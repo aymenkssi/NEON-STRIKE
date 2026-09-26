@@ -14,6 +14,7 @@ import { initStore } from "@/src/iap";
 import { reportSession } from "@/src/api/session";
 import { music } from "@/src/audio/music";
 import { setRemotePacks } from "@/src/iap/catalog";
+import { setRemoteWeapons } from "@/src/game/armory";
 import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
 import { useT } from "@/src/i18n";
 
@@ -52,6 +53,8 @@ export default function Index() {
     buySkin,
     equipSkin,
     grantSeasonReward,
+    buyWeapon,
+    toggleLoadout,
   } = useProgress(account.mode === "account");
 
   useEffect(() => {
@@ -81,10 +84,14 @@ export default function Index() {
   useEffect(() => {
     (async () => {
       const cached = await loadCachedConfig();
-      if (cached) setRemotePacks(cached.packs);
+      if (cached) {
+        setRemotePacks(cached.packs);
+        setRemoteWeapons(cached.weapons);
+      }
       const live = await fetchRemoteConfig();
       if (live) {
         setRemotePacks(live.packs);
+        setRemoteWeapons(live.weapons);
         setMessages(live.messages);
       }
     })();
@@ -182,6 +189,8 @@ export default function Index() {
           onBuySkin={buySkin}
           onEquipSkin={equipSkin}
           onSeasonReward={grantSeasonReward}
+          onBuyWeapon={buyWeapon}
+          onToggleLoadout={toggleLoadout}
         />
       ) : (
         <GameScreen
@@ -194,6 +203,7 @@ export default function Index() {
           modifiers={modifiersFrom(progress.upgrades)}
           difficulty={gameSettings.difficulty}
           options={{
+            loadout: progress.armory.loadout,
             aimAssist: gameSettings.aimAssist,
             invertY: gameSettings.invertY,
             quality: gameSettings.quality,

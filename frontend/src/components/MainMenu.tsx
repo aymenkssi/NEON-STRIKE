@@ -11,7 +11,7 @@ import AdBanner from "../ads/AdBanner";
 import Leaderboard from "./Leaderboard";
 import Settings from "./Settings";
 import LevelSelect from "./LevelSelect";
-import Arsenal from "./Arsenal";
+import Armory from "./Armory";
 import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
@@ -58,6 +58,8 @@ type Props = {
   onBuySkin: (id: string) => boolean;
   onEquipSkin: (id: string) => void;
   onSeasonReward: (credits: number, skin: string | null) => void;
+  onBuyWeapon: (key: string) => boolean;
+  onToggleLoadout: (key: string) => boolean;
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -141,7 +143,7 @@ export default function MainMenu(props: Props) {
           )}
         </Pressable>
         <Pressable testID="open-arsenal" style={[styles.topBtn, styles.arsenalBtn]} onPress={() => setShowArsenal(true)}>
-          <MaterialCommunityIcons name="store" size={18} color={colors.brandSecondary} />
+          <MaterialCommunityIcons name="pistol" size={18} color={colors.brandSecondary} />
           <Text style={styles.arsenalText}>{t("menu.arsenal")}</Text>
         </Pressable>
         <Pressable testID="open-skins" style={[styles.topBtn, styles.skinsBtn]} onPress={() => setShowSkins(true)}>
@@ -217,10 +219,14 @@ export default function MainMenu(props: Props) {
         />
       )}
       {showArsenal && (
-        <Arsenal
+        <Armory
           credits={progress.credits}
+          armory={progress.armory}
+          skins={progress.skins}
           upgrades={progress.upgrades}
-          onBuy={props.onBuyUpgrade}
+          onBuyWeapon={props.onBuyWeapon}
+          onToggleLoadout={props.onToggleLoadout}
+          onBuyUpgrade={props.onBuyUpgrade}
           onOpenShop={() => setShowShop(true)}
           onClose={() => setShowArsenal(false)}
         />

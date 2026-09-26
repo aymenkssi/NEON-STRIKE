@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { DIFFICULTIES, DIFFICULTY, MAX_LEVEL, WEAPON_UNLOCK_LEVEL, type Difficulty } from "../game/progression";
+import { DIFFICULTIES, DIFFICULTY, MAX_LEVEL, type Difficulty } from "../game/progression";
 import Panel from "./Panel";
 import { useT } from "@/src/i18n";
 
@@ -18,7 +18,6 @@ type Props = {
   onClose: () => void;
 };
 
-const WEAPON_AT = Object.fromEntries(Object.entries(WEAPON_UNLOCK_LEVEL).map(([k, v]) => [v, k]));
 
 export default function LevelSelect({ unlockedLevel, stars, nightmare, difficulty, onDifficulty, credits, onSelect, onClose }: Props) {
   const totalStars = Object.values(stars).reduce((a, b) => a + b, 0);
@@ -104,9 +103,6 @@ export default function LevelSelect({ unlockedLevel, stars, nightmare, difficult
                 ))}
               </View>
               {nightmare[lvl] && <MaterialCommunityIcons name="skull" size={12} color={colors.error} style={styles.skullMark} />}
-              {WEAPON_AT[lvl] && lvl > 1 && (
-                <MaterialCommunityIcons name="pistol" size={12} color={colors.brandSecondary} style={styles.weaponMark} />
-              )}
             </Pressable>
           );
         })}
@@ -135,7 +131,6 @@ const styles = StyleSheet.create({
   tileLocked: { opacity: 0.45 },
   num: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 22, lineHeight: 24 },
   tileStars: { flexDirection: "row", gap: 1 },
-  weaponMark: { position: "absolute", top: 4, right: 4 },
   skullMark: { position: "absolute", top: 4, left: 4 },
   diffRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
   diffLabel: { color: colors.onSurfaceSecondary, fontFamily: fonts.displaySemi, fontSize: 13, letterSpacing: 1, marginRight: 2 },
