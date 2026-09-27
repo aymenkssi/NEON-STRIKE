@@ -96,8 +96,8 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
               </>
             ) : reward ? (
               <>
-                <MaterialCommunityIcons name="trophy" size={18} color={colors.warning} />
-                <Text style={[styles.actionText, { color: colors.warning, fontSize: 13 }]}>{t("skins.seasonOnly")}</Text>
+                <MaterialCommunityIcons name={hero?.exclusive ? "book-open-variant" : "trophy"} size={18} color={colors.warning} />
+                <Text style={[styles.actionText, { color: colors.warning, fontSize: 13 }]}>{t(hero?.exclusive ? "skins.storyOnly" : "skins.seasonOnly")}</Text>
               </>
             ) : equipped ? (
               <>

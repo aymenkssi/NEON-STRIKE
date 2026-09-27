@@ -8,7 +8,8 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import type { ZombieKind } from "./content";
 import { box, capsule, cone, cyl, merge, paint, sphere, toonMaterial } from "./toon";
 
-export type CharacterKind = ZombieKind | "boss";
+// "guardian": look of the story boss of Act 1 (a Helix security guard), used by the "boss" zombie.
+export type CharacterKind = ZombieKind | "boss" | "guardian";
 
 type Look = {
   skin: number;
@@ -16,7 +17,7 @@ type Look = {
   pants: number;
   shoes: number;
   eyes: number;
-  extra?: "hood" | "helmet" | "belly" | "crown" | "sac" | "riot";
+  extra?: "hood" | "helmet" | "belly" | "crown" | "sac" | "riot" | "cap";
   bulk: number; // torso/limb thickness
 };
 
@@ -27,6 +28,7 @@ const LOOKS: Record<CharacterKind, Look> = {
   exploder: { skin: 0xc6d65a, shirt: 0x7a5a3a, pants: 0x4a3a2a, shoes: 0x2a2320, eyes: 0xff9b1f, extra: "belly", bulk: 1.15 },
   spitter: { skin: 0xb5d94a, shirt: 0x6b4fa0, pants: 0x3a3350, shoes: 0x2a2320, eyes: 0xd4ff3a, extra: "sac", bulk: 0.95 },
   shield: { skin: 0x9bb7c4, shirt: 0x243447, pants: 0x1f2a38, shoes: 0x111418, eyes: 0x6dfaff, extra: "riot", bulk: 1.1 },
+  guardian: { skin: 0x7fa88a, shirt: 0x1d2b4f, pants: 0x141c33, shoes: 0x0a0a0a, eyes: 0x00ffff, extra: "cap", bulk: 1.3 },
   boss: { skin: 0x7b4fd0, shirt: 0x1f1b2e, pants: 0x2a1f3f, shoes: 0x111111, eyes: 0xff2d55, extra: "crown", bulk: 1.2 },
 };
 
@@ -67,6 +69,11 @@ function build(kind: CharacterKind): Parts {
     head.push(paint(rbox(0.66, 0.34, 0.62, 0.15), 0x1f2a38, { y: 2.0 }));
     head.push(paint(box(0.6, 0.06, 0.22), 0x6dfaff, { y: 2.18, z: 0.2, rx: -0.5 }));
   }
+  if (L.extra === "cap") {
+    // Helix security cap: crown, visor and a glowing badge.
+    head.push(paint(rbox(0.6, 0.2, 0.56, 0.1), 0x141c33, { y: 2.08 }));
+    head.push(paint(box(0.56, 0.04, 0.26), 0x0a0f1f, { y: 1.99, z: 0.3 }));
+  }
   if (L.extra === "crown") {
     head.push(paint(cyl(0.3, 0.3, 0.16, 10), 0xffc233, { y: 2.11 }));
     for (let i = 0; i < 5; i++) {
@@ -94,6 +101,14 @@ function build(kind: CharacterKind): Parts {
   // Spitter: swollen glowing throat sac full of acid.
   if (L.extra === "sac") glow = merge([paint(sphere(0.22, 10, 7), 0x9dff2e, { y: 1.5, z: 0.16, sy: 0.8 })]);
   // Riot shield held in front: from the knees to the chin, the head stays above it.
+  // Guardian: glowing Helix badge and shoulder stripes.
+  if (L.extra === "cap")
+    glow = merge([
+      paint(box(0.12, 0.08, 0.03), 0x00ffff, { y: 2.1, z: 0.29 }),
+      paint(box(0.12, 0.14, 0.03), 0x00ffff, { x: 0.15, y: 1.3, z: 0.165 * b }),
+      paint(box(0.04, 0.04, 0.34 * b), 0x00ffff, { x: 0.3 * b, y: 1.45 }),
+      paint(box(0.04, 0.04, 0.34 * b), 0x00ffff, { x: -0.3 * b, y: 1.45 }),
+    ]);
   let shield: THREE.BufferGeometry | undefined;
   if (L.extra === "riot")
     shield = merge([
@@ -130,8 +145,8 @@ let shadowGeo: THREE.CircleGeometry | null = null;
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 const noRaycast = () => {};
 
-export function buildZombie(kind: CharacterKind) {
-  const p = parts(kind);
+export function buildZombie(kind: CharacterKind, look: CharacterKind = kind) {
+  const p = parts(look);
   const g = new THREE.Group();
   const mat = toonMaterial({ emissive: 0x000000 });
   const eyeMat = new THREE.MeshBasicMaterial({ vertexColors: true });
@@ -153,7 +168,7 @@ export function buildZombie(kind: CharacterKind) {
     g.add(shield);
   }
 
-  const b = LOOKS[kind].bulk;
+  const b = LOOKS[look].bulk;
   const leftArm = new THREE.Mesh(p.arm, mat);
   leftArm.position.set(0.36 * b, 1.42, 0);
   leftArm.rotation.x = -Math.PI / 2;

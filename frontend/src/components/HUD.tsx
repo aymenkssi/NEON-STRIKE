@@ -146,7 +146,7 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
       {/* Boss health */}
       {stats.boss && (
         <View style={[styles.bossWrap, { top: padT + 44 }]} pointerEvents="none" testID="boss-bar">
-          <Text style={styles.bossLabel}>BOSS</Text>
+          <Text style={styles.bossLabel} testID="boss-name">{stats.boss.name ?? "BOSS"}</Text>
           <View style={styles.bossBar}>
             <View style={[styles.bossFill, { width: `${(stats.boss.health / stats.boss.max) * 100}%` }]} />
           </View>

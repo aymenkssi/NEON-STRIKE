@@ -6,6 +6,7 @@ import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
 import { MUZZLE, VIEW, buildWeaponModel } from "./weapons";
 import { STANCE, buildHero, type Hero } from "./heroes";
+import { storyBoss } from "./story";
 import { WEAPONS, ammoBox, ammoCap, startAmmo, unlimitedAmmo, weaponOf, type FireMode, type WeaponConfig } from "./armory";
 import {
   CREDITS_PER_BOSS,
@@ -110,7 +111,7 @@ export type GameStats = {
   totalWaves: number;
   kills: number;
   credits: number; // credits picked up during the current level
-  boss: { health: number; max: number } | null;
+  boss: { health: number; max: number; name?: string } | null; // name: story boss
   weaponIndex: number;
   weapons: WeaponInfo[]; // the loadout (weapons carried in this game)
   reserve: number | null; // spare rounds of the current weapon (null: unlimited)
@@ -399,7 +400,9 @@ export class GameEngine {
     const cfg = this.levelCfg;
     const isBoss = kind === "boss";
     const def = ZOMBIES[isBoss ? "walker" : kind];
-    const { group: g, limbs } = buildZombie(kind);
+    // Last level of a story act: the boss has its own look, name and more health.
+    const story = isBoss ? storyBoss(cfg.level) : null;
+    const { group: g, limbs } = buildZombie(kind, story?.look);
     // Zombies come in from the streets, never right next to the player.
     const far = this.spawnPoints.filter((p) => Math.hypot(p.x - this.camera.position.x, p.z - this.camera.position.z) > 24);
     const from = far.length ? far[Math.floor(Math.random() * far.length)] : this.spawnPoints[0] ?? new THREE.Vector3(0, 0, -50);
@@ -408,11 +411,12 @@ export class GameEngine {
     g.scale.set(scale, scale, scale);
 
     const speed = (1.6 + Math.random() * 1.2 + cfg.zombieSpeedBonus) * cfg.speedMult;
-    const hp = isBoss ? cfg.bossHealth : Math.max(1, Math.round(cfg.zombieHealth * def.hpMult));
+    const hp = isBoss ? Math.round(cfg.bossHealth * (story?.hp ?? 1)) : Math.max(1, Math.round(cfg.zombieHealth * def.hpMult));
     g.userData = {
       type: "zombie",
       kind,
       boss: isBoss,
+      storyName: story ? t(story.name) : undefined,
       health: hp,
       maxHealth: hp,
       speed: isBoss ? speed * 0.7 : speed * def.speedMult,
@@ -1203,7 +1207,7 @@ export class GameEngine {
       kills: this.kills,
       credits: this.levelCredits,
       boss: this.boss
-        ? { health: Math.max(0, Math.ceil(this.boss.userData.health)), max: this.boss.userData.maxHealth }
+        ? { health: Math.max(0, Math.ceil(this.boss.userData.health)), max: this.boss.userData.maxHealth, name: this.boss.userData.storyName }
         : null,
       weaponIndex: this.weaponIndex,
       fireMode: this.fireMode,
