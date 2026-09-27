@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, BackHandler } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -17,6 +17,7 @@ import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
 import Skins from "./Skins";
 import SeasonReward from "./SeasonReward";
+import ExitConfirm, { canQuitApp } from "./ExitConfirm";
 import SeasonIntro, { SEASON_INTRO_KEY, markSeasonIntroSeen } from "./SeasonIntro";
 import { storage } from "@/src/utils/storage";
 import { currentSeason, daysLeft, fetchMySeason, type SeasonReward as PendingReward } from "../api/seasons";
@@ -79,6 +80,7 @@ export default function MainMenu(props: Props) {
   const [showShop, setShowShop] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
   const [showSkins, setShowSkins] = useState(false);
+  const [showExit, setShowExit] = useState(false);
   // Rewards of finished seasons waiting for this account (shown one at a time).
   const [rewards, setRewards] = useState<PendingReward[]>([]);
   useEffect(() => {
@@ -109,6 +111,22 @@ export default function MainMenu(props: Props) {
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
   const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || intro !== null;
   const goalsReady = claimableGoals(progress);
+
+  // Android back button: closes the open window, else asks to quit the game.
+  const overlayRef = React.useRef(false);
+  overlayRef.current = overlayOpen || showExit;
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (overlayRef.current) {
+        setShowDaily(false); setShowLevels(false); setShowArsenal(false); setShowShop(false);
+        setShowLeaderboard(false); setShowSettings(false); setShowGoals(false); setShowSkins(false); setShowExit(false);
+        return true;
+      }
+      setShowExit(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   const play = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -150,6 +168,11 @@ export default function MainMenu(props: Props) {
           <MaterialCommunityIcons name="tshirt-crew" size={18} color={colors.skins} />
           <Text style={styles.skinsText}>{t("menu.skins")}</Text>
         </Pressable>
+        {canQuitApp && (
+          <Pressable testID="open-exit" style={styles.topBtn} onPress={() => setShowExit(true)} accessibilityLabel={t("pause.quitGame")}>
+            <MaterialCommunityIcons name="power" size={20} color={colors.error} />
+          </Pressable>
+        )}
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -286,6 +309,7 @@ export default function MainMenu(props: Props) {
       {showLeaderboard && (
         <Leaderboard username={username} guest={guest} onSeasonInfo={() => setIntro("manual")} onClose={() => setShowLeaderboard(false)} />
       )}
+      {showExit && <ExitConfirm onCancel={() => setShowExit(false)} />}
       {showSettings && (
         <Settings
           lookSensitivity={props.lookSensitivity}

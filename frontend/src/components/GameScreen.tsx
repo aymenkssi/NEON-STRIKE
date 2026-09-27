@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, BackHandler } from "react-native";
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import * as Haptics from "@/src/utils/haptics";
 import { GameEngine, type EngineOptions, type GameStats, type RunResult } from "../game/GameEngine";
@@ -52,6 +52,7 @@ const INITIAL: GameStats = {
   sector: { index: 1, name: "PARIS" },
   powerups: [],
   difficulty: "normal",
+  grenades: 3,
 };
 
 export default function GameScreen({
@@ -164,6 +165,19 @@ export default function GameScreen({
     engineRef.current?.pause();
     setStatus("paused");
   };
+  // Android back button in game: pause (the pause menu offers menu / quit).
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (statusRef.current === "playing") {
+        engineRef.current?.pause();
+        setStatus("paused");
+      }
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
   const resume = () => {
     engineRef.current?.resume();
     setStatus("playing");
@@ -212,7 +226,7 @@ export default function GameScreen({
     <View style={styles.root}>
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
 
-      {status === "playing" && <TouchControls getEngine={getEngine} fireMode={stats.fireMode} fireModes={stats.fireModes} />}
+      {status === "playing" && <TouchControls getEngine={getEngine} fireMode={stats.fireMode} fireModes={stats.fireModes} grenades={stats.grenades} />}
 
       {(status === "playing" || status === "paused") && (
         <HUD

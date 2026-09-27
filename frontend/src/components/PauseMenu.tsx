@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { BlurView } from "expo-blur";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
 import { useT } from "@/src/i18n";
+import ExitConfirm, { canQuitApp } from "./ExitConfirm";
 
 type Props = {
   onResume: () => void;
@@ -13,7 +14,9 @@ type Props = {
 
 export default function PauseMenu({ onResume, onRestart, onExit }: Props) {
   const t = useT();
+  const [quitting, setQuitting] = useState(false);
   return (
+    <>
     <BlurView intensity={40} tint="dark" style={styles.overlay} testID="pause-menu">
       <View style={styles.panel}>
         <Text style={styles.title}>{t("pause.title")}</Text>
@@ -29,8 +32,16 @@ export default function PauseMenu({ onResume, onRestart, onExit }: Props) {
           <MaterialCommunityIcons name="home" size={22} color={colors.onSurfaceSecondary} />
           <Text style={[styles.btnText, { color: colors.onSurfaceSecondary }]}>{t("pause.mainMenu")}</Text>
         </Pressable>
+        {canQuitApp && (
+          <Pressable testID="pause-quit-button" style={[styles.btn, styles.ghost, { borderColor: "rgba(255,0,60,0.5)" }]} onPress={() => setQuitting(true)}>
+            <MaterialCommunityIcons name="power" size={22} color={colors.error} />
+            <Text style={[styles.btnText, { color: colors.error }]}>{t("pause.quitGame")}</Text>
+          </Pressable>
+        )}
       </View>
     </BlurView>
+    {quitting && <ExitConfirm onCancel={() => setQuitting(false)} />}
+    </>
   );
 }
 
