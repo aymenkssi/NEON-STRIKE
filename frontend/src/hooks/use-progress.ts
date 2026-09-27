@@ -14,8 +14,8 @@ import {
   type UpgradeLevels,
 } from "@/src/game/progression";
 import { LOADOUT_SIZE, ammoBox, ammoBoxPrice, ammoCap, cleanArmory, initialArmory, onSale, priceOf, startAmmo, unlimitedAmmo, type ArmoryState } from "@/src/game/armory";
-import { EMPTY_STORY, actByNumber, actProgress, cleanStory, type StoryState } from "@/src/game/story";
-import { DEFAULT_SKINS, canBuySkin, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
+import { EMPTY_STORY, actByNumber, actProgress, cleanStory, type ActReward, type StoryState } from "@/src/game/story";
+import { DEFAULT_SKINS, canBuySkin, ownsSkin, skinPrice, OUTFITS, WEAPON_SKINS, type SkinState } from "@/src/game/skins";
 import {
   ACHIEVEMENTS,
   advanceMissions,
@@ -322,6 +322,29 @@ export function useProgress(cloudEnabled: boolean) {
     [update]
   );
 
+  // Episodes from the admin page: opening comic seen, and the reward (once per episode).
+  const markEpisodeSeen = useCallback(
+    (id: string) => {
+      if (ref.current.story.epSeen.includes(id)) return;
+      update((p) => ({ ...p, story: { ...p.story, epSeen: [...p.story.epSeen, id] } }));
+    },
+    [update]
+  );
+  const claimEpisodeReward = useCallback(
+    (id: string, reward: ActReward) => {
+      if (ref.current.story.epClaimed.includes(id)) return null;
+      update((p) => {
+        // Unknown skin ids (newer app version) are ignored; the credits are still given.
+        const skin = reward.skin && [...WEAPON_SKINS, ...OUTFITS].some((x) => x.id === reward.skin) ? reward.skin : undefined;
+        const owned = skin && !p.skins.owned.includes(skin) ? [...p.skins.owned, skin] : p.skins.owned;
+        const skins = skin ? equipped({ ...p.skins, owned }, skin) : p.skins;
+        return { ...p, credits: p.credits + reward.credits, skins, story: { ...p.story, epClaimed: [...p.story.epClaimed, id] } };
+      });
+      return reward;
+    },
+    [update]
+  );
+
   // A secret document found in a level (story journal).
   const markDocFound = useCallback(
     (level: number) => {
@@ -411,6 +434,8 @@ export function useProgress(cloudEnabled: boolean) {
     markComicSeen,
     claimActReward,
     markDocFound,
+    markEpisodeSeen,
+    claimEpisodeReward,
     buyWeapon,
     toggleLoadout,
     buyAmmo,

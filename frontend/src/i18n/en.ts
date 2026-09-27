@@ -343,6 +343,7 @@ export const en: Record<Key, string> = {
   "skin.o_cyber": "Cyber",
   "skin.o_royal": "Royal",
   "skin.o_soldier_vet": "Veteran Max",
+  "skin.variantN": "skin {n}",
 
   "hero.soldier": "Max",
   "hero.commando": "Rex",
@@ -636,4 +637,13 @@ export const en: Record<Key, string> = {
   "story.scene.satellite": "HX-1 SATELLITE",
   "story.scene.desert": "CAIRO",
   "story.scene.signal": "UNKNOWN SIGNAL",
+  "story.episodeN": "EPISODE {n}",
+  "story.episodeDone": "EPISODE {n} COMPLETE",
+  "story.episodeNext": "A new episode comes out every season.",
+  "story.episodes": "Season episodes",
+  "story.episodesHint": "The story goes on: a new episode comes out every season.",
+  "story.new": "NEW",
+  "story.playEpisode": "Play the episode",
+  "story.episodeLevel": "Level {level} · {city}",
+  "story.replayEpisode": "Replay the comic",
 };

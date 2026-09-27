@@ -6,7 +6,7 @@ import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
 import { MUZZLE, VIEW, buildWeaponModel } from "./weapons";
 import { STANCE, buildHero, type Hero } from "./heroes";
-import { storyBoss } from "./story";
+import { storyBoss, type StoryBoss } from "./story";
 import { WEAPONS, ammoBox, ammoCap, startAmmo, unlimitedAmmo, weaponOf, type FireMode, type WeaponConfig } from "./armory";
 import {
   CREDITS_PER_BOSS,
@@ -134,6 +134,7 @@ export type EngineOptions = {
   outfit?: string;
   view?: "third" | "first"; // third person (default): the whole character is visible
   docsFound?: number[]; // levels whose secret document was already found (story mode)
+  episodeBoss?: StoryBoss; // episode published from the admin page: its boss replaces the level's
 };
 
 // Third-person camera: over the right shoulder, pulled in when a wall is behind the player.
@@ -404,7 +405,7 @@ export class GameEngine {
     const isBoss = kind === "boss";
     const def = ZOMBIES[isBoss ? "walker" : kind];
     // Last level of a story act: the boss has its own look, name and more health.
-    const story = isBoss ? storyBoss(cfg.level) : null;
+    const story = isBoss ? (this.opts.episodeBoss ?? storyBoss(cfg.level)) : null;
     const { group: g, limbs } = buildZombie(kind, story?.look);
     // Zombies come in from the streets, never right next to the player.
     const far = this.spawnPoints.filter((p) => Math.hypot(p.x - this.camera.position.x, p.z - this.camera.position.z) > 24);
@@ -419,7 +420,7 @@ export class GameEngine {
       type: "zombie",
       kind,
       boss: isBoss,
-      storyName: story ? t(story.name) : undefined,
+      storyName: story ? (story.label ?? (story.name ? t(story.name) : undefined)) : undefined,
       health: hp,
       maxHealth: hp,
       speed: isBoss ? speed * 0.7 : speed * def.speedMult,

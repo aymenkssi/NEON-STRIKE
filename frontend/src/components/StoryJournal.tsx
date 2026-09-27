@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
-import { ACTS, actProgress, comicsOf, docKey, docsOfAct, type Act, type StoryState } from "../game/story";
-import { outfit as outfitOf } from "../game/skins";
+import { ACTS, actProgress, comicsOf, docKey, docsOfAct, type Act, type ActReward, type EpisodeRun, type StoryState } from "../game/story";
+import { cityOfLevel } from "../game/cities";
+import { outfit as outfitOf, skinTitle } from "../game/skins";
 import { CITIES } from "../game/cities";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 import Panel from "./Panel";
@@ -19,9 +20,12 @@ type Props = {
   onClaim: (act: Act) => void;
   onPlay: (level: number) => void;
   onClose: () => void;
+  episodes: EpisodeRun[];
+  onPlayEpisode: (run: EpisodeRun) => void;
+  onReplayEpisode: (run: EpisodeRun, part: "intro" | "outro") => void;
 };
 
-export default function StoryJournal({ story, stars, unlockedLevel, credits, onReplay, onClaim, onPlay, onClose }: Props) {
+export default function StoryJournal({ story, stars, unlockedLevel, credits, onReplay, onClaim, onPlay, onClose, episodes, onPlayEpisode, onReplayEpisode }: Props) {
   const t = useT();
   const [docsAct, setDocsAct] = useState<Act | null>(null);
   let done = 0;
@@ -32,10 +36,10 @@ export default function StoryJournal({ story, stars, unlockedLevel, credits, onR
     total += p.total;
   }
   const percent = Math.round((done / total) * 100);
-  const rewardText = (a: Act) => {
+  const rewardText = (a: Act | { reward?: ActReward }) => {
     const r = a.reward!;
     const items = [t("story.creditsN", { n: formatNumber(r.credits) })];
-    if (r.skin) items.push(t(`skin.${r.skin}` as Key));
+    if (r.skin) items.push(skinTitle(r.skin, t));
     for (const h of r.heroes ?? []) items.push(t(outfitOf(h).heroName));
     return t("story.reward", { items: items.join(" + ") });
   };
@@ -70,9 +74,41 @@ export default function StoryJournal({ story, stars, unlockedLevel, credits, onR
         <View style={styles.bar}>
           <View style={[styles.fill, { width: `${percent}%` }]} />
         </View>
-        <Text style={styles.meta}>{t("story.docHint")}</Text>
+        <Text style={styles.meta}>{t(episodes.length ? "story.episodesHint" : "story.docHint")}</Text>
       </View>
       <ScrollView horizontal contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
+        {/* Episodes first: they are the news of the season. */}
+        {episodes.map((e) => {
+          const fresh = !story.epSeen.includes(e.id);
+          const claimed = story.epClaimed.includes(e.id);
+          return (
+            <View key={e.id} style={[styles.card, styles.epCard]} testID={`story-ep-${e.number}`}>
+              <View style={styles.cardTop}>
+                <Text style={[styles.actTag, styles.epTag]}>{t("story.episodeN", { n: e.number })}</Text>
+                {fresh ? <Text style={styles.newTag}>{t("story.new")}</Text> : claimed ? <MaterialCommunityIcons name="check-decagram" size={18} color={colors.brand} /> : null}
+              </View>
+              <Text style={styles.title} numberOfLines={1}>{e.title}</Text>
+              <Text style={styles.meta}>{t("story.episodeLevel", { level: e.level, city: t(cityOfLevel(e.level).name) })}</Text>
+              {!!e.tagline && <Text style={styles.tag} numberOfLines={2}>{e.tagline}</Text>}
+              <Text style={[styles.reward, claimed && { color: colors.brand }]} numberOfLines={2}>
+                {claimed ? "✓ " + t("story.rewardDone") : rewardText(e)}
+              </Text>
+              <View style={[styles.actions, { marginTop: "auto" }]}>
+                <Pressable testID={`story-play-ep-${e.number}`} style={[styles.btn, { backgroundColor: colors.skins }]} onPress={() => onPlayEpisode(e)}>
+                  <Text style={[styles.btnText, { color: "#1a0014" }]}>{t("story.playEpisode")}</Text>
+                </Pressable>
+                {!fresh && (
+                  <View style={styles.replays}>
+                    <Pressable testID={`story-replay-ep-${e.number}`} style={styles.ghost} onPress={() => onReplayEpisode(e, "intro")}>
+                      <MaterialCommunityIcons name="replay" size={14} color={colors.onSurfaceSecondary} />
+                      <Text style={styles.ghostText}>{t("story.replayEpisode")}</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })}
         {ACTS.map((a) => {
           const p = actProgress(a, stars);
           const complete = p.done >= p.total;
@@ -161,6 +197,9 @@ const styles = StyleSheet.create({
   replays: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   ghost: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
   ghostText: { color: colors.onSurfaceSecondary, fontFamily: fonts.textMed, fontSize: 10 },
+  epCard: { borderColor: colors.skins, backgroundColor: "rgba(255,92,214,0.06)" },
+  epTag: { backgroundColor: colors.skins, color: "#1a0014" },
+  newTag: { color: "#fff", backgroundColor: colors.error, fontFamily: fonts.display, fontSize: 10, letterSpacing: 1.5, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 3, overflow: "hidden" },
   docsRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   docsText: { color: "#00e5ff", fontFamily: fonts.textMed, fontSize: 11, flex: 1 },
   docsRead: { color: "#00e5ff", fontFamily: fonts.display, fontSize: 12, letterSpacing: 1 },

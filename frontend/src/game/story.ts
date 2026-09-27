@@ -26,13 +26,14 @@ export type SceneId =
 export type Stage = { bg: number; actors: Actor[]; night?: boolean };
 export type Art = { stage: Stage } | { scene: SceneId };
 
-export type Panel = { art: Art; who: Speaker; text: Key };
-export type Line = { who: Speaker; text: Key };
+// Text: a translation key (built-in story), or the text written in the admin page (episodes).
+export type Panel = { art: Art; who: Speaker } & ({ text: Key } | { raw: string });
+export type Line = { who: Speaker } & ({ text: Key } | { raw: string });
 
 // Reward of a finished act: credits, maybe an exclusive skin, and the characters met in the act
 // (given for free, the others keep being sold in the Skins shop).
 export type ActReward = { credits: number; skin?: string; heroes?: string[] };
-export type StoryBoss = { look: CharacterKind; name: Key; hp: number };
+export type StoryBoss = { look: CharacterKind; name?: Key; label?: string; hp: number }; // label: episode boss name
 
 export type Act = {
   n: number;
@@ -214,6 +215,85 @@ export const RADIO: Record<number, { start?: Line; boss?: Line }> = {
   30: { start: { who: "leo", text: "story.l30.start" }, boss: { who: "founder", text: "story.l30.boss" } },
 };
 
+// ---------------- Episodes (published from the admin page, see backend/episodes.py) ----------------
+export type RemotePanel = { art: string; who: string; text_fr: string; text_en?: string };
+export type RemoteEpisode = {
+  id: string;
+  number: number;
+  title_fr: string;
+  title_en?: string;
+  tagline_fr?: string;
+  tagline_en?: string;
+  level: number;
+  boss_look: string;
+  boss_name_fr?: string;
+  boss_name_en?: string;
+  boss_hp: number;
+  radio_start_who?: string;
+  radio_start_fr?: string;
+  radio_start_en?: string;
+  radio_boss_who?: string;
+  radio_boss_fr?: string;
+  radio_boss_en?: string;
+  intro: RemotePanel[];
+  outro: RemotePanel[];
+  reward_credits: number;
+  reward_skin?: string | null;
+  starts_at?: string | null;
+};
+// An episode ready to play, in the player's language.
+export type EpisodeRun = {
+  id: string;
+  number: number;
+  title: string;
+  tagline: string;
+  level: number;
+  boss: StoryBoss;
+  radio: { start?: Line; boss?: Line };
+  intro: Panel[];
+  outro: Panel[];
+  reward: ActReward;
+  startsAt: number; // ms (0: unknown)
+};
+
+const SPEAKERS: Speaker[] = ["narrator", "max", "radio", "rex", "kira", "zed", "nova", "leo", "doc", "guardian", "commander", "queen", "founder"];
+const SCENE_IDS: SceneId[] = ["lab", "leak", "radio", "tower", "badge", "skyline", "crates", "neon", "servers", "satellite", "desert", "signal"];
+const BOSS_LOOKS: CharacterKind[] = ["boss", "guardian", "spitterking", "commander", "queen", "founder"];
+const HERO_WEAPON: Record<string, string> = { o_soldier: "shotgun", o_commando: "m4", o_ninja: "mp5", o_astronaut: "sniper", o_cyber: "pistol", o_royal: "ak47" };
+const speaker = (v?: string): Speaker => (SPEAKERS.includes(v as Speaker) ? (v as Speaker) : "narrator");
+
+// Picture of an episode page: "lab"… (drawn scene), "hero:<outfit>", "boss:<look>", "team" or "horde".
+export function episodeArt(art: string): Art {
+  if (SCENE_IDS.includes(art as SceneId)) return { scene: art as SceneId };
+  if (art.startsWith("hero:") && HERO_WEAPON[art.slice(5)]) return solo(hero(art.slice(5), HERO_WEAPON[art.slice(5)]));
+  if (art.startsWith("boss:") && BOSS_LOOKS.includes(art.slice(5) as CharacterKind)) return boss(art.slice(5) as CharacterKind, 0x1a0f2e);
+  if (art === "team") return { stage: { bg: 0x121a2e, night: true, actors: TEAM(Object.entries(HERO_WEAPON) as [string, string][]) } };
+  if (art === "horde") return COMICS.a1_intro[4].art;
+  return { scene: "signal" };
+}
+
+export function episodeFrom(e: RemoteEpisode, lang: "fr" | "en"): EpisodeRun | null {
+  if (!e?.id || !Array.isArray(e.intro) || !e.intro.length) return null;
+  const tr = (fr?: string, en?: string) => ((lang === "en" && en?.trim()) || fr || "").trim();
+  const panels = (list: RemotePanel[]) =>
+    (list ?? []).filter((p) => p?.text_fr).map((p): Panel => ({ art: episodeArt(p.art), who: speaker(p.who), raw: tr(p.text_fr, p.text_en) }));
+  const line = (who?: string, fr?: string, en?: string): Line | undefined => (fr?.trim() ? { who: speaker(who), raw: tr(fr, en) } : undefined);
+  const look = BOSS_LOOKS.includes(e.boss_look as CharacterKind) ? (e.boss_look as CharacterKind) : "boss";
+  return {
+    id: e.id,
+    number: e.number,
+    title: tr(e.title_fr, e.title_en),
+    tagline: tr(e.tagline_fr, e.tagline_en),
+    level: Math.max(1, Math.min(30, Math.round(e.level) || 1)),
+    boss: { look, label: tr(e.boss_name_fr, e.boss_name_en) || undefined, hp: Math.max(1, Math.min(4, Number(e.boss_hp) || 1)) },
+    radio: { start: line(e.radio_start_who, e.radio_start_fr, e.radio_start_en), boss: line(e.radio_boss_who, e.radio_boss_fr, e.radio_boss_en) },
+    intro: panels(e.intro),
+    outro: panels(e.outro),
+    reward: { credits: Math.max(0, Math.round(e.reward_credits) || 0), skin: e.reward_skin || undefined },
+    startsAt: e.starts_at ? Date.parse(e.starts_at) || 0 : 0,
+  };
+}
+
 // Secret Helix documents: one hidden in every level (story.doc.<level>).
 export const DOC_COUNT = 30;
 export const docKey = (level: number) => `story.doc.${level}` as Key;
@@ -248,15 +328,23 @@ export function actEndingAt(level: number): Act | null {
   return a?.ready && a.levels[1] === level ? a : null;
 }
 
-// Comics seen, act rewards received, secret documents found (levels).
-export type StoryState = { seen: string[]; claimed: number[]; docs: number[] };
-export const EMPTY_STORY: StoryState = { seen: [], claimed: [], docs: [] };
+// Comics seen, act rewards received, secret documents found (levels), episodes started and
+// episode rewards received (episode ids).
+export type StoryState = { seen: string[]; claimed: number[]; docs: number[]; epSeen: string[]; epClaimed: string[] };
+export const EMPTY_STORY: StoryState = { seen: [], claimed: [], docs: [], epSeen: [], epClaimed: [] };
 
 export function cleanStory(s: any): StoryState {
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x in COMICS) : []);
   const nums = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is number => typeof x === "number" && !!actByNumber(x)) : []);
   const docs = Array.isArray(s?.docs) ? s.docs.filter((x: unknown): x is number => typeof x === "number" && x >= 1 && x <= DOC_COUNT) : [];
-  return { seen: Array.from(new Set(strings(s?.seen))), claimed: Array.from(new Set(nums(s?.claimed))), docs: Array.from(new Set<number>(docs)) };
+  const ids = (v: unknown) => (Array.isArray(v) ? Array.from(new Set(v.filter((x): x is string => typeof x === "string" && x.length <= 64))).slice(-200) : []);
+  return {
+    seen: Array.from(new Set(strings(s?.seen))),
+    claimed: Array.from(new Set(nums(s?.claimed))),
+    docs: Array.from(new Set<number>(docs)),
+    epSeen: ids(s?.epSeen),
+    epClaimed: ids(s?.epClaimed),
+  };
 }
 
 // Levels of an act cleared (for the journal).

@@ -112,6 +112,16 @@ export const skinsOf = (base: string) => OUTFITS.filter((o) => o.base === base);
 export type SkinState = { owned: string[]; weapon: string; outfit: string };
 export const DEFAULT_SKINS: SkinState = { owned: [], weapon: "w_default", outfit: "o_soldier" };
 
+// Display name of any skin: "Arctique", "Kira · Ninja", "Max Vétéran"… (t: the i18n function).
+export function skinTitle(id: string, t: (k: Key, v?: Record<string, string | number>) => string) {
+  const w = WEAPON_SKINS.find((s) => s.id === id);
+  if (w) return t(w.name);
+  const o = OUTFITS.find((s) => s.id === id);
+  if (!o) return id;
+  if (o.exclusive) return t(`skin.${o.id}` as Key);
+  return o.variant === 0 ? `${t(o.heroName)} · ${t(o.name)}` : `${t(o.heroName)} · ${t("skin.variantN", { n: o.variant + 1 })}`;
+}
+
 export const weaponSkin = (id?: string) => WEAPON_SKINS.find((s) => s.id === id) ?? WEAPON_SKINS[0];
 export const outfit = (id?: string) => OUTFITS.find((s) => s.id === id) ?? OUTFITS[0];
 export const isExclusive = (id: string) => !!(WEAPON_SKINS.find((s) => s.id === id)?.exclusive || OUTFITS.find((o) => o.id === id)?.exclusive);

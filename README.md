@@ -131,6 +131,13 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 
   **Documents secrets** : un document Helix est caché dans chaque niveau (30 au total). C'est une tablette lumineuse sous un rayon cyan. On le lit à la radio en le ramassant, puis dans le Journal.
 
+  **Épisodes de saison** (onglet « Épisodes » de la page d'administration, `backend/episodes.py`) : après les 5 actes, l'histoire continue avec un nouvel épisode publié sans mise à jour de l'application :
+  - l'admin écrit la BD d'ouverture et la BD de fin (1 à 8 cases chacune : décor, personnage ou boss, qui parle, texte français et anglais) ;
+  - il choisit le niveau joué (ville et difficulté), l'apparence, le nom et la vie du boss, les répliques radio, et la récompense (crédits et un skin) ;
+  - il publie l'épisode tout de suite ou à une date.
+
+  Dans le jeu, le bouton HISTOIRE affiche une pastille rouge et le Journal montre l'épisode en premier (« NOUVEAU »). Un épisode ne débloque pas de niveau de la campagne, et sa récompense se reçoit une seule fois.
+
   Le **Journal** (bouton HISTOIRE du menu) montre la progression, les documents trouvés et les récompenses, et permet de revoir les BD et de rejouer un acte. La progression de l'histoire est dans la sauvegarde (et la sauvegarde en ligne des comptes).
 - **Messages personnels** : depuis l'onglet « Joueurs » de la page d'administration (bouton ✉), l'administrateur envoie un message à un joueur précis ; il s'affiche une seule fois dans le jeu avec la mention « POUR TOI », et l'historique montre s'il a été lu.
 - **Réglages de jeu** : aide à la visée (ralentissement et légère attraction du viseur sur le zombie visé), inversion de l'axe vertical, vibrations, qualité graphique (Économie : décor allégé et 30 images/s ; Normal ; Élevée).

@@ -17,7 +17,7 @@ import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
 import Skins from "./Skins";
 import StoryJournal from "./StoryJournal";
-import type { Act } from "../game/story";
+import type { Act, EpisodeRun } from "../game/story";
 import SeasonReward from "./SeasonReward";
 import ExitConfirm, { canQuitApp } from "./ExitConfirm";
 import SeasonIntro, { SEASON_INTRO_KEY, markSeasonIntroSeen } from "./SeasonIntro";
@@ -67,6 +67,9 @@ type Props = {
   onBuyAmmo: (key: string) => boolean;
   onReplayComic: (id: string, act: Act) => void;
   onClaimAct: (act: Act) => void;
+  episodes: EpisodeRun[]; // published from the admin page
+  onPlayEpisode: (run: EpisodeRun) => void;
+  onReplayEpisode: (run: EpisodeRun, part: "intro" | "outro") => void;
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -134,6 +137,8 @@ export default function MainMenu(props: Props) {
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
   const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || showStory || intro !== null;
   const goalsReady = claimableGoals(progress);
+  // A published episode the player has not opened yet: dot on the HISTOIRE button.
+  const newEpisode = props.episodes.some((e) => !progress.story.epSeen.includes(e.id));
 
   // Android back button: closes the open window, else asks to quit the game.
   const overlayRef = React.useRef(false);
@@ -190,6 +195,7 @@ export default function MainMenu(props: Props) {
         <Pressable testID="open-story" style={[styles.topBtn, styles.storyBtn]} onPress={() => setShowStory(true)}>
           <MaterialCommunityIcons name="book-open-variant" size={18} color={colors.warning} />
           <Text style={styles.storyText}>{t("menu.story")}</Text>
+          {newEpisode && <View style={styles.newDot} testID="story-new-dot" />}
         </Pressable>
         <Pressable testID="open-skins" style={[styles.topBtn, styles.skinsBtn]} onPress={() => setShowSkins(true)}>
           <MaterialCommunityIcons name="tshirt-crew" size={18} color={colors.skins} />
@@ -300,6 +306,12 @@ export default function MainMenu(props: Props) {
           credits={progress.credits}
           onReplay={props.onReplayComic}
           onClaim={props.onClaimAct}
+          episodes={props.episodes}
+          onPlayEpisode={(run) => {
+            setShowStory(false);
+            props.onPlayEpisode(run);
+          }}
+          onReplayEpisode={props.onReplayEpisode}
           onPlay={(level) => {
             setShowStory(false);
             onPlay(level);
@@ -464,6 +476,7 @@ const styles = StyleSheet.create({
   countText: { color: "#fff", fontFamily: fonts.display, fontSize: 11 },
   arsenalBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(0,255,255,0.45)" },
   arsenalText: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
+  newDot: { position: "absolute", top: -3, right: -3, width: 11, height: 11, borderRadius: 6, backgroundColor: colors.error, borderWidth: 2, borderColor: "#0d0f12" },
   storyBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(255,193,7,0.5)" },
   storyText: { color: colors.warning, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
   skinsBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(255,92,214,0.5)" },

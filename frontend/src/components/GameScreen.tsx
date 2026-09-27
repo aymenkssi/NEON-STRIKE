@@ -17,7 +17,7 @@ import LevelComplete from "./LevelComplete";
 import StoryComic from "./StoryComic";
 import RadioLine from "./RadioLine";
 import { useT } from "@/src/i18n";
-import { DOC_COUNT, RADIO, docKey, actEndingAt, actOfLevel, introBefore, type Act, type ActReward, type Line, type StoryState } from "../game/story";
+import { type EpisodeRun, DOC_COUNT, RADIO, docKey, actEndingAt, actOfLevel, introBefore, type Act, type ActReward, type Line, type StoryState } from "../game/story";
 
 type Props = {
   username: string;
@@ -42,6 +42,9 @@ type Props = {
   onComicSeen: (id: string) => void;
   onClaimAct: (n: number) => ActReward | null;
   onDocFound: (level: number) => void;
+  // Episode published from the admin page: its radio, boss and ending; no campaign progress.
+  episode?: EpisodeRun;
+  onClaimEpisode?: (id: string, reward: ActReward) => ActReward | null;
   ownedSkins: string[]; // to tell which characters of an act reward are already owned
 };
 
@@ -90,13 +93,15 @@ export default function GameScreen({
   onClaimAct,
   onDocFound,
   ownedSkins,
+  episode,
+  onClaimEpisode,
 }: Props) {
   const engineRef = useRef<GameEngine | null>(null);
   const [stats, setStats] = useState<GameStats>(INITIAL);
   const [status, setStatus] = useState<"playing" | "paused" | "gameover" | "complete" | "story">("playing");
   // End of a story act: its closing comic (and reward) before going on.
   // Story comic between two levels: the end of an act (with its reward), or the opening of the next.
-  const [ending, setEnding] = useState<{ id: string; act: Act; reward: ActReward | null; then: () => void } | null>(null);
+  const [ending, setEnding] = useState<{ id: string; act?: Act; episode?: EpisodeRun; reward: ActReward | null; then: () => void } | null>(null);
   const t = useT();
   const storyRef = useRef(story);
   storyRef.current = story;
@@ -178,7 +183,9 @@ export default function GameScreen({
           },
           onLevelComplete: (r) => {
             const reward = levelReward(r);
-            latest.current.onLevelDone(r.level, reward.stars, reward.total, r.difficulty ?? "normal");
+            // An episode pays its credits but does not unlock campaign levels.
+            if (episode) onAddCredits(reward.total);
+            else latest.current.onLevelDone(r.level, reward.stars, reward.total, r.difficulty ?? "normal");
             // Accounts: every level cleared counts for the leaderboard (not only a game over).
             if (!guest) submitRunScore({ name: username, score: r.score, level: r.level, kills: r.runKills ?? r.kills }).catch(() => {});
             track({ type: "level", stars: reward.stars });
@@ -278,9 +285,17 @@ export default function GameScreen({
       setStatus("story");
     } else fn();
   };
+  // End of an episode: its closing comic and reward (once), then the menu.
+  const afterEpisode = (fn: () => void) => () => {
+    if (!episode) return fn();
+    const reward = storyRef.current.epClaimed.includes(episode.id) ? null : episode.reward;
+    if (!reward && !episode.outro.length) return fn();
+    setEnding({ id: episode.id, episode, reward, then: fn });
+    setStatus("story");
+  };
   const endStory = () => {
     if (!ending) return;
-    onComicSeen(ending.id);
+    if (!ending.episode) onComicSeen(ending.id);
     const then = ending.then;
     setEnding(null);
     then();
@@ -292,11 +307,11 @@ export default function GameScreen({
     if (stats === INITIAL || status !== "playing" || radioLevel.current === stats.level) return;
     radioLevel.current = stats.level;
     const lvl = stats.level;
-    setTimeout(() => say(RADIO[lvl]?.start), 1200);
-  }, [stats, status, say]);
+    setTimeout(() => say(episode ? episode.radio.start : RADIO[lvl]?.start), 1200);
+  }, [stats, status, say, episode]);
   const bossUp = !!stats.boss;
   useEffect(() => {
-    if (bossUp) say(RADIO[stats.level]?.boss);
+    if (bossUp) say(episode ? episode.radio.boss : RADIO[stats.level]?.boss);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bossUp]);
   const revive = () => {
@@ -352,19 +367,20 @@ export default function GameScreen({
         <LevelComplete
           result={levelResult}
           onDoubleCredits={onAddCredits}
-          onNext={afterLevel(atBreak(nextLevel))}
-          onExit={afterLevel(atBreak(onExit))}
+          onNext={episode ? undefined : afterLevel(atBreak(nextLevel))}
+          onExit={episode ? afterEpisode(atBreak(onExit)) : afterLevel(atBreak(onExit))}
         />
       )}
 
       {status === "story" && ending && (
         <StoryComic
           key={ending.id}
-          id={ending.id}
+          id={ending.episode ? undefined : ending.id}
           act={ending.act}
+          episode={ending.episode ? { run: ending.episode, part: "outro" } : undefined}
           reward={ending.reward}
           owned={ownedSkins}
-          onClaim={() => onClaimAct(ending.act.n)}
+          onClaim={() => (ending.episode ? onClaimEpisode?.(ending.episode.id, ending.episode.reward) : ending.act && onClaimAct(ending.act.n))}
           onDone={endStory}
         />
       )}
