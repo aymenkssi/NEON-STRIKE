@@ -16,6 +16,8 @@ import DailyReward from "./DailyReward";
 import CreditBadge from "./CreditBadge";
 import Shop from "./Shop";
 import Skins from "./Skins";
+import StoryJournal from "./StoryJournal";
+import type { Act } from "../game/story";
 import SeasonReward from "./SeasonReward";
 import ExitConfirm, { canQuitApp } from "./ExitConfirm";
 import SeasonIntro, { SEASON_INTRO_KEY, markSeasonIntroSeen } from "./SeasonIntro";
@@ -63,6 +65,8 @@ type Props = {
   onBuyWeapon: (key: string) => boolean;
   onToggleLoadout: (key: string) => boolean;
   onBuyAmmo: (key: string) => boolean;
+  onReplayComic: (id: string, act: Act) => void;
+  onClaimAct: (act: Act) => void;
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -82,6 +86,7 @@ export default function MainMenu(props: Props) {
   const [showShop, setShowShop] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
   const [showSkins, setShowSkins] = useState(false);
+  const [showStory, setShowStory] = useState(false);
   const [showExit, setShowExit] = useState(false);
   // Rewards of finished seasons waiting for this account (shown one at a time).
   const [rewards, setRewards] = useState<PendingReward[]>([]);
@@ -127,7 +132,7 @@ export default function MainMenu(props: Props) {
   }, []);
   const personal = inbox[0] ?? null;
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
-  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || intro !== null;
+  const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || showStory || intro !== null;
   const goalsReady = claimableGoals(progress);
 
   // Android back button: closes the open window, else asks to quit the game.
@@ -137,7 +142,7 @@ export default function MainMenu(props: Props) {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (overlayRef.current) {
         setShowDaily(false); setShowLevels(false); setShowArsenal(false); setShowShop(false);
-        setShowLeaderboard(false); setShowSettings(false); setShowGoals(false); setShowSkins(false); setShowExit(false);
+        setShowLeaderboard(false); setShowSettings(false); setShowGoals(false); setShowSkins(false); setShowStory(false); setShowExit(false);
         return true;
       }
       setShowExit(true);
@@ -181,6 +186,10 @@ export default function MainMenu(props: Props) {
         <Pressable testID="open-arsenal" style={[styles.topBtn, styles.arsenalBtn]} onPress={() => setShowArsenal(true)}>
           <MaterialCommunityIcons name="pistol" size={18} color={colors.brandSecondary} />
           <Text style={styles.arsenalText}>{t("menu.arsenal")}</Text>
+        </Pressable>
+        <Pressable testID="open-story" style={[styles.topBtn, styles.storyBtn]} onPress={() => setShowStory(true)}>
+          <MaterialCommunityIcons name="book-open-variant" size={18} color={colors.warning} />
+          <Text style={styles.storyText}>{t("menu.story")}</Text>
         </Pressable>
         <Pressable testID="open-skins" style={[styles.topBtn, styles.skinsBtn]} onPress={() => setShowSkins(true)}>
           <MaterialCommunityIcons name="tshirt-crew" size={18} color={colors.skins} />
@@ -283,6 +292,21 @@ export default function MainMenu(props: Props) {
           onClose={() => setShowSkins(false)}
         />
       )}
+      {showStory && (
+        <StoryJournal
+          story={progress.story}
+          stars={progress.stars}
+          unlockedLevel={progress.unlockedLevel}
+          credits={progress.credits}
+          onReplay={props.onReplayComic}
+          onClaim={props.onClaimAct}
+          onPlay={(level) => {
+            setShowStory(false);
+            onPlay(level);
+          }}
+          onClose={() => setShowStory(false)}
+        />
+      )}
       {showShop && <Shop credits={progress.credits} onClose={() => setShowShop(false)} />}
       {showGoals && (
         <Goals
@@ -292,7 +316,7 @@ export default function MainMenu(props: Props) {
           onClose={() => setShowGoals(false)}
         />
       )}
-      {intro && (intro === "manual" || !(showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins)) && (
+      {intro && (intro === "manual" || !(showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || showStory)) && (
         <SeasonIntro
           guest={guest}
           onClose={closeIntro}
@@ -440,6 +464,8 @@ const styles = StyleSheet.create({
   countText: { color: "#fff", fontFamily: fonts.display, fontSize: 11 },
   arsenalBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(0,255,255,0.45)" },
   arsenalText: { color: colors.brandSecondary, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
+  storyBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(255,193,7,0.5)" },
+  storyText: { color: colors.warning, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
   skinsBtn: { flexDirection: "row", gap: 6, borderColor: "rgba(255,92,214,0.5)" },
   skinsText: { color: colors.skins, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1.5 },
   dot: { position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error },

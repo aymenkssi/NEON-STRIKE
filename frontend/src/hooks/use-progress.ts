@@ -14,6 +14,7 @@ import {
   type UpgradeLevels,
 } from "@/src/game/progression";
 import { LOADOUT_SIZE, ammoBox, ammoBoxPrice, ammoCap, cleanArmory, initialArmory, onSale, priceOf, startAmmo, unlimitedAmmo, type ArmoryState } from "@/src/game/armory";
+import { EMPTY_STORY, actByNumber, actProgress, cleanStory, type StoryState } from "@/src/game/story";
 import { DEFAULT_SKINS, canBuySkin, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
 import {
   ACHIEVEMENTS,
@@ -43,6 +44,7 @@ export type Progress = {
   nightmare: Record<string, boolean>; // levels cleared in Nightmare (red skull)
   skins: SkinState;
   armory: ArmoryState; // weapons bought in the Armory and the 4 carried in game
+  story: StoryState; // story mode: comic pages seen, act rewards received
   updatedAt: number; // ms of the last change, decides which save wins when syncing
 };
 
@@ -59,6 +61,7 @@ const DEFAULT: Progress = {
   nightmare: {},
   skins: DEFAULT_SKINS,
   armory: initialArmory(1),
+  story: EMPTY_STORY,
   updatedAt: 0,
 };
 
@@ -83,7 +86,7 @@ function fromObject(p: any): Progress {
     const skins = { ...DEFAULT_SKINS, ...(p.skins || {}) };
     skins.owned = Array.isArray(skins.owned) ? skins.owned.filter((id: unknown) => typeof id === "string") : [];
     const armory = cleanArmory(p.armory, Number(p.unlockedLevel) || 1);
-    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats, nightmare: { ...(p.nightmare || {}) }, skins, armory };
+    return { ...DEFAULT, ...p, upgrades: { ...NO_UPGRADES, ...(p.upgrades || {}) }, stats, nightmare: { ...(p.nightmare || {}) }, skins, armory, story: cleanStory(p.story) };
   } catch {
     return DEFAULT;
   }
@@ -290,6 +293,33 @@ export function useProgress(cloudEnabled: boolean) {
     [update]
   );
 
+  // Story: a comic page was shown (not shown again automatically; replayable in the journal).
+  const markComicSeen = useCallback(
+    (id: string) => {
+      if (ref.current.story.seen.includes(id)) return;
+      update((p) => ({ ...p, story: { ...p.story, seen: [...p.story.seen, id] } }));
+    },
+    [update]
+  );
+
+  // Reward of a finished act (credits + story skin, equipped), once. Returns the reward or null.
+  const claimActReward = useCallback(
+    (n: number) => {
+      const act = actByNumber(n);
+      const cur = ref.current;
+      if (!act?.reward || cur.story.claimed.includes(n)) return null;
+      const { done, total } = actProgress(act, cur.stars);
+      if (done < total) return null;
+      const { credits, skin } = act.reward;
+      update((p) => {
+        const owned = p.skins.owned.includes(skin) ? p.skins.owned : [...p.skins.owned, skin];
+        return { ...p, credits: p.credits + credits, skins: equipped({ ...p.skins, owned }, skin), story: { ...p.story, claimed: [...p.story.claimed, n] } };
+      });
+      return act.reward;
+    },
+    [update]
+  );
+
   const equipSkin = useCallback(
     (id: string) => {
       if (!ownsSkin(ref.current.skins, id)) return;
@@ -367,6 +397,8 @@ export function useProgress(cloudEnabled: boolean) {
     buySkin,
     equipSkin,
     grantSeasonReward,
+    markComicSeen,
+    claimActReward,
     buyWeapon,
     toggleLoadout,
     buyAmmo,

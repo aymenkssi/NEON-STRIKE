@@ -18,6 +18,8 @@ import { setRemotePacks } from "@/src/iap/catalog";
 import { setRemoteWeapons } from "@/src/game/armory";
 import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
 import { useT } from "@/src/i18n";
+import StoryComic from "@/src/components/StoryComic";
+import { actOfLevel, introBefore, type Act } from "@/src/game/story";
 
 const KEYS = {
   lookSens: "np_look_sensitivity",
@@ -34,6 +36,8 @@ export default function Index() {
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicVolume, setMusicVolume] = useState(0.5);
   const [level, setLevel] = useState(1);
+  // Story comic shown over the menu (act opening before its first level, or replay from the journal).
+  const [comic, setComic] = useState<{ id: string; act: Act; then?: () => void } | null>(null);
   const { account, loaded: accountLoaded, playAsGuest, signedIn, signedOut } = useAccount();
   const { settings: gameSettings, loaded: settingsLoaded, update: updateGameSettings } = useGameSettings();
   const isGuest = account.mode !== "account";
@@ -54,6 +58,8 @@ export default function Index() {
     buySkin,
     equipSkin,
     grantSeasonReward,
+    markComicSeen,
+    claimActReward,
     buyWeapon,
     toggleLoadout,
     buyAmmo,
@@ -146,8 +152,20 @@ export default function Index() {
   };
 
   const startGame = (lvl: number) => {
-    setLevel(lvl);
-    setScreen("game");
+    const go = () => {
+      setLevel(lvl);
+      setScreen("game");
+    };
+    const intro = introBefore(lvl, progress.story.seen);
+    const act = actOfLevel(lvl);
+    if (intro && act) setComic({ id: intro, act, then: go });
+    else go();
+  };
+  const closeComic = () => {
+    if (!comic) return;
+    markComicSeen(comic.id);
+    setComic(null);
+    comic.then?.();
   };
 
   if (!ready || !loaded || !accountLoaded || !settingsLoaded) return <View style={styles.root} />;
@@ -197,6 +215,8 @@ export default function Index() {
           onBuyWeapon={buyWeapon}
           onToggleLoadout={toggleLoadout}
           onBuyAmmo={buyAmmo}
+          onReplayComic={(id, act) => setComic({ id, act })}
+          onClaimAct={(act) => claimActReward(act.n)}
         />
       ) : (
         <GameScreen
@@ -221,10 +241,14 @@ export default function Index() {
           onLevelDone={completeLevel}
           onAddCredits={addCredits}
           onAmmo={setAmmoStock}
+          story={progress.story}
+          onComicSeen={markComicSeen}
+          onClaimAct={claimActReward}
           onSession={recordSession}
           onExit={() => setScreen("menu")}
         />
       )}
+      {comic && <StoryComic key={comic.id} id={comic.id} act={comic.act} onDone={closeComic} />}
     </View>
   );
 }

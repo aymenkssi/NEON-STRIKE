@@ -38,6 +38,7 @@ export type Outfit = {
   hair: number;
   female?: boolean;
   glow?: boolean;
+  exclusive?: "story"; // reward of the story mode: cannot be bought
 };
 
 export const VARIANT_PRICE = 300;
@@ -99,6 +100,12 @@ export const OUTFITS: Outfit[] = HEROES.flatMap((h) =>
     glow,
   }))
 );
+// Story reward (end of Act 1): "Max Vétéran", worn desert camouflage with gold stripes.
+const soldier = OUTFITS[0];
+OUTFITS.push({
+  ...soldier, id: "o_soldier_vet", variant: 3, price: 0, exclusive: "story",
+  sleeve: 0x6b5a3e, suit2: 0x3d3226, band: 0xffc233, glove: 0x2a2118,
+});
 export const CHARACTERS = OUTFITS.filter((o) => o.variant === 0);
 export const skinsOf = (base: string) => OUTFITS.filter((o) => o.base === base);
 
@@ -107,7 +114,7 @@ export const DEFAULT_SKINS: SkinState = { owned: [], weapon: "w_default", outfit
 
 export const weaponSkin = (id?: string) => WEAPON_SKINS.find((s) => s.id === id) ?? WEAPON_SKINS[0];
 export const outfit = (id?: string) => OUTFITS.find((s) => s.id === id) ?? OUTFITS[0];
-export const isExclusive = (id: string) => !!WEAPON_SKINS.find((s) => s.id === id)?.exclusive;
+export const isExclusive = (id: string) => !!(WEAPON_SKINS.find((s) => s.id === id)?.exclusive || OUTFITS.find((o) => o.id === id)?.exclusive);
 // null: unknown or not for sale (exclusive rewards).
 export const skinPrice = (id: string) => (isExclusive(id) ? null : ((WEAPON_SKINS.find((s) => s.id === id) ?? OUTFITS.find((s) => s.id === id))?.price ?? null));
 export const ownsSkin = (s: SkinState, id: string) =>
