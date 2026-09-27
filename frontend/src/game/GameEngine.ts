@@ -1404,7 +1404,9 @@ export class GameEngine {
   private updateAimAssist(delta: number, time: number) {
     if (!this.opts.aimAssist) return;
     const aiming = time - this.lastLookAt < 300 || this.triggerHeld || this.moveVec.x !== 0 || this.moveVec.y !== 0;
-    if (!aiming) return;
+    // Never pull while the thumb is turning the view: the player must be able to look away
+    // from a zombie (the slow-down near the crosshair stays).
+    if (!aiming || time - this.lastLookAt < 150) return;
     const target = this.assistTarget(ASSIST.pullAngle);
     if (!target) return;
     const fwd = new THREE.Vector3();
