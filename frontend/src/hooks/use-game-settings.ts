@@ -7,12 +7,16 @@ import type { Difficulty } from "@/src/game/progression";
 export type Quality = "low" | "normal" | "high";
 export const QUALITIES: Quality[] = ["low", "normal", "high"];
 
+export type View = "third" | "first";
+export const VIEWS: View[] = ["third", "first"];
+
 export type GameSettings = {
   difficulty: Difficulty;
   aimAssist: boolean;
   quality: Quality;
   vibration: boolean;
   invertY: boolean;
+  view: View;
 };
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -21,6 +25,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
   quality: "normal",
   vibration: true,
   invertY: false,
+  view: "third",
 };
 
 const KEY = "np_game_settings";

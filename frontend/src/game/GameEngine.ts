@@ -5,6 +5,7 @@ import { buildWorld, type World, type WorldQuality } from "./world";
 import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
 import { MUZZLE, VIEW, buildWeaponModel } from "./weapons";
+import { STANCE, buildHero, type Hero } from "./heroes";
 import { WEAPONS, ammoBox, ammoCap, startAmmo, unlimitedAmmo, weaponOf, type FireMode, type WeaponConfig } from "./armory";
 import {
   CREDITS_PER_BOSS,
@@ -122,7 +123,11 @@ export type EngineOptions = {
   quality: WorldQuality;
   weaponSkin?: string;
   outfit?: string;
+  view?: "third" | "first"; // third person (default): the whole character is visible
 };
+
+// Third-person camera: over the right shoulder, pulled in when a wall is behind the player.
+const TP = { right: 0.8, up: 0.3, back: 2.7, margin: 0.25 };
 
 // Aim assist: a light slow-down on targets and a gentle pull while the player aims or fires.
 const ASSIST = {
@@ -169,6 +174,11 @@ export class GameEngine {
   private modelHolder!: THREE.Group;
   private muzzleFlash!: THREE.Group;
   private muzzleLight!: THREE.PointLight;
+  private hero: Hero | null = null;
+  private tpAim: THREE.Group | null = null; // weapon holder in the hero's hands (aim and recoil)
+  private tpPivot = new THREE.Vector3(); // shoulder point the camera looks through (shots start here)
+  private tpOffset = new THREE.Vector3();
+  private walkPhase = 0;
 
   private playerVelocity = new THREE.Vector3();
   private moveVec = { x: 0, y: 0 };
@@ -441,17 +451,33 @@ export class GameEngine {
     this.camera.add(this.weaponGroup);
     this.scene.add(this.camera);
 
+    if (this.opts.view !== "first") {
+      // Third person: the character carries the weapon, the flash and the light.
+      this.hero = buildHero(this.opts.outfit);
+      this.tpAim = new THREE.Group();
+      this.hero.mount.add(this.tpAim);
+      this.tpAim.add(this.modelHolder, this.muzzleFlash, this.muzzleLight);
+      this.weaponGroup.visible = false;
+      this.scene.add(this.hero.group);
+    }
+
     this.equipModel();
   }
 
   private equipModel() {
     this.modelHolder.clear();
+    const muzzleY = this.weapon.key === "pistol" ? 0.016 : this.weapon.key === "minigun" || this.weapon.key === "launcher" ? 0 : 0.03;
+    if (this.hero) {
+      this.modelHolder.add(buildWeaponModel(this.weapon.key, this.opts.weaponSkin, this.opts.outfit, false));
+      this.muzzleFlash.position.set(0, muzzleY, MUZZLE[this.weapon.key] ?? -0.6);
+      this.showWarhead();
+      return;
+    }
     this.modelHolder.add(buildWeaponModel(this.weapon.key, this.opts.weaponSkin, this.opts.outfit));
     // Models are in metres; each weapon has its own hold (a pistol closer, a sniper further).
     const v = VIEW[this.weapon.key] ?? VIEW.m4;
     this.modelHolder.scale.setScalar(v.scale);
     this.modelHolder.position.set(v.x, v.y, v.z);
-    const muzzleY = this.weapon.key === "pistol" ? 0.016 : this.weapon.key === "minigun" || this.weapon.key === "launcher" ? 0 : 0.03;
     this.muzzleFlash.position.set(v.x, v.y + muzzleY * v.scale, v.z + (MUZZLE[this.weapon.key] ?? -0.6) * v.scale);
     this.showWarhead();
   }
@@ -643,7 +669,7 @@ export class GameEngine {
     this.currentKickback = 0.15;
 
     this.muzzleFlash.rotation.z = Math.random() * Math.PI;
-    const fs = 0.35 + Math.random() * 0.2;
+    const fs = (0.35 + Math.random() * 0.2) * (this.hero ? 1.6 : 1);
     this.muzzleFlash.scale.set(fs, fs, fs);
     this.muzzleFlash.children.forEach((c: any) => (c.material.opacity = 1));
     this.muzzleLight.color.set(0xffaa00);
@@ -659,8 +685,10 @@ export class GameEngine {
 
     const base = new THREE.Raycaster();
     base.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-    const origin = base.ray.origin.clone();
     const baseDir = base.ray.direction.clone();
+    // Third person: the shot follows the camera's line of sight from the shoulder, so it lands
+    // exactly under the crosshair.
+    const origin = this.aimOrigin(baseDir);
     const right = new THREE.Vector3().crossVectors(baseDir, this.camera.up).normalize();
     const up = new THREE.Vector3().crossVectors(right, baseDir).normalize();
     const candidates = [...this.objects, ...this.enemies];
@@ -1276,9 +1304,9 @@ export class GameEngine {
 
   // The visible zombie closest to the crosshair, within `maxAngle` radians.
   private assistTarget(maxAngle: number): THREE.Object3D | null {
-    const eye = this.camera.position;
     const fwd = new THREE.Vector3();
     this.camera.getWorldDirection(fwd);
+    const eye = this.aimOrigin(fwd);
     let best: THREE.Object3D | null = null;
     let bestAngle = maxAngle;
     for (const z of this.enemies) {
@@ -1300,7 +1328,9 @@ export class GameEngine {
     if (!aiming) return;
     const target = this.assistTarget(ASSIST.pullAngle);
     if (!target) return;
-    const dir = this.aimPoint(target).sub(this.camera.position);
+    const fwd = new THREE.Vector3();
+    this.camera.getWorldDirection(fwd);
+    const dir = this.aimPoint(target).sub(this.aimOrigin(fwd));
     const yaw = Math.atan2(-dir.x, -dir.z);
     const pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
     let dYaw = yaw - this.camera.rotation.y;
@@ -1406,10 +1436,13 @@ export class GameEngine {
     if (this.opts.quality === "low" && now - this.lastFrameAt < 30) return;
     this.lastFrameAt = now;
     this.update();
-    // Screen shake: offset the camera only for rendering, never for physics.
-    this.camera.position.add(this.shakeOffset);
+    // Screen shake and the third-person camera: offset the camera only for rendering, never for
+    // physics or the zombies' target.
+    if (this.hero) this.thirdPersonOffset();
+    else this.tpOffset.set(0, 0, 0);
+    this.camera.position.add(this.shakeOffset).add(this.tpOffset);
     this.renderer.render(this.scene, this.camera);
-    this.camera.position.sub(this.shakeOffset);
+    this.camera.position.sub(this.shakeOffset).sub(this.tpOffset);
     this.gl.endFrameEXP();
   };
 
@@ -1730,7 +1763,8 @@ export class GameEngine {
       reloadPosY = dip * -0.4;
     }
 
-    if (this.weaponGroup) {
+    if (this.hero) this.poseHero(delta, speedMag, this.reloading ? Math.sin(Math.min((time - this.reloadStart) / this.reloadMs, 1) * Math.PI) : 0);
+    else if (this.weaponGroup) {
       this.weaponGroup.rotation.x = -this.swayY + this.currentRecoil + reloadRotX;
       this.weaponGroup.rotation.y = -this.swayX + this.currentRecoilX;
       this.weaponGroup.rotation.z = reloadRotZ;
@@ -1740,6 +1774,72 @@ export class GameEngine {
       this.weaponGroup.position.y = THREE.MathUtils.lerp(this.weaponGroup.position.y, hipPos.y + bobY - this.swayY * 0.5, blend) + reloadPosY;
       this.weaponGroup.position.z = THREE.MathUtils.lerp(this.weaponGroup.position.z, hipPos.z + this.currentKickback + this.currentRecoil * 0.2, blend);
     }
+  }
+
+  // Where the line of the crosshair starts: the eyes, or the shoulder in third person.
+  private aimOrigin(dir: THREE.Vector3) {
+    return this.hero ? this.aimPivot(dir).clone() : this.camera.position.clone();
+  }
+
+  // Shoulder point: to the right of and just above the eyes, kept on this side of the walls.
+  private aimPivot(dir: THREE.Vector3) {
+    const eye = this.camera.position;
+    const right = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    const side = this.clearDistance(eye, right, TP.right);
+    this.tpPivot.copy(eye).addScaledVector(right, side);
+    this.tpPivot.y += TP.up;
+    return this.tpPivot;
+  }
+
+  // How far one can go from `from` along `dir` (up to `max`) before a building or an obstacle.
+  private clearDistance(from: THREE.Vector3, dir: THREE.Vector3, max: number) {
+    const ray = new THREE.Ray(from, dir);
+    const hit = new THREE.Vector3();
+    let d = max;
+    for (const obj of this.objects) {
+      const box = obj.userData.aabb as THREE.Box3 | undefined;
+      if (!box || box.containsPoint(from)) continue;
+      if (ray.intersectBox(box, hit)) d = Math.min(d, from.distanceTo(hit) - TP.margin);
+    }
+    return Math.max(0, d);
+  }
+
+  private thirdPersonOffset() {
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    const pivot = this.aimPivot(dir);
+    const back = dir.clone().negate();
+    let dist = this.clearDistance(pivot, back, TP.back);
+    // Never under the ground when looking up.
+    if (back.y < -0.01) dist = Math.min(dist, (pivot.y - 0.35) / -back.y);
+    const cam = pivot.clone().addScaledVector(back, Math.max(0.3, dist));
+    this.tpOffset.copy(cam).sub(this.camera.position);
+    // Too close to the body (back against a wall): hide it rather than fill the screen with it.
+    if (this.hero) this.hero.group.visible = dist > 0.9;
+  }
+
+  // The character follows the player: body turned with the view, torso and weapon aimed with
+  // the pitch, legs walking with the speed, weapon kicking back and dipping on reload.
+  private poseHero(delta: number, speed: number, dip: number) {
+    const h = this.hero!;
+    const p = this.camera.position;
+    h.group.position.set(p.x, p.y - this.currentEyeLevel, p.z);
+    h.group.rotation.y = this.camera.rotation.y + Math.PI - STANCE;
+    const pitch = this.camera.rotation.x;
+    h.upper.rotation.x = -pitch * 0.55;
+    const onGround = this.canJump;
+    const stride = onGround ? Math.min(1, speed / 6) : 0.3;
+    this.walkPhase += delta * (onGround ? 4 + speed * 1.1 : 0);
+    const swing = Math.sin(this.walkPhase) * 0.7 * stride;
+    h.leftLeg.rotation.x = swing;
+    h.rightLeg.rotation.x = -swing;
+    h.upper.position.y = 0.95 + Math.abs(Math.cos(this.walkPhase)) * 0.04 * stride;
+    h.upper.rotation.z = Math.sin(this.walkPhase) * 0.04 * stride;
+    const aim = this.tpAim!;
+    aim.rotation.x = pitch * 0.45 + this.currentRecoil * 0.6 - dip * 0.7;
+    aim.rotation.z = dip * 0.5;
+    aim.position.z = this.currentKickback * 0.3;
+    aim.position.y = -dip * 0.15;
   }
 
   dispose() {

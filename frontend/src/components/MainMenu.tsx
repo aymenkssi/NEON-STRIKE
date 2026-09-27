@@ -24,6 +24,7 @@ import { currentSeason, daysLeft, fetchMySeason, type SeasonReward as PendingRew
 import PlayerMessage from "./PlayerMessage";
 import Goals, { claimableGoals } from "./Goals";
 import { useMessageQueue } from "../hooks/use-message-queue";
+import { fetchInbox, markRead } from "../api/inbox";
 import type { RemoteMessage } from "../api/config";
 import { dailyStatus, type UpgradeKey } from "../game/progression";
 import type { CloudStatus, Progress } from "../hooks/use-progress";
@@ -109,6 +110,22 @@ export default function MainMenu(props: Props) {
   });
 
   const { next: message, dismiss } = useMessageQueue(props.messages);
+  // Personal messages from the admin page: at launch, then every minute while on the menu.
+  const [inbox, setInbox] = useState<RemoteMessage[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetchInbox().then((list) => {
+        if (alive) setInbox((cur) => [...cur, ...list.filter((m) => !cur.some((c) => c.id === m.id))]);
+      });
+    load();
+    const timer = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+  const personal = inbox[0] ?? null;
   // One overlay at a time: messages wait until the daily reward and other windows are closed.
   const overlayOpen = showDaily || showLevels || showArsenal || showShop || showLeaderboard || showSettings || showGoals || showSkins || intro !== null;
   const goalsReady = claimableGoals(progress);
@@ -296,7 +313,18 @@ export default function MainMenu(props: Props) {
           onClose={() => setRewards((r) => r.slice(1))}
         />
       )}
-      {message && !overlayOpen && rewards.length === 0 && (
+      {personal && !overlayOpen && rewards.length === 0 && (
+        <PlayerMessage
+          message={personal}
+          personal
+          onClose={() => {
+            markRead(personal.id);
+            setInbox((cur) => cur.slice(1));
+          }}
+          onOpenShop={() => setShowShop(true)}
+        />
+      )}
+      {message && !personal && !overlayOpen && rewards.length === 0 && (
         <PlayerMessage message={message} onClose={() => dismiss(message.id)} onOpenShop={() => setShowShop(true)} />
       )}
       {showDaily && (

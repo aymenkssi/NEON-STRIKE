@@ -16,15 +16,57 @@ export type WeaponSkin = {
   exclusive?: boolean; // not for sale: season reward (top 5 of a monthly season)
 };
 
+// Characters ("heroes"): each has its own look (headgear, hair, build) and 3 colour skins.
+// A skin of a character is an Outfit: its colours dress the full body in third person and the
+// arms and gloves in first person. The first skin comes with the character; the others are
+// bought separately once the character is owned.
+export type HeroKind = "soldier" | "commando" | "ninja" | "astronaut" | "cyber" | "royal";
+
 export type Outfit = {
   id: string;
-  name: Key;
+  name: Key; // role, e.g. "Ninja"
+  hero: HeroKind;
+  heroName: Key; // e.g. "Kira"
+  base: string; // id of the character (its first skin)
+  variant: number; // 0 = the character's standard skin
   price: number;
   glove: number;
-  sleeve: number;
-  band: number; // cuff between glove and sleeve
+  sleeve: number; // main suit colour
+  suit2: number; // pants, vest, headgear
+  band: number; // accent: cuff, stripes, visor, crown
+  skinTone: number;
+  hair: number;
+  female?: boolean;
   glow?: boolean;
 };
+
+export const VARIANT_PRICE = 300;
+
+type HeroDef = {
+  id: string;
+  kind: HeroKind;
+  price: number;
+  skinTone: number;
+  hair: number;
+  female?: boolean;
+  // [suit, suit2, accent, glove, glow]
+  variants: [number, number, number, number, boolean?][];
+};
+
+const HEROES: HeroDef[] = [
+  { id: "o_soldier", kind: "soldier", price: 0, skinTone: 0xe0ac69, hair: 0x3b2a1a,
+    variants: [[0x3f6fbf, 0x2a3550, 0x2a3550, 0x2e3440], [0xc2a36b, 0x8a6f3e, 0x6b5530, 0x4a3b28], [0x6b7280, 0x374151, 0xef4444, 0x1f2937]] },
+  { id: "o_commando", kind: "commando", price: 500, skinTone: 0x8d5524, hair: 0x1a1a1a,
+    variants: [[0x5b6b3a, 0x3b4226, 0x8a6f3e, 0x3b3a2a], [0x2f5d3a, 0x1f3d26, 0xd4a017, 0x1f2a1a], [0xe5e7eb, 0x9ca3af, 0x374151, 0x6b7280]] },
+  { id: "o_ninja", kind: "ninja", price: 800, skinTone: 0xf1c27d, hair: 0x111111, female: true,
+    variants: [[0x1c1c22, 0x111111, 0xd62828, 0x111111], [0x1e3a8a, 0x0f172a, 0x38bdf8, 0x0f172a], [0xf5f5f4, 0xd6d3d1, 0xdc2626, 0xe7e5e4]] },
+  { id: "o_astronaut", kind: "astronaut", price: 1000, skinTone: 0xc68642, hair: 0x6b3e26, female: true,
+    variants: [[0xe3e6ea, 0xf2f2f2, 0xff8c1a, 0xf2f2f2], [0x1f2937, 0x374151, 0x22d3ee, 0x111827], [0xfde68a, 0xfef3c7, 0x2563eb, 0xfef3c7]] },
+  { id: "o_cyber", kind: "cyber", price: 1400, skinTone: 0xa1665e, hair: 0xf0f0f0,
+    variants: [[0x3a1f6b, 0x141428, 0x00ffff, 0x141428, true], [0x7f1d1d, 0x1c0a0a, 0xff3b3b, 0x1c0a0a, true], [0x064e3b, 0x022c22, 0x39ff14, 0x022c22, true]] },
+  { id: "o_royal", kind: "royal", price: 2000, skinTone: 0xffdbac, hair: 0xd4a017,
+    variants: [[0x8b1e3f, 0x5a1128, 0xffd23a, 0xffd23a], [0x1e3a8a, 0x172554, 0xffd23a, 0xffd23a], [0x14532d, 0x052e16, 0xe5e7eb, 0xe5e7eb]] },
+];
 
 export const WEAPON_SKINS: WeaponSkin[] = [
   { id: "w_default", name: "skin.w_default", price: 0, body: 0x4a4f5a, metal: 0x2a2d35, furniture: 0xc9783a, light: 0xe8e8ee, tube: 0x5a7a4a, accent: null },
@@ -37,14 +79,28 @@ export const WEAPON_SKINS: WeaponSkin[] = [
   { id: "w_gold", name: "skin.w_gold", price: 1500, body: 0xd4a017, metal: 0x8f6206, furniture: 0xe8bf4a, light: 0xf0cf6a, tube: 0xc08a12, accent: 0xfff1a8 },
 ];
 
-export const OUTFITS: Outfit[] = [
-  { id: "o_soldier", name: "skin.o_soldier", price: 0, glove: 0x2e3440, sleeve: 0x3f6fbf, band: 0x2a3550 },
-  { id: "o_commando", name: "skin.o_commando", price: 500, glove: 0x3b3a2a, sleeve: 0x5b6b3a, band: 0x8a6f3e },
-  { id: "o_ninja", name: "skin.o_ninja", price: 800, glove: 0x111111, sleeve: 0x1c1c22, band: 0xd62828 },
-  { id: "o_astronaut", name: "skin.o_astronaut", price: 1000, glove: 0xf2f2f2, sleeve: 0xe3e6ea, band: 0xff8c1a },
-  { id: "o_cyber", name: "skin.o_cyber", price: 1400, glove: 0x141428, sleeve: 0x3a1f6b, band: 0x00ffff, glow: true },
-  { id: "o_royal", name: "skin.o_royal", price: 2000, glove: 0xffd23a, sleeve: 0x8b1e3f, band: 0xffd23a },
-];
+// Every skin of every character (the first one of each keeps the old outfit id).
+export const OUTFITS: Outfit[] = HEROES.flatMap((h) =>
+  h.variants.map(([suit, suit2, accent, glove, glow], i) => ({
+    id: i === 0 ? h.id : `${h.id}_${i + 1}`,
+    name: `skin.${h.id}` as Key,
+    hero: h.kind,
+    heroName: `hero.${h.kind}` as Key,
+    base: h.id,
+    variant: i,
+    price: i === 0 ? h.price : VARIANT_PRICE,
+    glove,
+    sleeve: suit,
+    suit2,
+    band: accent,
+    skinTone: h.skinTone,
+    hair: h.hair,
+    female: h.female,
+    glow,
+  }))
+);
+export const CHARACTERS = OUTFITS.filter((o) => o.variant === 0);
+export const skinsOf = (base: string) => OUTFITS.filter((o) => o.base === base);
 
 export type SkinState = { owned: string[]; weapon: string; outfit: string };
 export const DEFAULT_SKINS: SkinState = { owned: [], weapon: "w_default", outfit: "o_soldier" };
@@ -54,4 +110,10 @@ export const outfit = (id?: string) => OUTFITS.find((s) => s.id === id) ?? OUTFI
 export const isExclusive = (id: string) => !!WEAPON_SKINS.find((s) => s.id === id)?.exclusive;
 // null: unknown or not for sale (exclusive rewards).
 export const skinPrice = (id: string) => (isExclusive(id) ? null : ((WEAPON_SKINS.find((s) => s.id === id) ?? OUTFITS.find((s) => s.id === id))?.price ?? null));
-export const ownsSkin = (s: SkinState, id: string) => s.owned.includes(id) || (!isExclusive(id) && skinPrice(id) === 0);
+export const ownsSkin = (s: SkinState, id: string) =>
+  s.owned.includes(id) || (!isExclusive(id) && skinPrice(id) === 0 && !OUTFITS.some((o) => o.id === id && o.variant > 0));
+// A character's extra skins can only be bought once the character itself is owned.
+export const canBuySkin = (s: SkinState, id: string) => {
+  const o = OUTFITS.find((x) => x.id === id);
+  return !o || o.variant === 0 || ownsSkin(s, o.base);
+};

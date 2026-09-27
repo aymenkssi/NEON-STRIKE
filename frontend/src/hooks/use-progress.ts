@@ -14,7 +14,7 @@ import {
   type UpgradeLevels,
 } from "@/src/game/progression";
 import { LOADOUT_SIZE, ammoBox, ammoBoxPrice, ammoCap, cleanArmory, initialArmory, onSale, priceOf, startAmmo, unlimitedAmmo, type ArmoryState } from "@/src/game/armory";
-import { DEFAULT_SKINS, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
+import { DEFAULT_SKINS, canBuySkin, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
 import {
   ACHIEVEMENTS,
   advanceMissions,
@@ -208,6 +208,7 @@ export function useProgress(cloudEnabled: boolean) {
       const cur = ref.current;
       if (price === null) return false;
       if (ownsSkin(cur.skins, id)) return true;
+      if (!canBuySkin(cur.skins, id)) return false;
       if (cur.credits < price) return false;
       update((p) => ({ ...p, credits: p.credits - price, skins: equipped({ ...p.skins, owned: [...p.skins.owned, id] }, id) }));
       return true;
