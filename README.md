@@ -113,13 +113,25 @@ Pour ajouter une dépendance, utilisez `npx expo install <paquet>` : il choisit 
 - **Quitter le jeu** (Android) : bouton marche/arrêt en haut du menu et dans le menu pause, avec confirmation. Le bouton retour d'Android ferme la fenêtre ouverte, met la partie en pause, ou propose de quitter depuis le menu.
 - **Skins** (`frontend/src/game/skins.ts`) achetés avec les crédits : 6 finitions d'armes (camouflage, arctique, bonbon, néon, lave, or), avec un aperçu 3D qui tourne.
 - **Personnages** (`frontend/src/game/heroes.ts`) : 6 héros jouables (Max le soldat, gratuit ; Rex le commando, Kira la ninja, Nova l'astronaute, Zed le cyber, Leo le royal) avec chacun 3 skins de couleur (300 crédits une fois le personnage acheté). En jeu, le personnage est **visible en entier** : vue à la 3e personne par-dessus l'épaule (la caméra se rapproche contre les murs, le tir part de l'épaule sous le viseur), jambes animées à la marche, arme qui recule et se recharge. La vue à la 1re personne reste disponible dans les Réglages.
-- **Histoire « L'Épidémie Néon »** (`frontend/src/game/story.ts`) : un scénario en 5 actes, une ville par acte. **Acte 1 « L'éveil »** (niveaux 1 à 5, Paris) complet :
-  - bande dessinée d'ouverture avant le niveau 1 : 5 cases, dont des scènes 3D avec les vrais personnages et zombies du jeu ;
-  - messages radio pendant les niveaux, au début et à l'arrivée du boss ;
-  - boss d'histoire au niveau 5, « Le Gardien » (vigile de Helix, 1,5 × plus de vie, nom sur la barre de vie) ;
-  - bande dessinée de fin, puis récompense de l'acte : 500 crédits et le skin exclusif « Max Vétéran ».
+- **Histoire « L'Épidémie Néon »** (`frontend/src/game/story.ts`) : un scénario complet en 5 actes sur les 30 niveaux, une ville par acte.
 
-  Le **Journal** (bouton HISTOIRE du menu) montre la progression, permet de revoir les BD et de rejouer l'acte. Les actes 2 à 5 y sont annoncés (« Bientôt »). La progression de l'histoire est dans la sauvegarde (et la sauvegarde en ligne des comptes).
+  | Acte | Niveaux | Ville | Boss final | Récompense |
+  |---|---|---|---|---|
+  | 1. L'éveil | 1-5 | Paris | Le Gardien | 500 crédits + skin « Max Vétéran » |
+  | 2. Les survivants | 6-10 | New York | Le Cracheur Géant | 800 crédits + Rex et Kira |
+  | 3. La trahison | 11-15 | Tokyo | Le Commandant Helix | 1 000 crédits + Zed |
+  | 4. Le ciel | 16-20 | Londres | La Reine Néon | 1 200 crédits + Nova |
+  | 5. La source | 21-30 | Le Caire puis Rio | Le Fondateur | 2 500 crédits + Leo |
+
+  Dans chaque acte :
+  - bandes dessinées au début et à la fin (et au milieu de l'acte 5), avec des cases en 3D qui montrent les vrais personnages et zombies du jeu ;
+  - messages radio des héros au début de chaque niveau et à l'arrivée du boss ;
+  - un boss d'histoire au dernier niveau, avec son apparence, son nom sur la barre de vie et plus de vie ;
+  - en récompense de l'acte, les personnages rencontrés sont offerts ; ceux qui ne veulent pas attendre peuvent toujours les acheter dans Skins.
+
+  **Documents secrets** : un document Helix est caché dans chaque niveau (30 au total). C'est une tablette lumineuse sous un rayon cyan. On le lit à la radio en le ramassant, puis dans le Journal.
+
+  Le **Journal** (bouton HISTOIRE du menu) montre la progression, les documents trouvés et les récompenses, et permet de revoir les BD et de rejouer un acte. La progression de l'histoire est dans la sauvegarde (et la sauvegarde en ligne des comptes).
 - **Messages personnels** : depuis l'onglet « Joueurs » de la page d'administration (bouton ✉), l'administrateur envoie un message à un joueur précis ; il s'affiche une seule fois dans le jeu avec la mention « POUR TOI », et l'historique montre s'il a été lu.
 - **Réglages de jeu** : aide à la visée (ralentissement et légère attraction du viseur sur le zombie visé), inversion de l'axe vertical, vibrations, qualité graphique (Économie : décor allégé et 30 images/s ; Normal ; Élevée).
 - **Saisons mensuelles** (`backend/seasons.py`) : un classement remis à zéro chaque mois en plus du classement général, avec un compte à rebours dans le menu. À la fin du mois, tu vérifies le top dans l'onglet « Saisons » de la page d'administration (tu peux exclure un score suspect) puis tu valides ; sans action, la validation est automatique 3 jours après. Récompenses récupérées au lancement du jeu : 1er 5 000 crédits, 2e 3 000, 3e 2 000, 4e-5e 1 000 (top 5 : skin exclusif « Champion » et trophée à côté du pseudo dans les classements), 6e-20e 500, 21e-100e 200. Une fenêtre explique les saisons au premier lancement (et depuis le « ? » du classement de la saison), avec l'annonce des cartes cadeaux pour le top 5 dès 10 000 joueurs, « selon le règlement qui sera publié à ce moment-là » (`frontend/src/components/SeasonIntro.tsx`).

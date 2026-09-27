@@ -60,6 +60,7 @@ export default function Index() {
     grantSeasonReward,
     markComicSeen,
     claimActReward,
+    markDocFound,
     buyWeapon,
     toggleLoadout,
     buyAmmo,
@@ -237,6 +238,7 @@ export default function Index() {
             quality: gameSettings.quality,
             weaponSkin: progress.skins.weapon,
             outfit: progress.skins.outfit,
+            docsFound: progress.story.docs,
           }}
           onLevelDone={completeLevel}
           onAddCredits={addCredits}
@@ -244,6 +246,8 @@ export default function Index() {
           story={progress.story}
           onComicSeen={markComicSeen}
           onClaimAct={claimActReward}
+          onDocFound={markDocFound}
+          ownedSkins={progress.skins.owned}
           onSession={recordSession}
           onExit={() => setScreen("menu")}
         />

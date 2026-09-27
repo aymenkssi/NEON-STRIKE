@@ -8,8 +8,11 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import type { ZombieKind } from "./content";
 import { box, capsule, cone, cyl, merge, paint, sphere, toonMaterial } from "./toon";
 
-// "guardian": look of the story boss of Act 1 (a Helix security guard), used by the "boss" zombie.
-export type CharacterKind = ZombieKind | "boss" | "guardian";
+// Looks of the story bosses (used by the "boss" zombie on the last level of each act):
+// guardian (Act 1, Helix security guard), spitterking (Act 2, giant spitter), commander (Act 3,
+// Helix officer), queen (Act 4, Neon Queen), founder (Act 5, the founder of Helix).
+export type StoryBossLook = "guardian" | "spitterking" | "commander" | "queen" | "founder";
+export type CharacterKind = ZombieKind | "boss" | StoryBossLook;
 
 type Look = {
   skin: number;
@@ -17,7 +20,7 @@ type Look = {
   pants: number;
   shoes: number;
   eyes: number;
-  extra?: "hood" | "helmet" | "belly" | "crown" | "sac" | "riot" | "cap";
+  extra?: "hood" | "helmet" | "belly" | "crown" | "sac" | "riot" | "cap" | "officer" | "tiara" | "veins";
   bulk: number; // torso/limb thickness
 };
 
@@ -29,6 +32,10 @@ const LOOKS: Record<CharacterKind, Look> = {
   spitter: { skin: 0xb5d94a, shirt: 0x6b4fa0, pants: 0x3a3350, shoes: 0x2a2320, eyes: 0xd4ff3a, extra: "sac", bulk: 0.95 },
   shield: { skin: 0x9bb7c4, shirt: 0x243447, pants: 0x1f2a38, shoes: 0x111418, eyes: 0x6dfaff, extra: "riot", bulk: 1.1 },
   guardian: { skin: 0x7fa88a, shirt: 0x1d2b4f, pants: 0x141c33, shoes: 0x0a0a0a, eyes: 0x00ffff, extra: "cap", bulk: 1.3 },
+  spitterking: { skin: 0xa8d23f, shirt: 0x3a2a5a, pants: 0x2a2340, shoes: 0x1a1a1a, eyes: 0xd4ff3a, extra: "sac", bulk: 1.4 },
+  commander: { skin: 0x8a9aa8, shirt: 0x5a0f1a, pants: 0x1a1a1a, shoes: 0x0a0a0a, eyes: 0xff3b3b, extra: "officer", bulk: 1.3 },
+  queen: { skin: 0xd46bd0, shirt: 0x2a0a3a, pants: 0x1a0628, shoes: 0x111111, eyes: 0xff5cf0, extra: "tiara", bulk: 1.1 },
+  founder: { skin: 0x9fc9d8, shirt: 0xf0f0f0, pants: 0xdedede, shoes: 0x111111, eyes: 0xffffff, extra: "veins", bulk: 1.25 },
   boss: { skin: 0x7b4fd0, shirt: 0x1f1b2e, pants: 0x2a1f3f, shoes: 0x111111, eyes: 0xff2d55, extra: "crown", bulk: 1.2 },
 };
 
@@ -74,6 +81,12 @@ function build(kind: CharacterKind): Parts {
     head.push(paint(rbox(0.6, 0.2, 0.56, 0.1), 0x141c33, { y: 2.08 }));
     head.push(paint(box(0.56, 0.04, 0.26), 0x0a0f1f, { y: 1.99, z: 0.3 }));
   }
+  if (L.extra === "officer") {
+    // Peaked officer cap with a red band.
+    head.push(paint(cyl(0.34, 0.3, 0.14, 12), 0x1a1a1a, { y: 2.12 }));
+    head.push(paint(cyl(0.305, 0.305, 0.06, 12), 0xc81e2e, { y: 2.06 }));
+    head.push(paint(box(0.5, 0.03, 0.22), 0x0a0a0a, { y: 2.02, z: 0.3, rx: 0.15 }));
+  }
   if (L.extra === "crown") {
     head.push(paint(cyl(0.3, 0.3, 0.16, 10), 0xffc233, { y: 2.11 }));
     for (let i = 0; i < 5; i++) {
@@ -109,6 +122,34 @@ function build(kind: CharacterKind): Parts {
       paint(box(0.04, 0.04, 0.34 * b), 0x00ffff, { x: 0.3 * b, y: 1.45 }),
       paint(box(0.04, 0.04, 0.34 * b), 0x00ffff, { x: -0.3 * b, y: 1.45 }),
     ]);
+  // Commander: glowing epaulettes and medals.
+  if (L.extra === "officer")
+    glow = merge([
+      paint(box(0.16, 0.05, 0.3 * b), 0xff3b3b, { x: 0.3 * b, y: 1.47 }),
+      paint(box(0.16, 0.05, 0.3 * b), 0xff3b3b, { x: -0.3 * b, y: 1.47 }),
+      paint(box(0.12, 0.06, 0.03), 0xffc233, { x: 0.14, y: 1.32, z: 0.165 * b }),
+    ]);
+  // Neon Queen: a crown of glowing spikes and a glowing collar.
+  if (L.extra === "tiara") {
+    const spikes: THREE.BufferGeometry[] = [paint(cyl(0.31, 0.31, 0.08, 12), 0x00ffff, { y: 2.08 })];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      spikes.push(paint(cone(0.05, 0.34, 5), i % 2 ? 0xff5cf0 : 0x00ffff, { x: Math.cos(a) * 0.26, y: 2.3, z: Math.sin(a) * 0.26 }));
+    }
+    spikes.push(paint(cyl(0.2, 0.26, 0.08, 12), 0xff5cf0, { y: 1.5 }));
+    glow = merge(spikes);
+  }
+  // Founder: white suit crossed by glowing Neon-X veins, and a halo.
+  if (L.extra === "veins") {
+    const halo = new THREE.TorusGeometry(0.34, 0.03, 6, 24).rotateX(Math.PI / 2);
+    glow = merge([
+      paint(halo, 0x00ffff, { y: 2.2 }),
+      paint(box(0.03, 0.5, 0.02), 0x00ffff, { x: 0.12, y: 1.2, z: 0.17 * b }),
+      paint(box(0.03, 0.36, 0.02), 0x00ffff, { x: -0.1, y: 1.26, z: 0.17 * b, rz: 0.4 }),
+      paint(box(0.2, 0.03, 0.02), 0xff5cf0, { y: 1.02, z: 0.17 * b }),
+      paint(box(0.26, 0.03, 0.02), 0x00ffff, { y: 1.74, z: 0.265 }),
+    ]);
+  }
   let shield: THREE.BufferGeometry | undefined;
   if (L.extra === "riot")
     shield = merge([

@@ -12,6 +12,14 @@ const LOOK: Record<Speaker, { icon: string; color: string }> = {
   radio: { icon: "radio-handheld", color: colors.brand },
   rex: { icon: "radio-handheld", color: "#b5d97a" },
   guardian: { icon: "shield-alert", color: "#00ffff" },
+  kira: { icon: "sword", color: "#ff4d6d" },
+  zed: { icon: "laptop", color: "#b388ff" },
+  nova: { icon: "rocket-launch", color: "#ffa94d" },
+  leo: { icon: "crown", color: "#ffd23a" },
+  doc: { icon: "file-document-outline", color: "#00e5ff" },
+  commander: { icon: "shield-alert", color: "#ff3b3b" },
+  queen: { icon: "crown-outline", color: "#ff5cf0" },
+  founder: { icon: "white-balance-sunny", color: "#e0f7ff" },
 };
 
 export default function RadioLine({ line }: { line: Line }) {

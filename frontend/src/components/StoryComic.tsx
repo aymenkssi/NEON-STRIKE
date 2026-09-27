@@ -7,6 +7,13 @@ import { colors, fonts, spacing, radius } from "../theme";
 import { COMICS, type Act, type ActReward, type Panel, type SceneId, type Speaker } from "../game/story";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 import ComicStage from "./ComicStage";
+import { outfit as outfitOf } from "../game/skins";
+
+// Reward page picture: the reward skin, or the characters who join the team.
+function rewardCast(r: ActReward) {
+  const ids = r.skin ? [r.skin] : (r.heroes ?? []);
+  return ids.map((h, i) => ({ hero: h, weapon: "m4", x: (i - (ids.length - 1) / 2) * 1.3, turn: 0.35 }));
+}
 
 // Comic pages of the story: one panel at a time (art + caption or speech bubble), tap to go on.
 // With `reward`, a last page shows the act reward and a button to collect it.
@@ -14,6 +21,7 @@ type Props = {
   id: string;
   act: Act;
   reward?: ActReward | null;
+  owned?: string[]; // skins owned: characters of the reward already bought
   onClaim?: () => void;
   onDone: () => void;
 };
@@ -24,13 +32,21 @@ const SPEAKER: Record<Speaker, { icon: string; color: string }> = {
   radio: { icon: "radio-handheld", color: colors.brand },
   rex: { icon: "radio-handheld", color: "#9bbf5a" },
   guardian: { icon: "shield-alert", color: "#00ffff" },
+  kira: { icon: "sword", color: "#ff4d6d" },
+  zed: { icon: "laptop", color: "#b388ff" },
+  nova: { icon: "rocket-launch", color: "#ffa94d" },
+  leo: { icon: "crown", color: "#ffd23a" },
+  doc: { icon: "file-document-outline", color: "#00e5ff" },
+  commander: { icon: "shield-alert", color: "#ff3b3b" },
+  queen: { icon: "crown-outline", color: "#ff5cf0" },
+  founder: { icon: "white-balance-sunny", color: "#e0f7ff" },
 };
 
 type Deco = { icon: string; size: number; color: string; x: string; y: string; rot?: number };
-const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?: string }> = {
+const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?: Key }> = {
   lab: {
     colors: ["#06112a", "#15416b"],
-    label: "HELIX CORP · NÉON-X",
+    label: "story.scene.lab",
     decos: [
       { icon: "city-variant", size: 90, color: "#0f2a48", x: "2%", y: "58%" },
       { icon: "city-variant", size: 90, color: "#0f2a48", x: "60%", y: "58%" },
@@ -41,7 +57,7 @@ const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?:
   },
   leak: {
     colors: ["#1c0306", "#6b0f1a"],
-    label: "ALERTE · FUITE",
+    label: "story.scene.leak",
     decos: [
       { icon: "city-variant", size: 100, color: "#2a0409", x: "0%", y: "55%" },
       { icon: "city-variant", size: 100, color: "#2a0409", x: "58%", y: "55%" },
@@ -61,7 +77,7 @@ const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?:
   },
   tower: {
     colors: ["#07041a", "#3d0a4d"],
-    label: "TOUR HELIX",
+    label: "story.scene.tower",
     decos: [
       { icon: "city-variant", size: 90, color: "#1b0b2b", x: "0%", y: "60%" },
       { icon: "office-building", size: 150, color: "#ff5cd6", x: "33%", y: "6%" },
@@ -69,9 +85,83 @@ const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?:
       { icon: "star-four-points", size: 18, color: "#fff35c", x: "18%", y: "24%" },
     ],
   },
+  skyline: {
+    colors: ["#070a1c", "#27205a"],
+    label: "story.scene.skyline",
+    decos: [
+      { icon: "office-building", size: 150, color: "#1b1740", x: "4%", y: "18%" },
+      { icon: "office-building", size: 190, color: "#221c52", x: "34%", y: "4%" },
+      { icon: "office-building", size: 140, color: "#1b1740", x: "66%", y: "22%" },
+      { icon: "moon-waning-crescent", size: 40, color: "#fff3b0", x: "80%", y: "8%" },
+      { icon: "eye", size: 16, color: "#9dff2e", x: "30%", y: "70%" },
+      { icon: "eye", size: 16, color: "#9dff2e", x: "60%", y: "76%" },
+    ],
+  },
+  crates: {
+    colors: ["#0c0e10", "#2c3136"],
+    label: "story.scene.crates",
+    decos: [
+      { icon: "package-variant-closed", size: 90, color: "#c58b3a", x: "8%", y: "44%" },
+      { icon: "package-variant-closed", size: 90, color: "#a8742f", x: "36%", y: "50%" },
+      { icon: "package-variant-closed", size: 70, color: "#c58b3a", x: "22%", y: "14%" },
+      { icon: "radioactive", size: 60, color: "#9dff2e", x: "66%", y: "20%" },
+      { icon: "airplane-takeoff", size: 44, color: "#6c7a89", x: "72%", y: "62%" },
+    ],
+  },
+  neon: {
+    colors: ["#120320", "#3a0d4a"],
+    label: "story.scene.neon",
+    decos: [
+      { icon: "store", size: 80, color: "#ff5cd6", x: "6%", y: "40%" },
+      { icon: "store", size: 80, color: "#00e5ff", x: "62%", y: "44%" },
+      { icon: "lightbulb-on", size: 44, color: "#fff35c", x: "40%", y: "12%" },
+      { icon: "flower-poppy", size: 34, color: "#ff9ad6", x: "28%", y: "24%" },
+      { icon: "flower-poppy", size: 26, color: "#ff9ad6", x: "80%", y: "14%" },
+    ],
+  },
+  servers: {
+    colors: ["#020d0a", "#063a2a"],
+    label: "story.scene.servers",
+    decos: [
+      { icon: "server", size: 110, color: "#0f5a40", x: "6%", y: "20%" },
+      { icon: "server", size: 110, color: "#0f5a40", x: "62%", y: "20%" },
+      { icon: "file-lock-outline", size: 90, color: "#39ff14", x: "36%", y: "24%" },
+      { icon: "code-braces", size: 34, color: "#39ff14", x: "44%", y: "72%" },
+    ],
+  },
+  satellite: {
+    colors: ["#01030c", "#101a3a"],
+    label: "story.scene.satellite",
+    decos: [
+      { icon: "earth", size: 150, color: "#1d3b73", x: "8%", y: "38%" },
+      { icon: "satellite-variant", size: 90, color: "#e0e6ff", x: "56%", y: "8%", rot: -15 },
+      { icon: "wifi", size: 50, color: "#00ffff", x: "46%", y: "34%", rot: 200 },
+      { icon: "star-four-points", size: 16, color: "#fff", x: "84%", y: "60%" },
+      { icon: "star-four-points", size: 12, color: "#fff", x: "20%", y: "12%" },
+    ],
+  },
+  desert: {
+    colors: ["#1a0d05", "#6b3a12"],
+    label: "story.scene.desert",
+    decos: [
+      { icon: "triangle", size: 120, color: "#8a5a22", x: "4%", y: "46%" },
+      { icon: "triangle", size: 90, color: "#6e461a", x: "30%", y: "56%" },
+      { icon: "flash", size: 150, color: "#00ffff", x: "58%", y: "2%" },
+      { icon: "weather-sunset", size: 44, color: "#ffb45c", x: "82%", y: "68%" },
+    ],
+  },
+  signal: {
+    colors: ["#000000", "#12061f"],
+    label: "story.scene.signal",
+    decos: [
+      { icon: "earth", size: 170, color: "#16163a", x: "28%", y: "16%" },
+      { icon: "access-point", size: 50, color: "#ff5cd6", x: "62%", y: "22%" },
+      { icon: "map-marker", size: 30, color: "#ff5cd6", x: "66%", y: "40%" },
+    ],
+  },
   badge: {
     colors: ["#081421", "#15324e"],
-    label: "SÉCURITÉ HELIX · NIVEAU 5",
+    label: "story.scene.badge",
     decos: [
       { icon: "shield-account", size: 130, color: "#00ffff", x: "33%", y: "14%" },
       { icon: "card-account-details-outline", size: 44, color: "#2e5b86", x: "8%", y: "62%", rot: -14 },
@@ -79,7 +169,7 @@ const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?:
   },
 };
 
-export default function StoryComic({ id, act, reward, onClaim, onDone }: Props) {
+export default function StoryComic({ id, act, reward, owned = [], onClaim, onDone }: Props) {
   const t = useT();
   const panels: Panel[] = COMICS[id] ?? [];
   const [i, setI] = useState(0);
@@ -97,7 +187,7 @@ export default function StoryComic({ id, act, reward, onClaim, onDone }: Props) 
   const p = panels[Math.min(i, panels.length - 1)];
   const who = SPEAKER[p?.who ?? "narrator"];
   const stage = onReward
-    ? { bg: 0x1a1406, actors: [{ hero: reward!.skin, weapon: "m4", x: 0, turn: 0.35 }] }
+    ? { bg: 0x1a1406, actors: rewardCast(reward!) }
     : p && "stage" in p.art
       ? p.art.stage
       : null;
@@ -131,7 +221,7 @@ export default function StoryComic({ id, act, reward, onClaim, onDone }: Props) 
                   style={{ position: "absolute", left: d.x as any, top: d.y as any, transform: [{ rotate: `${d.rot ?? 0}deg` }] }}
                 />
               ))}
-              {scene.label && <Text style={styles.sceneLabel}>{scene.label}</Text>}
+              {scene.label && <Text style={styles.sceneLabel}>{t(scene.label)}</Text>}
             </LinearGradient>
           )}
           <View style={styles.halftone} pointerEvents="none" />
@@ -144,12 +234,25 @@ export default function StoryComic({ id, act, reward, onClaim, onDone }: Props) 
               <MaterialCommunityIcons name="circle-multiple" size={22} color={colors.warning} />
               <Text style={styles.rewardText}>+{formatNumber(reward!.credits)}</Text>
             </View>
-            <View style={styles.rewardRow}>
-              <MaterialCommunityIcons name="tshirt-crew" size={22} color={colors.skins} />
-              <Text style={[styles.rewardText, { color: colors.skins }]}>{t(`skin.${reward!.skin}` as Key)}</Text>
-            </View>
-            {claimed && <Text style={styles.equipped}>{t("story.equipped", { skin: t(`skin.${reward!.skin}` as Key) })}</Text>}
-            <Text style={styles.soon}>{t("story.toBeContinued")}</Text>
+            {reward!.skin && (
+              <View style={styles.rewardRow}>
+                <MaterialCommunityIcons name="tshirt-crew" size={22} color={colors.skins} />
+                <Text style={[styles.rewardText, { color: colors.skins }]}>{t(`skin.${reward!.skin}` as Key)}</Text>
+              </View>
+            )}
+            {(reward!.heroes ?? []).map((h) => {
+              const name = t(outfitOf(h).heroName);
+              return (
+                <View key={h} style={styles.rewardRow} testID={`story-hero-${h}`}>
+                  <MaterialCommunityIcons name="account-plus" size={22} color={colors.brandSecondary} />
+                  <Text style={[styles.rewardText, { color: colors.brandSecondary, fontSize: 17 }]}>
+                    {t(owned.includes(h) && !claimed ? "story.heroOwned" : "story.heroJoins", { name })}
+                  </Text>
+                </View>
+              );
+            })}
+            {claimed && reward!.skin && <Text style={styles.equipped}>{t("story.equipped", { skin: t(`skin.${reward!.skin}` as Key) })}</Text>}
+            <Text style={styles.soon}>{t(act.next)}</Text>
             <Pressable
               testID={claimed ? "story-finish" : "story-claim"}
               style={[styles.btn, { backgroundColor: claimed ? colors.brand : colors.warning }]}

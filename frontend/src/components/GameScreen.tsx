@@ -16,7 +16,8 @@ import GameOver from "./GameOver";
 import LevelComplete from "./LevelComplete";
 import StoryComic from "./StoryComic";
 import RadioLine from "./RadioLine";
-import { RADIO, actEndingAt, type Act, type ActReward, type Line, type StoryState } from "../game/story";
+import { useT } from "@/src/i18n";
+import { DOC_COUNT, RADIO, docKey, actEndingAt, actOfLevel, introBefore, type Act, type ActReward, type Line, type StoryState } from "../game/story";
 
 type Props = {
   username: string;
@@ -40,6 +41,8 @@ type Props = {
   story: StoryState;
   onComicSeen: (id: string) => void;
   onClaimAct: (n: number) => ActReward | null;
+  onDocFound: (level: number) => void;
+  ownedSkins: string[]; // to tell which characters of an act reward are already owned
 };
 
 const INITIAL: GameStats = {
@@ -85,30 +88,34 @@ export default function GameScreen({
   story,
   onComicSeen,
   onClaimAct,
+  onDocFound,
+  ownedSkins,
 }: Props) {
   const engineRef = useRef<GameEngine | null>(null);
   const [stats, setStats] = useState<GameStats>(INITIAL);
   const [status, setStatus] = useState<"playing" | "paused" | "gameover" | "complete" | "story">("playing");
   // End of a story act: its closing comic (and reward) before going on.
-  const [ending, setEnding] = useState<{ act: Act; reward: ActReward | null; then: () => void } | null>(null);
+  // Story comic between two levels: the end of an act (with its reward), or the opening of the next.
+  const [ending, setEnding] = useState<{ id: string; act: Act; reward: ActReward | null; then: () => void } | null>(null);
+  const t = useT();
   const storyRef = useRef(story);
   storyRef.current = story;
   // Radio line of the story shown at the top of the screen for a few seconds.
   const [radio, setRadio] = useState<Line | null>(null);
   const radioTimer = useRef<any>(null);
-  const say = useCallback((line?: Line) => {
+  const say = useCallback((line?: Line, ms = 6000) => {
     if (!line) return;
     setRadio(line);
     if (radioTimer.current) clearTimeout(radioTimer.current);
-    radioTimer.current = setTimeout(() => setRadio(null), 6000);
+    radioTimer.current = setTimeout(() => setRadio(null), ms);
   }, []);
   const [result, setResult] = useState<RunResult>({ score: 0, level: startLevel, kills: 0, credits: 0 });
   const [levelResult, setLevelResult] = useState<LevelResult | null>(null);
   // Credits picked up before dying are paid out when the player leaves the game-over screen
   // (not on revive, which continues the level and pays through the level reward instead).
   const pendingRunCredits = useRef(0);
-  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession, onAmmo });
-  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession, onAmmo };
+  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession, onAmmo, onDocFound });
+  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession, onAmmo, onDocFound };
 
   // Events are batched and saved at natural breaks (level end, death, exit).
   const session = useRef<PlayerStats>(emptyStats());
@@ -184,6 +191,13 @@ export default function GameScreen({
           playSound: (n) => sound.play(n),
           onEvent: track,
           onAmmo: (stock) => latest.current.onAmmo(stock),
+          onDocument: (lvl) => {
+            const n = new Set([...storyRef.current.docs, lvl]).size;
+            latest.current.onDocFound(lvl);
+            notify(t("story.docFound", { n, total: DOC_COUNT }));
+            say({ who: "doc", text: docKey(lvl) }, 10000);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          },
         },
         { lookSensitivity, level: startLevel, unlockedLevel, modifiers, difficulty, options }
       );
@@ -231,14 +245,23 @@ export default function GameScreen({
   };
   const nextLevel = () => {
     const next = (levelResult?.level ?? stats.level) + 1;
-    engineRef.current?.startLevel(next, {
-      keepRun: true,
-      unlockedLevel: Math.max(latest.current.unlockedLevel, next),
-      modifiers: latest.current.modifiers,
-    });
-    setLevelResult(null);
-    setCanRevive(true);
-    setStatus("playing");
+    const go = () => {
+      engineRef.current?.startLevel(next, {
+        keepRun: true,
+        unlockedLevel: Math.max(latest.current.unlockedLevel, next),
+        modifiers: latest.current.modifiers,
+      });
+      setLevelResult(null);
+      setCanRevive(true);
+      setStatus("playing");
+    };
+    // Next level opens a new act (or its second part): its comic first.
+    const intro = introBefore(next, storyRef.current.seen);
+    const act = actOfLevel(next);
+    if (intro && act) {
+      setEnding({ id: intro, act, reward: null, then: go });
+      setStatus("story");
+    } else go();
   };
   const exit = () => {
     payPendingCredits();
@@ -251,13 +274,13 @@ export default function GameScreen({
     const act = levelResult ? actEndingAt(levelResult.level) : null;
     const s = storyRef.current;
     if (act?.outro && (!s.seen.includes(act.outro) || (act.reward && !s.claimed.includes(act.n)))) {
-      setEnding({ act, reward: act.reward && !s.claimed.includes(act.n) ? act.reward : null, then: fn });
+      setEnding({ id: act.outro, act, reward: act.reward && !s.claimed.includes(act.n) ? act.reward : null, then: fn });
       setStatus("story");
     } else fn();
   };
   const endStory = () => {
     if (!ending) return;
-    if (ending.act.outro) onComicSeen(ending.act.outro);
+    onComicSeen(ending.id);
     const then = ending.then;
     setEnding(null);
     then();
@@ -334,11 +357,13 @@ export default function GameScreen({
         />
       )}
 
-      {status === "story" && ending?.act.outro && (
+      {status === "story" && ending && (
         <StoryComic
-          id={ending.act.outro}
+          key={ending.id}
+          id={ending.id}
           act={ending.act}
           reward={ending.reward}
+          owned={ownedSkins}
           onClaim={() => onClaimAct(ending.act.n)}
           onDone={endStory}
         />
