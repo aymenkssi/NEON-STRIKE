@@ -954,6 +954,7 @@ export class GameEngine {
       maxHealth: this.mods.maxHealth,
       credits: this.levelCredits,
       difficulty: this.difficulty,
+      runKills: this.kills,
     });
   }
 

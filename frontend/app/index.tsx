@@ -12,6 +12,7 @@ import type { AuthMode } from "@/src/components/AuthForm";
 import { modifiersFrom } from "@/src/game/progression";
 import { initStore } from "@/src/iap";
 import { reportSession } from "@/src/api/session";
+import { flushPendingScore } from "@/src/api/leaderboard";
 import { music } from "@/src/audio/music";
 import { setRemotePacks } from "@/src/iap/catalog";
 import { setRemoteWeapons } from "@/src/game/armory";
@@ -103,7 +104,9 @@ export default function Index() {
   // Once the player has chosen guest or account: counts the visit in the admin statistics.
   useEffect(() => {
     if (accountLoaded && account.mode !== "unset") reportSession();
-  }, [accountLoaded, account.mode]);
+    // A score that could not be sent last time (no network) is sent now.
+    if (accountLoaded && account.mode === "account" && account.username) flushPendingScore(account.username);
+  }, [accountLoaded, account.mode, account.username]);
 
   useEffect(() => {
     if (loaded) initStore(addCredits);

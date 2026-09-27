@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView } from
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors, fonts, spacing, radius } from "../theme";
-import { submitScore } from "../api/leaderboard";
+import { submitRunScore } from "../api/leaderboard";
 import { showRewarded } from "../ads";
 import AdBanner from "../ads/AdBanner";
 import type { RunResult } from "../game/GameEngine";
@@ -34,12 +34,13 @@ export default function GameOver({ username, guest, result, canRevive, onRevive,
     if (guest) return;
     setState("submitting");
     try {
-      const res = await submitScore({
+      const res = await submitRunScore({
         name: username,
         score: scoreValue,
         level: result.level,
         kills: result.kills,
       });
+      if (!res) throw new Error("not sent");
       setRank(res.rank);
       setIsHigh(res.is_high_score);
       setState("done");

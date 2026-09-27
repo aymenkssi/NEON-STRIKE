@@ -6,6 +6,7 @@ import { GameEngine, type EngineOptions, type GameStats, type RunResult } from "
 import { levelReward, type Difficulty, type LevelResult, type PlayerModifiers } from "../game/progression";
 import { applyEvent, emptyStats, type MetaEvent, type PlayerStats } from "../game/meta";
 import { sound } from "../audio/sound";
+import { submitRunScore } from "../api/leaderboard";
 import { showInterstitialAtBreak, showRewarded } from "../ads";
 import { colors, fonts } from "../theme";
 import HUD from "./HUD";
@@ -147,6 +148,8 @@ export default function GameScreen({
           onLevelComplete: (r) => {
             const reward = levelReward(r);
             latest.current.onLevelDone(r.level, reward.stars, reward.total, r.difficulty ?? "normal");
+            // Accounts: every level cleared counts for the leaderboard (not only a game over).
+            if (!guest) submitRunScore({ name: username, score: r.score, level: r.level, kills: r.runKills ?? r.kills }).catch(() => {});
             track({ type: "level", stars: reward.stars });
             flushSession();
             setLevelResult(r);
