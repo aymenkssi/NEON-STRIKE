@@ -54,7 +54,8 @@ const CONFIG = {
   standHeight: 2.0,
   // Aiming (AIM button): zoom over the shoulder, tighter spread, slower view and walk, no sprint.
   aimFov: 50,
-  aimBack: 1.3, // third-person camera distance while aiming
+  aimBack: 2.1, // third-person camera distance while aiming (the zoom comes from aimFov)
+  aimRight: 0.25, // camera moved further right while aiming, so the character stays out of the way
   aimSensitivity: 0.6,
   aimSpread: 0.4,
   aimSpeedMult: 0.7,
@@ -1403,7 +1404,9 @@ export class GameEngine {
   private updateAimAssist(delta: number, time: number) {
     if (!this.opts.aimAssist) return;
     const aiming = time - this.lastLookAt < 300 || this.triggerHeld || this.moveVec.x !== 0 || this.moveVec.y !== 0;
-    if (!aiming) return;
+    // Never pull while the thumb is turning the view: the player must be able to look away
+    // from a zombie (the slow-down near the crosshair stays).
+    if (!aiming || time - this.lastLookAt < 150) return;
     const target = this.assistTarget(ASSIST.pullAngle);
     if (!target) return;
     const fwd = new THREE.Vector3();
@@ -1869,7 +1872,7 @@ export class GameEngine {
   private aimPivot(dir: THREE.Vector3) {
     const eye = this.camera.position;
     const right = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
-    const side = this.clearDistance(eye, right, TP.right);
+    const side = this.clearDistance(eye, right, TP.right + CONFIG.aimRight * this.aimBlend);
     this.tpPivot.copy(eye).addScaledVector(right, side);
     this.tpPivot.y += TP.up;
     return this.tpPivot;

@@ -162,45 +162,63 @@ export default function TouchControls({ getEngine, fireMode, fireModes, grenades
       runOnJS(stopFire)();
     });
   const jumpPressed = useSharedValue(0);
+  // Every button on the right also turns the view when the thumb slides from it, like FIRE:
+  // the right thumb aims wherever it lands while the left one moves.
   const jumpGesture = Gesture.Pan()
     .minDistance(0)
     .onBegin(() => {
       jumpPressed.value = 1;
       runOnJS(jumpDown)();
     })
+    .onChange((e) => {
+      runOnJS(look)(e.changeX, e.changeY);
+    })
     .onFinalize(() => {
       jumpPressed.value = 0;
       runOnJS(jumpUp)();
     });
   const reloadPressed = useSharedValue(0);
-  const reloadGesture = Gesture.Tap()
-    .maxDuration(10000)
+  const reloadGesture = Gesture.Pan()
+    .minDistance(0)
     .onBegin(() => {
       reloadPressed.value = 1;
       runOnJS(reload)();
+    })
+    .onChange((e) => {
+      runOnJS(look)(e.changeX, e.changeY);
     })
     .onFinalize(() => {
       reloadPressed.value = 0;
     });
   const grenadePressed = useSharedValue(0);
-  const grenadeGesture = Gesture.Tap()
-    .maxDuration(10000)
+  const grenadeGesture = Gesture.Pan()
+    .minDistance(0)
     .onBegin(() => {
       grenadePressed.value = 1;
       runOnJS(throwGrenade)();
+    })
+    .onChange((e) => {
+      runOnJS(look)(e.changeX, e.changeY);
     })
     .onFinalize(() => {
       grenadePressed.value = 0;
     });
   const grenadeStyle = useAnimatedStyle(() => ({ opacity: grenadePressed.value ? 0.7 : 1 }));
-  const aimGesture = Gesture.Tap()
-    .maxDuration(10000)
+  const aimGesture = Gesture.Pan()
+    .minDistance(0)
     .onBegin(() => {
       runOnJS(toggleAim)();
+    })
+    .onChange((e) => {
+      runOnJS(look)(e.changeX, e.changeY);
     });
   const modeGesture = Gesture.Tap().onEnd(() => {
     runOnJS(cycleMode)();
   });
+  // Each thumb has its own gesture: declare them all simultaneous so that no platform cancels
+  // the look (right thumb) while the joystick (left thumb) is active, or the other way round.
+  const all = [joystick, lookPan, fireGesture, jumpGesture, reloadGesture, grenadeGesture, aimGesture, modeGesture];
+  all.forEach((g) => g.simultaneousWithExternalGesture(...all.filter((o) => o !== g)));
   const fireStyle = useAnimatedStyle(() => ({
     backgroundColor: firePressed.value ? "rgba(255,0,60,0.6)" : "rgba(255,0,60,0.28)",
   }));
