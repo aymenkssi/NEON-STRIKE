@@ -164,9 +164,10 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
         {stats.reloading ? (
           <Text style={styles.reloadText}>{t("hud.reloading")}</Text>
         ) : (
-          <Text style={styles.ammoText}>
+          // Magazine / spare rounds (∞ for the pistol); red when the weapon is almost dry.
+          <Text style={[styles.ammoText, stats.reserve === 0 && stats.ammo <= 3 && { color: colors.error }]} testID="hud-ammo">
             {stats.ammo}
-            <Text style={styles.ammoMax}>/{stats.maxAmmo}</Text>
+            <Text style={[styles.ammoMax, stats.reserve === 0 && { color: colors.error }]}>/{stats.reserve === null ? "∞" : stats.reserve}</Text>
           </Text>
         )}
       </View>

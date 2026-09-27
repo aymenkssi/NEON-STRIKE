@@ -13,7 +13,7 @@ import {
   type UpgradeKey,
   type UpgradeLevels,
 } from "@/src/game/progression";
-import { LOADOUT_SIZE, cleanArmory, initialArmory, onSale, priceOf, type ArmoryState } from "@/src/game/armory";
+import { LOADOUT_SIZE, ammoBox, ammoBoxPrice, ammoCap, cleanArmory, initialArmory, onSale, priceOf, startAmmo, unlimitedAmmo, type ArmoryState } from "@/src/game/armory";
 import { DEFAULT_SKINS, ownsSkin, skinPrice, OUTFITS, type SkinState } from "@/src/game/skins";
 import {
   ACHIEVEMENTS,
@@ -224,10 +224,40 @@ export function useProgress(cloudEnabled: boolean) {
       if (!onSale(key) || cur.credits < price) return false;
       update((p) => {
         const loadout = p.armory.loadout.length < LOADOUT_SIZE ? [...p.armory.loadout, key] : p.armory.loadout;
-        return { ...p, credits: p.credits - price, armory: { owned: [...p.armory.owned, key], loadout } };
+        const ammo = unlimitedAmmo(key) ? p.armory.ammo : { ...p.armory.ammo, [key]: startAmmo(key) };
+        return { ...p, credits: p.credits - price, armory: { owned: [...p.armory.owned, key], loadout, ammo } };
       });
       return true;
     },
+    [update]
+  );
+
+  // A box of ammo from the Armory (price and size set in the admin page). False: not affordable / full.
+  const buyAmmo = useCallback(
+    (key: string) => {
+      const cur = ref.current;
+      if (!cur.armory.owned.includes(key) || unlimitedAmmo(key)) return false;
+      const price = ammoBoxPrice(key);
+      const have = cur.armory.ammo[key] ?? 0;
+      if (cur.credits < price || have >= ammoCap(key)) return false;
+      update((p) => ({
+        ...p,
+        credits: p.credits - price,
+        armory: { ...p.armory, ammo: { ...p.armory.ammo, [key]: Math.min(ammoCap(key), (p.armory.ammo[key] ?? 0) + ammoBox(key)) } },
+      }));
+      return true;
+    },
+    [update]
+  );
+
+  // Rounds left after a game (the engine reports them at the end of a level, on death or exit).
+  const setAmmoStock = useCallback(
+    (stock: Record<string, number>) =>
+      update((p) => {
+        const ammo = { ...p.armory.ammo };
+        for (const [k, v] of Object.entries(stock)) if (p.armory.owned.includes(k) && !unlimitedAmmo(k)) ammo[k] = Math.max(0, Math.min(ammoCap(k), Math.floor(v)));
+        return { ...p, armory: { ...p.armory, ammo } };
+      }),
     [update]
   );
 
@@ -338,6 +368,8 @@ export function useProgress(cloudEnabled: boolean) {
     grantSeasonReward,
     buyWeapon,
     toggleLoadout,
+    buyAmmo,
+    setAmmoStock,
   };
 }
 

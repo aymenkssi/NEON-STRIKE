@@ -3,7 +3,19 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { LOADOUT_SIZE, WEAPONS, onSale, onWeaponPricesChange, priceOf, weaponBars, type ArmoryState } from "../game/armory";
+import {
+  LOADOUT_SIZE,
+  WEAPONS,
+  ammoBox,
+  ammoBoxPrice,
+  ammoCap,
+  onSale,
+  onWeaponPricesChange,
+  priceOf,
+  unlimitedAmmo,
+  weaponBars,
+  type ArmoryState,
+} from "../game/armory";
 import type { UpgradeKey, UpgradeLevels } from "../game/progression";
 import type { SkinState } from "../game/skins";
 import { formatNumber, useT, type Key } from "@/src/i18n";
@@ -18,6 +30,7 @@ type Props = {
   upgrades: UpgradeLevels;
   onBuyWeapon: (key: string) => boolean;
   onToggleLoadout: (key: string) => boolean;
+  onBuyAmmo: (key: string) => boolean;
   onBuyUpgrade: (key: UpgradeKey) => boolean;
   onOpenShop: () => void;
   onClose: () => void;
@@ -34,7 +47,7 @@ const BARS: { key: "damage" | "rate" | "accuracy" | "ammo"; label: Key }[] = [
 
 // Armory: buy real weapons with credits (prices set in the admin page), choose the 4 carried
 // in game, and upgrade damage / armour / magazine / reload.
-export default function Armory({ credits, armory, skins, upgrades, onBuyWeapon, onToggleLoadout, onBuyUpgrade, onOpenShop, onClose }: Props) {
+export default function Armory({ credits, armory, skins, upgrades, onBuyWeapon, onToggleLoadout, onBuyAmmo, onBuyUpgrade, onOpenShop, onClose }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("weapons");
   const [selected, setSelected] = useState(armory.loadout[0] ?? "shotgun");
@@ -49,6 +62,22 @@ export default function Armory({ credits, armory, skins, upgrades, onBuyWeapon, 
   const forSale = onSale(w.key);
   const bars = weaponBars(w);
   const name = (key: string) => t(`weapon.${key}` as Key);
+  const stock = armory.ammo[w.key] ?? 0;
+  const full = stock >= ammoCap(w.key);
+
+  const buyAmmo = () => {
+    if (full) {
+      setNotice({ ok: false, text: t("armory.ammoFull") });
+      return;
+    }
+    if (onBuyAmmo(w.key)) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setNotice({ ok: true, text: t("armory.ammoBought", { n: Math.min(ammoBox(w.key), ammoCap(w.key) - stock), name: name(w.key) }) });
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      setNotice({ ok: false, text: t("skins.poor") });
+    }
+  };
 
   const act = () => {
     setNotice(null);
@@ -102,7 +131,7 @@ export default function Armory({ credits, armory, skins, upgrades, onBuyWeapon, 
               <WeaponPreview weapon={w.key} weaponSkin={skins.weapon} outfit={skins.outfit} withHand={false} />
             </View>
             <Text style={styles.name} testID="armory-name">{name(w.key)}</Text>
-            <Text style={styles.desc} numberOfLines={2}>{t(`armory.desc.${w.key}` as Key)}</Text>
+            <Text style={styles.desc} numberOfLines={1}>{t(`armory.desc.${w.key}` as Key)}</Text>
             {BARS.map((b) => (
               <View key={b.key} style={styles.barRow}>
                 <Text style={styles.barLabel}>{t(b.label)}</Text>
@@ -111,6 +140,21 @@ export default function Armory({ credits, armory, skins, upgrades, onBuyWeapon, 
                 </View>
               </View>
             ))}
+            {owned && (
+              <View style={styles.ammoRow} testID="armory-ammo">
+                <MaterialCommunityIcons name="ammunition" size={16} color={stock === 0 && !unlimitedAmmo(w.key) ? colors.error : colors.warning} />
+                <Text style={styles.ammoText} testID="armory-ammo-stock">
+                  {t("armory.ammo")} : {unlimitedAmmo(w.key) ? t("armory.unlimited") : `${formatNumber(stock)} / ${formatNumber(ammoCap(w.key))}`}
+                </Text>
+                {!unlimitedAmmo(w.key) && (
+                  <Pressable testID="armory-buy-ammo" onPress={buyAmmo} style={[styles.ammoBtn, full && { opacity: 0.4 }]}>
+                    <Text style={styles.ammoBtnText}>{t("armory.buyAmmo", { n: ammoBox(w.key) })}</Text>
+                    <MaterialCommunityIcons name="circle-multiple" size={12} color={colors.onWarning} />
+                    <Text style={styles.ammoBtnText}>{formatNumber(ammoBoxPrice(w.key))}</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
             <Pressable
               testID="armory-action"
               onPress={act}
@@ -190,7 +234,7 @@ const styles = StyleSheet.create({
   slotText: { color: colors.onSurfaceTertiary, fontFamily: fonts.display, fontSize: 12, letterSpacing: 1 },
   body: { flexDirection: "row", gap: spacing.md, flexShrink: 1 },
   left: { width: 270, gap: 3 },
-  preview: { height: 104, borderRadius: radius.md, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  preview: { height: 88, borderRadius: radius.md, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
   name: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 16, letterSpacing: 1.5 },
   desc: { color: colors.onSurfaceSecondary, fontFamily: fonts.text, fontSize: 11, lineHeight: 13 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -203,6 +247,10 @@ const styles = StyleSheet.create({
   actionIn: { borderColor: colors.brand },
   actionOff: { borderColor: colors.border },
   actionText: { fontFamily: fonts.display, fontSize: 15, letterSpacing: 1.5 },
+  ammoRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  ammoText: { flex: 1, color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: 12 },
+  ammoBtn: { flexDirection: "row", alignItems: "center", gap: 3, height: 26, paddingHorizontal: 8, borderRadius: radius.sm, backgroundColor: colors.warning },
+  ammoBtnText: { color: colors.onWarning, fontFamily: fonts.display, fontSize: 11 },
   notice: { fontFamily: fonts.textMed, fontSize: 12, textAlign: "center" },
   right: { flex: 1 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingBottom: spacing.sm },

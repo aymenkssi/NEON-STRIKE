@@ -266,6 +266,8 @@ export const fr = {
   "game.health": "+{n} SANTÉ",
   "game.ammo": "MUNITIONS +",
   "game.grenade": "+1 GRENADE",
+  "game.noAmmo": "PLUS DE MUNITIONS · CHANGE D'ARME",
+  "game.ammoFound": "+{n} MUNITIONS {weapon}",
 
   "hud.reloading": "RECHARGEMENT…",
   "hud.levelWave": "NIV {n} · VAGUE {w}/{max}",
@@ -398,6 +400,11 @@ export const fr = {
   "armory.desc.launcher": "Lance-grenades à barillet, 6 grenades explosives par chargement.",
   "armory.desc.minigun": "Mitrailleuse rotative à 6 canons : un mur de balles.",
   "armory.desc.rpg": "Lance-roquettes : une roquette, une énorme explosion.",
+  "armory.ammo": "Munitions",
+  "armory.unlimited": "illimitées",
+  "armory.buyAmmo": "+{n} BALLES",
+  "armory.ammoFull": "Stock de munitions plein.",
+  "armory.ammoBought": "+{n} munitions pour {name}.",
 
   "exit.title": "QUITTER NEON STRIKE ?",
   "exit.text": "Ta progression est enregistrée. À bientôt, survivant !",

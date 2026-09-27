@@ -5,7 +5,7 @@ import { buildWorld, type World, type WorldQuality } from "./world";
 import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
 import { MUZZLE, VIEW, buildWeaponModel } from "./weapons";
-import { WEAPONS, weaponOf, type FireMode, type WeaponConfig } from "./armory";
+import { WEAPONS, ammoBox, ammoCap, startAmmo, unlimitedAmmo, weaponOf, type FireMode, type WeaponConfig } from "./armory";
 import {
   CREDITS_PER_BOSS,
   CREDITS_PER_HEADSHOT,
@@ -105,6 +105,7 @@ export type GameStats = {
   boss: { health: number; max: number } | null;
   weaponIndex: number;
   weapons: WeaponInfo[]; // the loadout (weapons carried in this game)
+  reserve: number | null; // spare rounds of the current weapon (null: unlimited)
   fireMode: FireMode;
   fireModes: FireMode[]; // modes of the current weapon (MODE button hidden when only one)
   sector: { index: number; name: string };
@@ -115,6 +116,7 @@ export type GameStats = {
 
 export type EngineOptions = {
   loadout?: string[]; // weapon keys chosen in the Armory (up to 4)
+  ammo?: Record<string, number>; // rounds owned per weapon (magazine included); unlimited if absent
   aimAssist: boolean;
   invertY: boolean;
   quality: WorldQuality;
@@ -148,6 +150,7 @@ export type EngineCallbacks = {
   onNotify: (msg: string) => void;
   playSound: (name: string) => void;
   onEvent?: (e: GameEvent) => void;
+  onAmmo?: (stock: Record<string, number>) => void; // rounds left, saved with the progress
 };
 
 export class GameEngine {
@@ -203,7 +206,9 @@ export class GameEngine {
   private nextShotAt = 0;
   private burstLeft = 0;
   private nextBurstAt = 0;
-  private ammoByWeapon: number[] = [0];
+  private ammoByWeapon: number[] = [0]; // rounds in the magazine
+  private reserve: number[] = [0]; // spare rounds (Infinity for the pistol)
+  private lastNoAmmoAt = 0;
   private reloading = false;
   private reloadStart = 0;
   private score = 0;
@@ -465,7 +470,34 @@ export class GameEngine {
     this.arms = arms.length ? arms : [weaponOf("shotgun")!];
     this.weaponIndex = 0;
     this.fireModeByWeapon = this.arms.map(() => 0);
-    this.ammoByWeapon = this.arms.map((_, i) => this.maxAmmoOf(i));
+    const total = this.arms.map((w) => (unlimitedAmmo(w.key) ? Infinity : Math.max(0, this.opts.ammo?.[w.key] ?? startAmmo(w.key))));
+    this.ammoByWeapon = this.arms.map((_, i) => Math.min(this.maxAmmoOf(i), total[i]));
+    this.reserve = this.arms.map((_, i) => total[i] - this.ammoByWeapon[i]);
+  }
+
+  // New level: every magazine is topped up from its reserve (the upgrades may have changed it).
+  private topUpMagazines() {
+    this.arms.forEach((_, i) => {
+      const total = this.ammoByWeapon[i] + this.reserve[i];
+      this.ammoByWeapon[i] = Math.min(this.maxAmmoOf(i), total);
+      this.reserve[i] = total - this.ammoByWeapon[i];
+    });
+  }
+
+  // Rounds left per weapon, saved with the progress (weapons with unlimited ammo left out).
+  ammoStock(): Record<string, number> {
+    const out: Record<string, number> = {};
+    this.arms.forEach((w, i) => {
+      if (!unlimitedAmmo(w.key)) out[w.key] = this.ammoByWeapon[i] + this.reserve[i];
+    });
+    return out;
+  }
+
+  private noAmmo() {
+    const now = Date.now();
+    if (now - this.lastNoAmmoAt < 1500) return;
+    this.lastNoAmmoAt = now;
+    this.cb.onNotify(t("game.noAmmo"));
   }
 
   // RPG: the rocket is visible in the tube only when loaded.
@@ -577,6 +609,10 @@ export class GameEngine {
   reload() {
     if (this.reloading || this.ammo === this.maxAmmoOf(this.weaponIndex) || this.gameOver) return;
     if (this.powerActive("infinite")) return;
+    if (this.reserve[this.weaponIndex] <= 0) {
+      this.noAmmo();
+      return;
+    }
     this.reloading = true;
     this.reloadStart = Date.now();
     this.cb.playSound("reload");
@@ -592,6 +628,7 @@ export class GameEngine {
       this.reload();
       return false;
     }
+    // Rounds used during the "unlimited ammo" power-up are not taken from the stock.
 
     const wpn = this.weapon;
     if (!this.powerActive("infinite")) this.ammo = this.ammo - 1;
@@ -907,6 +944,7 @@ export class GameEngine {
     this.levelComplete = true;
     this.setMove(0, 0, false);
     this.isSpaceHeld = false;
+    this.cb.onAmmo?.(this.ammoStock());
     this.cb.onLevelComplete({
       level: this.levelCfg.level,
       score: this.score,
@@ -919,6 +957,27 @@ export class GameEngine {
     });
   }
 
+  // Ammo crate: half a box for the current weapon, or for the loadout weapon that needs it most
+  // when the current one has unlimited ammo or is full.
+  private pickUpAmmo() {
+    const need = (i: number) => (unlimitedAmmo(this.arms[i].key) ? -1 : ammoCap(this.arms[i].key) - this.ammoByWeapon[i] - this.reserve[i]);
+    let i = this.weaponIndex;
+    if (need(i) <= 0) {
+      const others = this.arms.map((_, j) => j).filter((j) => need(j) > 0).sort((a, b) => need(b) - need(a));
+      if (!others.length) {
+        this.ammo = this.maxAmmoOf(this.weaponIndex); // everything is full: a free magazine
+        this.cb.onNotify(t("game.ammo"));
+        return;
+      }
+      i = others[0];
+    }
+    const w = this.arms[i];
+    const n = Math.min(need(i), Math.max(1, Math.round(ammoBox(w.key) / 2)));
+    this.reserve[i] += n;
+    this.cb.onNotify(t("game.ammoFound", { n, weapon: t(`weapon.${w.key}` as Key) }));
+    if (i === this.weaponIndex && this.ammo === 0) this.reload();
+  }
+
   private maybeDropPickup(position: THREE.Vector3) {
     const r = Math.random();
     let type: "health" | "ammo" | "grenade" | PowerUpKind | null = null;
@@ -927,7 +986,7 @@ export class GameEngine {
       const kinds = Object.keys(POWERUPS) as PowerUpKind[];
       type = kinds[Math.floor(Math.random() * kinds.length)];
     } else if (r < POWERUP_DROP_CHANCE + 0.16) type = "health";
-    else if (r < POWERUP_DROP_CHANCE + 0.41) type = "ammo";
+    else if (r < POWERUP_DROP_CHANCE + 0.31) type = "ammo";
     if (!type) return;
 
     const group = new THREE.Group();
@@ -1019,7 +1078,7 @@ export class GameEngine {
     this.grenades = [];
     this.unlockedLevel = Math.max(opts.unlockedLevel ?? this.unlockedLevel, this.levelCfg.level);
     this.health = this.mods.maxHealth;
-    this.ammoByWeapon = this.arms.map((_, i) => this.maxAmmoOf(i));
+    this.topUpMagazines();
     this.reloading = false;
     if (!opts.keepRun) {
       this.score = 0;
@@ -1094,6 +1153,7 @@ export class GameEngine {
       fireMode: this.fireMode,
       fireModes: this.weapon.modes,
       weapons: this.arms.map((w) => ({ key: w.key, short: w.short })),
+      reserve: Number.isFinite(this.reserve[this.weaponIndex]) ? this.reserve[this.weaponIndex] : null,
       sector: { index: this.sector.index, name: t(CITIES[this.sector.city].name) },
       powerups: (Object.keys(this.powerUntil) as PowerUpKind[])
         .map((kind) => ({ kind, remaining: Math.ceil(((this.powerUntil[kind] ?? 0) - Date.now()) / 1000) }))
@@ -1192,6 +1252,7 @@ export class GameEngine {
     this.cb.playSound("gameover");
     this.cb.onEvent?.({ type: "death" });
     this.emitStats();
+    this.cb.onAmmo?.(this.ammoStock());
     this.cb.onGameOver({ score: this.score, level: this.levelCfg.level, kills: this.kills, credits: this.levelCredits });
   }
 
@@ -1456,9 +1517,7 @@ export class GameEngine {
           this.health = Math.min(this.mods.maxHealth, this.health + 25);
           this.cb.onNotify(t("game.health", { n: 25 }));
         } else {
-          this.ammo = this.maxAmmoOf(this.weaponIndex);
-          this.reloading = false;
-          this.cb.onNotify(t("game.ammo"));
+          this.pickUpAmmo();
         }
         if (!(pk.userData.type in POWERUPS)) this.cb.playSound("pickup");
         this.scene.remove(pk);
@@ -1469,7 +1528,10 @@ export class GameEngine {
 
     if (this.reloading && time - this.reloadStart >= this.reloadMs) {
       this.reloading = false;
-      this.ammo = this.maxAmmoOf(this.weaponIndex);
+      const i = this.weaponIndex;
+      const take = Math.min(this.maxAmmoOf(i) - this.ammo, this.reserve[i]);
+      this.ammo = this.ammo + take;
+      this.reserve[i] -= take;
       this.showWarhead();
       this.emitStats();
     }

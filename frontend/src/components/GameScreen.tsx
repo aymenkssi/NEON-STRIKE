@@ -27,6 +27,8 @@ type Props = {
   // Persists a finished level (stars + credits) and unlocks the next one.
   onLevelDone: (level: number, stars: number, credits: number, difficulty: Difficulty) => void;
   onAddCredits: (credits: number) => void;
+  // Rounds left per weapon (limited ammo), saved at the end of a level, on death and on exit.
+  onAmmo: (stock: Record<string, number>) => void;
   // Stats of the play session (kills, levels…) for missions and achievements.
   onSession: (session: PlayerStats) => void;
   onExit: () => void;
@@ -53,6 +55,7 @@ const INITIAL: GameStats = {
   powerups: [],
   difficulty: "normal",
   grenades: 3,
+  reserve: null,
 };
 
 export default function GameScreen({
@@ -67,6 +70,7 @@ export default function GameScreen({
   options,
   onLevelDone,
   onAddCredits,
+  onAmmo,
   onSession,
   onExit,
 }: Props) {
@@ -78,8 +82,8 @@ export default function GameScreen({
   // Credits picked up before dying are paid out when the player leaves the game-over screen
   // (not on revive, which continues the level and pays through the level reward instead).
   const pendingRunCredits = useRef(0);
-  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession });
-  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession };
+  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession, onAmmo });
+  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession, onAmmo };
 
   // Events are batched and saved at natural breaks (level end, death, exit).
   const session = useRef<PlayerStats>(emptyStats());
@@ -107,6 +111,7 @@ export default function GameScreen({
     sound.init().then(() => sound.setEnabled(soundEnabled));
     return () => {
       flushSession();
+      if (engineRef.current) latest.current.onAmmo(engineRef.current.ammoStock());
       engineRef.current?.dispose();
       engineRef.current = null;
     };
@@ -151,6 +156,7 @@ export default function GameScreen({
           onNotify: notify,
           playSound: (n) => sound.play(n),
           onEvent: track,
+          onAmmo: (stock) => latest.current.onAmmo(stock),
         },
         { lookSensitivity, level: startLevel, unlockedLevel, modifiers, difficulty, options }
       );

@@ -268,6 +268,8 @@ export const en: Record<Key, string> = {
   "game.health": "+{n} HEALTH",
   "game.ammo": "AMMO +",
   "game.grenade": "+1 GRENADE",
+  "game.noAmmo": "OUT OF AMMO · SWITCH WEAPON",
+  "game.ammoFound": "+{n} AMMO {weapon}",
 
   "hud.reloading": "RELOADING…",
   "hud.levelWave": "LVL {n} · WAVE {w}/{max}",
@@ -400,6 +402,11 @@ export const en: Record<Key, string> = {
   "armory.desc.launcher": "Revolver grenade launcher, 6 explosive grenades per load.",
   "armory.desc.minigun": "6-barrel rotary machine gun: a wall of bullets.",
   "armory.desc.rpg": "Rocket launcher: one rocket, one huge explosion.",
+  "armory.ammo": "Ammo",
+  "armory.unlimited": "unlimited",
+  "armory.buyAmmo": "+{n} ROUNDS",
+  "armory.ammoFull": "Ammo stock full.",
+  "armory.ammoBought": "+{n} rounds for {name}.",
 
   "exit.title": "QUIT NEON STRIKE?",
   "exit.text": "Your progress is saved. See you soon, survivor!",

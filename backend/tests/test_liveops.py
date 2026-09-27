@@ -156,7 +156,7 @@ class TestWeaponPrices:
         r = api.put("/api/admin/weapons/ak47", json={"price": 3500, "on_sale": False}, headers=ADMIN)
         assert r.status_code == 200 and r.json()["price"] == 3500
         ak = next(w for w in api.get("/api/config").json()["weapons"] if w["key"] == "ak47")
-        assert ak == {"key": "ak47", "name": "AK-47", "price": 3500, "on_sale": False}
+        assert ak == {"key": "ak47", "name": "AK-47", "price": 3500, "on_sale": False, "ammo_price": 110, "ammo_box": 60}
         assert api.get("/api/admin/weapons", headers=ADMIN).json()[5]["price"] == 3500
 
     def test_validation(self, api):
@@ -164,3 +164,12 @@ class TestWeaponPrices:
         assert api.put("/api/admin/weapons/laser", json={"price": 10}, headers=ADMIN).status_code == 422
         assert api.put("/api/admin/weapons/m4", json={"price": -1}, headers=ADMIN).status_code == 422
         assert api.put("/api/admin/weapons/m4", json={"price": 10}).status_code == 401
+
+    def test_ammo_price(self, api):
+        from conftest import ADMIN
+        weapons = {w["key"]: w for w in api.get("/api/config").json()["weapons"]}
+        assert weapons["pistol"]["ammo_box"] == 0 and weapons["m4"]["ammo_box"] == 60 and weapons["m4"]["ammo_price"] == 100
+        api.put("/api/admin/weapons/m4", json={"price": 2200, "on_sale": True, "ammo_price": 75}, headers=ADMIN)
+        api.put("/api/admin/weapons/m4", json={"price": 2000, "on_sale": True}, headers=ADMIN)  # ammo price kept
+        m4 = next(w for w in api.get("/api/config").json()["weapons"] if w["key"] == "m4")
+        assert (m4["price"], m4["ammo_price"]) == (2000, 75)

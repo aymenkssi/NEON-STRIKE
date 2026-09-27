@@ -55,6 +55,8 @@ export default function Index() {
     grantSeasonReward,
     buyWeapon,
     toggleLoadout,
+    buyAmmo,
+    setAmmoStock,
   } = useProgress(account.mode === "account");
 
   useEffect(() => {
@@ -191,6 +193,7 @@ export default function Index() {
           onSeasonReward={grantSeasonReward}
           onBuyWeapon={buyWeapon}
           onToggleLoadout={toggleLoadout}
+          onBuyAmmo={buyAmmo}
         />
       ) : (
         <GameScreen
@@ -204,6 +207,7 @@ export default function Index() {
           difficulty={gameSettings.difficulty}
           options={{
             loadout: progress.armory.loadout,
+            ammo: progress.armory.ammo,
             aimAssist: gameSettings.aimAssist,
             invertY: gameSettings.invertY,
             quality: gameSettings.quality,
@@ -212,6 +216,7 @@ export default function Index() {
           }}
           onLevelDone={completeLevel}
           onAddCredits={addCredits}
+          onAmmo={setAmmoStock}
           onSession={recordSession}
           onExit={() => setScreen("menu")}
         />
