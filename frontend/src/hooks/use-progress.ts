@@ -302,7 +302,8 @@ export function useProgress(cloudEnabled: boolean) {
     [update]
   );
 
-  // Reward of a finished act (credits + story skin, equipped), once. Returns the reward or null.
+  // Reward of a finished act, once: credits, the story skin (equipped) and the characters met in
+  // the act (added to the owned skins). Returns the reward or null.
   const claimActReward = useCallback(
     (n: number) => {
       const act = actByNumber(n);
@@ -310,12 +311,22 @@ export function useProgress(cloudEnabled: boolean) {
       if (!act?.reward || cur.story.claimed.includes(n)) return null;
       const { done, total } = actProgress(act, cur.stars);
       if (done < total) return null;
-      const { credits, skin } = act.reward;
+      const { credits, skin, heroes = [] } = act.reward;
       update((p) => {
-        const owned = p.skins.owned.includes(skin) ? p.skins.owned : [...p.skins.owned, skin];
-        return { ...p, credits: p.credits + credits, skins: equipped({ ...p.skins, owned }, skin), story: { ...p.story, claimed: [...p.story.claimed, n] } };
+        const owned = Array.from(new Set([...p.skins.owned, ...heroes, ...(skin ? [skin] : [])]));
+        const skins = skin ? equipped({ ...p.skins, owned }, skin) : { ...p.skins, owned };
+        return { ...p, credits: p.credits + credits, skins, story: { ...p.story, claimed: [...p.story.claimed, n] } };
       });
       return act.reward;
+    },
+    [update]
+  );
+
+  // A secret document found in a level (story journal).
+  const markDocFound = useCallback(
+    (level: number) => {
+      if (ref.current.story.docs.includes(level)) return;
+      update((p) => ({ ...p, story: { ...p.story, docs: [...p.story.docs, level] } }));
     },
     [update]
   );
@@ -399,6 +410,7 @@ export function useProgress(cloudEnabled: boolean) {
     grantSeasonReward,
     markComicSeen,
     claimActReward,
+    markDocFound,
     buyWeapon,
     toggleLoadout,
     buyAmmo,

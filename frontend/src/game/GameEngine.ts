@@ -133,6 +133,7 @@ export type EngineOptions = {
   weaponSkin?: string;
   outfit?: string;
   view?: "third" | "first"; // third person (default): the whole character is visible
+  docsFound?: number[]; // levels whose secret document was already found (story mode)
 };
 
 // Third-person camera: over the right shoulder, pulled in when a wall is behind the player.
@@ -165,6 +166,7 @@ export type EngineCallbacks = {
   playSound: (name: string) => void;
   onEvent?: (e: GameEvent) => void;
   onAmmo?: (stock: Record<string, number>) => void; // rounds left, saved with the progress
+  onDocument?: (level: number) => void; // secret document of the level picked up
 };
 
 export class GameEngine {
@@ -369,6 +371,7 @@ export class GameEngine {
     this.objects = world.colliders;
     this.spawnPoints = world.spawnPoints;
     this.scene.add(world.group);
+    this.spawnDocument(level);
 
     const L = world.lighting;
     this.scene.background = new THREE.Color(L.horizon);
@@ -1083,6 +1086,37 @@ export class GameEngine {
     this.pickups.push(group);
   }
 
+  // Story: the secret Helix document of the level, a glowing tablet under a beam of cyan light,
+  // somewhere between the start and the edge of the arena (not shown once found).
+  private spawnDocument(level: number) {
+    if (this.opts.docsFound?.includes(level) || !this.spawnPoints.length) return;
+    const start = new THREE.Vector3(0, 0, 12);
+    const n = this.spawnPoints.length;
+    let at: THREE.Vector3 | null = null;
+    for (let k = 0; k < n && !at; k++) {
+      const sp = this.spawnPoints[(level * 7 + k) % n];
+      const p = start.clone().lerp(new THREE.Vector3(sp.x, 0, sp.z), 0.45);
+      p.y = 1;
+      const blocked = this.objects.some((o) => (o.userData.aabb as THREE.Box3 | undefined)?.clone().expandByScalar(1.2).containsPoint(p));
+      if (!blocked) at = p;
+    }
+    if (!at) return;
+    const group = new THREE.Group();
+    const tablet = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 0.05), new THREE.MeshStandardMaterial({ color: 0x0b2a33, emissive: 0x00e5ff, emissiveIntensity: 0.9 }));
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.42, 0.03), new THREE.MeshStandardMaterial({ color: 0x1a1a22, metalness: 0.4 }));
+    frame.position.z = -0.02;
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.3, 16, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+    );
+    beam.position.y = 7.6;
+    group.add(tablet, frame, beam);
+    group.position.copy(at);
+    group.userData = { type: "doc", spin: 0, level };
+    this.scene.add(group);
+    this.pickups.push(group);
+  }
+
   revive() {
     this.clearSpits();
     this.health = this.mods.maxHealth;
@@ -1588,6 +1622,9 @@ export class GameEngine {
       if (Math.sqrt(dx * dx + dz * dz) < 1.8) {
         if (pk.userData.type in POWERUPS) {
           this.activatePower(pk.userData.type as PowerUpKind);
+        } else if (pk.userData.type === "doc") {
+          this.opts.docsFound = [...(this.opts.docsFound ?? []), pk.userData.level];
+          this.cb.onDocument?.(pk.userData.level);
         } else if (pk.userData.type === "grenade") {
           this.handGrenades = Math.min(HAND_GRENADE_MAX, this.handGrenades + 1);
           this.cb.onNotify(t("game.grenade"));
