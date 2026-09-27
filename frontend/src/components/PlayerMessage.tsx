@@ -12,10 +12,10 @@ const KIND = {
   warning: { icon: "alert", color: colors.error, label: "msg.warning" },
 } as const;
 
-type Props = { message: RemoteMessage; onClose: () => void; onOpenShop?: () => void };
+type Props = { message: RemoteMessage; personal?: boolean; onClose: () => void; onOpenShop?: () => void };
 
 // A message published from the admin page, shown once to each player.
-export default function PlayerMessage({ message, onClose, onOpenShop }: Props) {
+export default function PlayerMessage({ message, personal, onClose, onOpenShop }: Props) {
   const kind = KIND[message.kind] ?? KIND.info;
   const t = useT();
   const lang = useLang();
@@ -25,6 +25,12 @@ export default function PlayerMessage({ message, onClose, onOpenShop }: Props) {
         <View style={styles.head}>
           <MaterialCommunityIcons name={kind.icon} size={22} color={kind.color} />
           <Text style={[styles.kind, { color: kind.color }]}>{t(kind.label)}</Text>
+          {personal && (
+            <View style={styles.personal} testID="message-personal">
+              <MaterialCommunityIcons name="account-arrow-left" size={13} color={colors.onBrand} />
+              <Text style={styles.personalText}>{t("msg.personal")}</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.title}>{(lang === "en" && message.title_en) || message.title}</Text>
         <ScrollView style={styles.bodyWrap}>
@@ -54,6 +60,8 @@ export default function PlayerMessage({ message, onClose, onOpenShop }: Props) {
 }
 
 const styles = StyleSheet.create({
+  personal: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.brand, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, marginLeft: "auto" },
+  personalText: { color: colors.onBrand, fontFamily: fonts.display, fontSize: 11, letterSpacing: 1 },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", zIndex: 35, padding: spacing.md },
   card: {
     width: "100%",

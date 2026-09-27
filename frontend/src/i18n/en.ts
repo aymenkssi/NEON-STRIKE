@@ -51,10 +51,14 @@ export const en: Record<Key, string> = {
   "settings.aimAssist": "Aim assist",
   "settings.aimAssist.hint": "The crosshair slows down and gently follows the zombie you aim at.",
   "settings.invertY": "Invert vertical look",
+  "settings.view": "View",
   "settings.vibration": "Vibration",
   "settings.quality": "Graphics quality",
   "settings.quality.hint": "Economy: lighter scenery and 30 fps, for modest phones and battery life.",
   "settings.adPrivacy": "Ad privacy",
+
+  "view.third": "Third person",
+  "view.first": "First person",
 
   "quality.low": "Economy",
   "quality.normal": "Normal",
@@ -179,6 +183,7 @@ export const en: Record<Key, string> = {
   "msg.info": "INFO",
   "msg.promo": "PROMO",
   "msg.warning": "ALERT",
+  "msg.personal": "FOR YOU",
 
   "mission.kills": "Kill 40 zombies",
   "mission.headshots": "Land 15 headshots",
@@ -308,9 +313,11 @@ export const en: Record<Key, string> = {
 
   "skins.title": "SKINS",
   "skins.weapons": "Weapon finish",
-  "skins.outfits": "Outfit",
+  "skins.outfits": "Characters",
   "skins.hint.weapons": "The finish applies to all your weapons.",
-  "skins.hint.outfits": "Your outfit shows on your arms and gloves in game.",
+  "skins.hint.outfits": "Your character is fully visible in game (third-person view).",
+  "skins.variants": "{name}'s skins:",
+  "skins.needHero": "Unlock {name} first to buy their skins.",
   "skins.equip": "EQUIP",
   "skins.equipped": "EQUIPPED",
   "skins.free": "FREE",
@@ -333,6 +340,13 @@ export const en: Record<Key, string> = {
   "skin.o_astronaut": "Astronaut",
   "skin.o_cyber": "Cyber",
   "skin.o_royal": "Royal",
+
+  "hero.soldier": "Max",
+  "hero.commando": "Rex",
+  "hero.ninja": "Kira",
+  "hero.astronaut": "Nova",
+  "hero.cyber": "Zed",
+  "hero.royal": "Leo",
 
   "season.m1": "January season",
   "season.m2": "February season",

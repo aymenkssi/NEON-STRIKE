@@ -145,6 +145,23 @@
         <label for="pl-sort" style="flex:0 0 210px">Trier par<select id="pl-sort"><option value="last_seen">Dernière visite</option><option value="created">Arrivée la plus récente</option><option value="sessions">Nombre de sessions</option><option value="name">Nom (A → Z)</option></select></label>
       </div>
       <div class="kpis" id="pl-kpis" style="margin-bottom:12px"></div>
+      <section class="panel" id="pl-compose" hidden style="margin-bottom:12px;border-color:var(--cyan)">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Message à <span id="pl-to" style="color:var(--cyan)"></span></h3>
+          <button type="button" id="pl-compose-close">Fermer</button>
+        </div>
+        <p class="hint" style="margin:6px 0 10px">Le joueur le verra dans une fenêtre au prochain lancement du jeu (ou dans la minute s'il est sur le menu). Une seule fois : il disparaît quand il le ferme.</p>
+        <form id="pl-form">
+          <div class="row">
+            <label for="pl-title">Titre<input id="pl-title" maxlength="80" required></label>
+            <label for="pl-msg-kind" style="flex:0 0 180px">Type<select id="pl-msg-kind"><option value="info">Information</option><option value="promo">Promotion</option><option value="warning">Avertissement</option></select></label>
+          </div>
+          <label for="pl-body" style="margin-top:8px">Message<textarea id="pl-body" maxlength="1000" required></textarea></label>
+          <div class="row" style="margin-top:8px"><button class="primary" type="submit">Envoyer</button></div>
+        </form>
+        <div id="pl-compose-status" class="status"></div>
+        <div id="pl-history"></div>
+      </section>
       <section class="panel"><div class="table-wrap"><table id="pl-table"></table></div>
         <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px">
           <span class="muted" id="pl-info"></span>
@@ -634,6 +651,41 @@
   $("pl-prev").addEventListener("click", () => { if (plPage > 1) { plPage--; loadPlayers(); } });
   $("pl-next").addEventListener("click", () => { plPage++; loadPlayers(); });
 
+  let composeTo = null;
+  function openCompose(p) {
+    composeTo = p;
+    $("pl-to").textContent = p.username || "l'invité " + p.id.slice(0, 8);
+    $("pl-compose").hidden = false; $("pl-compose-status").textContent = "";
+    $("pl-title").value = ""; $("pl-body").value = "";
+    loadHistory(); $("pl-compose").scrollIntoView({ behavior: "smooth", block: "start" }); $("pl-title").focus();
+  }
+  $("pl-compose-close").addEventListener("click", () => { $("pl-compose").hidden = true; composeTo = null; });
+  async function loadHistory() {
+    const box = $("pl-history"); box.replaceChildren();
+    if (!composeTo) return;
+    const list = await api("GET", "/players/" + composeTo.id + "/messages").catch(() => []);
+    if (!list.length) return;
+    box.append(el("h3", null, "Messages envoyés"));
+    for (const m of list) {
+      const card = el("article", "msg kind-" + m.kind);
+      const meta = el("div", "meta");
+      meta.append(el("span", "pill " + (m.read_at ? "off" : "live"), m.read_at ? "LU" : "NON LU"), el("span", null, new Date(m.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })));
+      const del = el("button", "danger", "Supprimer"); del.type = "button";
+      del.onclick = async () => { await api("DELETE", "/direct-messages/" + m.id).catch(() => {}); loadHistory(); };
+      const actions = el("div", "actions"); actions.append(del);
+      card.append(meta, el("h3", null, m.title), el("div", "body", m.body), actions); box.append(card);
+    }
+  }
+  $("pl-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!composeTo) return;
+    try {
+      await api("POST", "/players/" + composeTo.id + "/messages", { title: $("pl-title").value.trim(), body: $("pl-body").value.trim(), kind: $("pl-msg-kind").value });
+      say($("pl-compose-status"), "Message envoyé à " + $("pl-to").textContent + ".", true);
+      $("pl-title").value = ""; $("pl-body").value = ""; loadHistory();
+    } catch (err) { say($("pl-compose-status"), err.message, false); }
+  });
+
   async function loadPlayers() {
     const qs = new URLSearchParams({ q: $("pl-q").value.trim(), kind: $("pl-kind").value, sort: $("pl-sort").value, page: plPage });
     let r;
@@ -656,6 +708,9 @@
         el("td", null, when(p.registered_at || p.created_at)), el("td", null, when(p.last_seen_at)),
         el("td", "n", num(p.sessions)), el("td", "n", num(p.best_score)), el("td", "n", num(level)), el("td", "n", num(p.credits)),
         el("td", "n", buys), el("td", "n", money(p.spent)));
+      const msg = el("button", null, "✉"); msg.type = "button"; msg.title = "Envoyer un message à ce joueur";
+      msg.setAttribute("aria-label", "Message à " + (p.username || "l'invité " + p.id.slice(0, 8)));
+      msg.onclick = () => openCompose(p);
       const del = el("button", "danger", "✕"); del.type = "button"; del.title = "Supprimer ce joueur et ses données";
       del.setAttribute("aria-label", "Supprimer " + (p.username || "l'invité " + p.id.slice(0, 8)));
       del.onclick = async () => {
@@ -663,7 +718,7 @@
         try { await api("DELETE", "/players/" + p.id); say($("pl-status"), "Joueur supprimé.", true); loadPlayers(); }
         catch (err) { say($("pl-status"), err.message, false); }
       };
-      const td = el("td"); td.append(del); tr.append(td);
+      const td = el("td"); td.style.display = "flex"; td.style.gap = "6px"; td.append(msg, del); tr.append(td);
       tbody.append(tr);
     }
     $("pl-table").replaceChildren(thead, tbody);

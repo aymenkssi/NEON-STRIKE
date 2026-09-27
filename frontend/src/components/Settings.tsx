@@ -9,7 +9,7 @@ import AccountSection from "./AccountSection";
 import type { AuthMode } from "./AuthForm";
 import type { CloudStatus } from "../hooks/use-progress";
 import type { AccountState } from "../hooks/use-account";
-import { QUALITIES, type GameSettings } from "../hooks/use-game-settings";
+import { QUALITIES, VIEWS, type GameSettings } from "../hooks/use-game-settings";
 import { LANGS, LANG_NAMES, setLang, useLang, useT } from "@/src/i18n";
 
 type Props = {
@@ -181,6 +181,23 @@ export default function Settings({
             trackColor={{ false: colors.surfaceTertiary, true: colors.brandTertiary }}
             thumbColor={gameSettings.vibration ? colors.brand : colors.onSurfaceTertiary}
           />
+        </View>
+        <View style={styles.row}>
+          <View style={[styles.toggleRow, { gap: spacing.sm, flexWrap: "wrap" }]}>
+            <Text style={styles.label}>{t("settings.view")}</Text>
+            <View style={styles.langs}>
+              {VIEWS.map((v) => (
+                <Pressable
+                  key={v}
+                  testID={`view-${v}`}
+                  onPress={() => onGameSettings({ view: v })}
+                  style={[styles.langBtn, gameSettings.view === v && styles.langActive]}
+                >
+                  <Text style={[styles.langText, gameSettings.view === v && { color: colors.onBrand }]}>{t(`view.${v}`)}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </View>
         <View style={styles.row}>
           <View style={[styles.toggleRow, { gap: spacing.sm, flexWrap: "wrap" }]}>

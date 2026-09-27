@@ -213,6 +213,7 @@ export default function Index() {
             ammo: progress.armory.ammo,
             aimAssist: gameSettings.aimAssist,
             invertY: gameSettings.invertY,
+            view: gameSettings.view,
             quality: gameSettings.quality,
             weaponSkin: progress.skins.weapon,
             outfit: progress.skins.outfit,

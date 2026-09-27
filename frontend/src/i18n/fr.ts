@@ -49,10 +49,14 @@ export const fr = {
   "settings.aimAssist": "Aide à la visée",
   "settings.aimAssist.hint": "Le viseur ralentit et suit un peu le zombie visé.",
   "settings.invertY": "Inverser l'axe vertical",
+  "settings.view": "Vue",
   "settings.vibration": "Vibrations",
   "settings.quality": "Qualité graphique",
   "settings.quality.hint": "Économie : décor allégé et 30 images/s, pour les téléphones modestes et la batterie.",
   "settings.adPrivacy": "Confidentialité des annonces",
+
+  "view.third": "3e personne",
+  "view.first": "1re personne",
 
   "quality.low": "Économie",
   "quality.normal": "Normal",
@@ -177,6 +181,7 @@ export const fr = {
   "msg.info": "INFO",
   "msg.promo": "PROMO",
   "msg.warning": "ALERTE",
+  "msg.personal": "POUR TOI",
 
   "mission.kills": "Élimine 40 zombies",
   "mission.headshots": "Réussis 15 tirs à la tête",
@@ -306,9 +311,11 @@ export const fr = {
 
   "skins.title": "SKINS",
   "skins.weapons": "Finition des armes",
-  "skins.outfits": "Tenue",
+  "skins.outfits": "Personnages",
   "skins.hint.weapons": "La finition s'applique à toutes tes armes.",
-  "skins.hint.outfits": "La tenue se voit sur tes bras et tes gants en jeu.",
+  "skins.hint.outfits": "Ton personnage est visible en entier en jeu (vue à la 3e personne).",
+  "skins.variants": "Skins de {name} :",
+  "skins.needHero": "Débloque d'abord {name} pour acheter ses skins.",
   "skins.equip": "ÉQUIPER",
   "skins.equipped": "ÉQUIPÉ",
   "skins.free": "GRATUIT",
@@ -331,6 +338,13 @@ export const fr = {
   "skin.o_astronaut": "Astronaute",
   "skin.o_cyber": "Cyber",
   "skin.o_royal": "Royal",
+
+  "hero.soldier": "Max",
+  "hero.commando": "Rex",
+  "hero.ninja": "Kira",
+  "hero.astronaut": "Nova",
+  "hero.cyber": "Zed",
+  "hero.royal": "Leo",
 
   "season.m1": "Saison de janvier",
   "season.m2": "Saison de février",

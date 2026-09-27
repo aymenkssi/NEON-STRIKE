@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { OUTFITS, WEAPON_SKINS, isExclusive, ownsSkin, type SkinState } from "../game/skins";
+import { CHARACTERS, OUTFITS, WEAPON_SKINS, canBuySkin, isExclusive, outfit as outfitOf, ownsSkin, skinsOf, type SkinState } from "../game/skins";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 import Panel from "./Panel";
 import WeaponPreview from "./WeaponPreview";
@@ -28,12 +28,17 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
   const [weapon, setWeapon] = useState(0);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const items = tab === "weapons" ? WEAPON_SKINS : OUTFITS;
+  const items = tab === "weapons" ? WEAPON_SKINS : CHARACTERS;
   const item = [...WEAPON_SKINS, ...OUTFITS].find((i) => i.id === selected) ?? WEAPON_SKINS[0];
   const isWeaponSkin = WEAPON_SKINS.some((w) => w.id === item.id);
   const owned = ownsSkin(skins, item.id);
   const equipped = skins.weapon === item.id || skins.outfit === item.id;
   const reward = !owned && isExclusive(item.id); // season reward: cannot be bought
+  // Characters: the colour skins of the selected character (bought once the character is owned).
+  const hero = isWeaponSkin ? null : outfitOf(item.id);
+  const variants = hero ? skinsOf(hero.base) : [];
+  const locked = !owned && !canBuySkin(skins, item.id);
+  const title = hero ? `${t(hero.heroName)} · ${t(hero.name)}` : t(item.name);
 
   const switchTab = (next: Tab) => {
     setTab(next);
@@ -43,6 +48,10 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
 
   const act = () => {
     if (equipped || reward) return;
+    if (locked && hero) {
+      setNotice({ ok: false, text: t("skins.needHero", { name: t(hero.heroName) }) });
+      return;
+    }
     if (owned) {
       onEquip(item.id);
       Haptics.selectionAsync().catch(() => {});
@@ -50,7 +59,7 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
     }
     if (onBuy(item.id)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setNotice({ ok: true, text: t("skins.bought", { name: t(item.name) }) });
+      setNotice({ ok: true, text: t("skins.bought", { name: title }) });
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setNotice({ ok: false, text: t("skins.poor") });
@@ -66,20 +75,26 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
               weapon={PREVIEW_WEAPONS[weapon]}
               weaponSkin={isWeaponSkin ? item.id : skins.weapon}
               outfit={isWeaponSkin ? skins.outfit : item.id}
+              hero={!isWeaponSkin}
             />
             <View style={styles.cycle} pointerEvents="none">
               <MaterialCommunityIcons name="gesture-tap" size={14} color={colors.onSurfaceSecondary} />
               <Text style={styles.cycleText}>{t(`weapon.${PREVIEW_WEAPONS[weapon]}` as Key)}</Text>
             </View>
           </Pressable>
-          <Text style={styles.itemName} testID="skin-name">{t(item.name)}</Text>
+          <Text style={styles.itemName} testID="skin-name" numberOfLines={1} adjustsFontSizeToFit>{title}</Text>
           <Pressable
             testID="skin-action"
             onPress={act}
             disabled={equipped || reward}
-            style={[styles.action, equipped ? styles.actionDone : reward ? styles.actionReward : owned ? styles.actionEquip : styles.actionBuy]}
+            style={[styles.action, equipped ? styles.actionDone : reward || locked ? styles.actionReward : owned ? styles.actionEquip : styles.actionBuy]}
           >
-            {reward ? (
+            {locked ? (
+              <>
+                <MaterialCommunityIcons name="lock" size={18} color={colors.warning} />
+                <Text style={[styles.actionText, { color: colors.warning, fontSize: 14 }]}>{formatNumber(item.price)}</Text>
+              </>
+            ) : reward ? (
               <>
                 <MaterialCommunityIcons name="trophy" size={18} color={colors.warning} />
                 <Text style={[styles.actionText, { color: colors.warning, fontSize: 13 }]}>{t("skins.seasonOnly")}</Text>
@@ -109,33 +124,61 @@ export default function Skins({ credits, skins, onBuy, onEquip, onOpenShop, onCl
           <View style={styles.tabs}>
             {(["weapons", "outfits"] as Tab[]).map((k) => (
               <Pressable key={k} testID={`skins-tab-${k}`} onPress={() => switchTab(k)} style={[styles.tab, tab === k && styles.tabOn]}>
-                <MaterialCommunityIcons name={k === "weapons" ? "pistol" : "hand-back-right"} size={16} color={tab === k ? colors.onBrand : colors.onSurfaceSecondary} />
+                <MaterialCommunityIcons name={k === "weapons" ? "pistol" : "account"} size={16} color={tab === k ? colors.onBrand : colors.onSurfaceSecondary} />
                 <Text style={[styles.tabText, tab === k && { color: colors.onBrand }]}>{t(k === "weapons" ? "skins.weapons" : "skins.outfits")}</Text>
               </Pressable>
             ))}
           </View>
-          <Text style={styles.hint}>{t(tab === "weapons" ? "skins.hint.weapons" : "skins.hint.outfits")}</Text>
+          {hero ? (
+            <View style={styles.variants}>
+              <Text style={styles.hint}>{t("skins.variants", { name: t(hero.heroName) })}</Text>
+              {variants.map((v) => (
+                <Pressable
+                  key={v.id}
+                  testID={`variant-${v.id}`}
+                  onPress={() => {
+                    setSelected(v.id);
+                    setNotice(null);
+                  }}
+                  style={[styles.variant, { backgroundColor: hex(v.sleeve), borderColor: selected === v.id ? colors.skins : "rgba(0,0,0,0.4)" }]}
+                >
+                  <View style={[styles.variantDot, { backgroundColor: hex(v.band) }]} />
+                  {skins.outfit === v.id ? (
+                    <MaterialCommunityIcons name="check-circle" size={13} color={colors.brand} style={styles.variantMark} />
+                  ) : !ownsSkin(skins, v.id) ? (
+                    <MaterialCommunityIcons name="lock" size={11} color={colors.onSurfaceSecondary} style={styles.variantMark} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.hint}>{t(tab === "weapons" ? "skins.hint.weapons" : "skins.hint.outfits")}</Text>
+          )}
           <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
             {items.map((it) => {
-              const swatch = "body" in it ? [it.body, it.metal, it.accent ?? 0xb45cff] : [it.sleeve, it.glove, it.band];
+              const swatch = "body" in it ? [it.body, it.metal, it.accent ?? 0xb45cff] : [it.sleeve, it.suit2, it.band];
               const mine = ownsSkin(skins, it.id);
-              const on = skins.weapon === it.id || skins.outfit === it.id;
+              const character = "hero" in it ? it : null;
+              const on = skins.weapon === it.id || (character ? outfitOf(skins.outfit).base === character.base : skins.outfit === it.id);
+              const picked = character ? hero?.base === character.base : selected === it.id;
               return (
                 <Pressable
                   key={it.id}
                   testID={`skin-${it.id}`}
                   onPress={() => {
-                    setSelected(it.id);
+                    // A character opens on the skin being worn, if it is this one.
+                    setSelected(character && outfitOf(skins.outfit).base === character.base ? skins.outfit : it.id);
                     setNotice(null);
                   }}
-                  style={[styles.card, selected === it.id && styles.cardSelected]}
+                  style={[styles.card, picked && styles.cardSelected]}
                 >
                   <View style={styles.swatches}>
                     {swatch.map((c, i) => (
                       <View key={i} style={[styles.swatch, { backgroundColor: hex(c) }]} />
                     ))}
                   </View>
-                  <Text style={styles.cardName} numberOfLines={1}>{t(it.name)}</Text>
+                  <Text style={styles.cardName} numberOfLines={1}>{t(character ? character.heroName : it.name)}</Text>
+                  {character && <Text style={styles.cardRole} numberOfLines={1}>{t(character.name)}</Text>}
                   {on ? (
                     <MaterialCommunityIcons name="check-circle" size={16} color={colors.brand} />
                   ) : !mine && isExclusive(it.id) ? (
@@ -197,6 +240,11 @@ const styles = StyleSheet.create({
   swatches: { flexDirection: "row", gap: 3 },
   swatch: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: "rgba(0,0,0,0.4)" },
   cardName: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 14, letterSpacing: 1 },
+  cardRole: { color: colors.onSurfaceSecondary, fontFamily: fonts.text, fontSize: 10, marginTop: -4 },
+  variants: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 4 },
+  variant: { width: 30, height: 30, borderRadius: 15, borderWidth: 2.5, alignItems: "center", justifyContent: "center" },
+  variantDot: { width: 10, height: 10, borderRadius: 5 },
+  variantMark: { position: "absolute", right: -5, top: -5 },
   cardOwned: { color: colors.brand, fontFamily: fonts.display, fontSize: 12, letterSpacing: 1 },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 3 },
   price: { color: colors.warning, fontFamily: fonts.display, fontSize: 13 },

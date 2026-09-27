@@ -173,3 +173,32 @@ class TestWeaponPrices:
         api.put("/api/admin/weapons/m4", json={"price": 2000, "on_sale": True}, headers=ADMIN)  # ammo price kept
         m4 = next(w for w in api.get("/api/config").json()["weapons"] if w["key"] == "m4")
         assert (m4["price"], m4["ammo_price"]) == (2000, 75)
+
+
+class TestDirectMessages:
+    def test_send_read_and_delete(self, api, player):
+        from conftest import ADMIN
+        h = player("Neo")
+        me = api.get("/api/leaderboard/me", headers=h)  # warm-up: resolve the player id through the admin list
+        pid = next(p["id"] for p in api.get("/api/admin/players?q=neo", headers=ADMIN).json()["items"])
+        r = api.post(f"/api/admin/players/{pid}/messages", json={"title": "Bravo !", "body": "Tu es 1er du mois.", "kind": "promo"}, headers=ADMIN)
+        assert r.status_code == 200, r.text
+        mid = r.json()["id"]
+        inbox = api.get("/api/inbox", headers=h).json()
+        assert [(m["id"], m["title"], m["kind"]) for m in inbox] == [(mid, "Bravo !", "promo")]
+        # Another player does not see it and cannot mark it read.
+        other = player("Trinity")
+        assert api.get("/api/inbox", headers=other).json() == []
+        assert api.post(f"/api/inbox/{mid}/read", headers=other).status_code == 404
+        assert api.post(f"/api/inbox/{mid}/read", headers=h).status_code == 200
+        assert api.get("/api/inbox", headers=h).json() == []
+        history = api.get(f"/api/admin/players/{pid}/messages", headers=ADMIN).json()
+        assert history[0]["read_at"] is not None
+        assert api.delete(f"/api/admin/direct-messages/{mid}", headers=ADMIN).status_code == 200
+        assert me.status_code == 200
+
+    def test_validation(self, api):
+        from conftest import ADMIN
+        assert api.post("/api/admin/players/nope/messages", json={"title": "x", "body": "y"}, headers=ADMIN).status_code == 404
+        assert api.post("/api/admin/players/nope/messages", json={"title": "x", "body": "y"}).status_code == 401
+        assert api.get("/api/inbox").status_code == 401

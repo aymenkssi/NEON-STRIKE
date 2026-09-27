@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 
+from auth import current_player
 from database import db
 
 # Seeded once into an empty database; afterwards the admin page is the source of truth.
@@ -122,6 +123,18 @@ class WeaponPrice(WeaponPriceIn):
     ammo_box: int = 0  # rounds per box (0: unlimited ammo)
 
 
+class DirectMessageIn(BaseModel):
+    title: str = Field(..., min_length=1, max_length=80)
+    body: str = Field(..., min_length=1, max_length=1000)
+    kind: Literal["info", "promo", "warning"] = "info"
+
+
+class DirectMessage(DirectMessageIn):
+    id: str
+    created_at: datetime
+    read_at: Optional[datetime] = None
+
+
 class RemoteConfig(BaseModel):
     packs: List[Pack]
     messages: List[PublicMessage]
@@ -165,6 +178,7 @@ async def weapon_prices() -> List[WeaponPrice]:
 
 
 async def setup():
+    await db.direct_messages.create_index([("player_id", 1), ("read_at", 1)])
     await db.weapon_prices.create_index("key", unique=True)
     await db.packs.create_index("sku", unique=True)
     await db.messages.create_index("id", unique=True)
@@ -184,6 +198,21 @@ async def remote_config():
     msgs = await db.messages.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(50)
     live = [PublicMessage(**m) for m in msgs if message_is_live(m, now)][:5]
     return RemoteConfig(packs=[Pack(**p) for p in packs], messages=live, weapons=await weapon_prices())
+
+
+# Messages to one player (sent from the admin page's Players tab), shown in the app.
+@public.get("/inbox", response_model=List[DirectMessage])
+async def inbox(player: dict = Depends(current_player)):
+    docs = await db.direct_messages.find({"player_id": player["id"], "read_at": None}, {"_id": 0, "player_id": 0}).sort("created_at", 1).to_list(20)
+    return [DirectMessage(**d) for d in docs]
+
+
+@public.post("/inbox/{message_id}/read")
+async def mark_read(message_id: str, player: dict = Depends(current_player)):
+    res = await db.direct_messages.update_one({"id": message_id, "player_id": player["id"]}, {"$set": {"read_at": utcnow()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Unknown message")
+    return {"read": message_id}
 
 
 # ------------------------ Admin API ------------------------
@@ -243,6 +272,29 @@ async def update_message(message_id: str, payload: MessageIn):
     if not doc:
         raise HTTPException(404, "Unknown message")
     return Message(**doc)
+
+
+@admin.post("/players/{player_id}/messages", response_model=DirectMessage)
+async def send_direct_message(payload: DirectMessageIn, player_id: str):
+    if not await db.players.find_one({"id": player_id}, {"_id": 1}):
+        raise HTTPException(404, "Unknown player")
+    doc = {**payload.model_dump(), "id": str(uuid.uuid4()), "player_id": player_id, "created_at": utcnow(), "read_at": None}
+    await db.direct_messages.insert_one(dict(doc))
+    return DirectMessage(**doc)
+
+
+@admin.get("/players/{player_id}/messages", response_model=List[DirectMessage])
+async def list_direct_messages(player_id: str):
+    docs = await db.direct_messages.find({"player_id": player_id}, {"_id": 0, "player_id": 0}).sort("created_at", -1).to_list(50)
+    return [DirectMessage(**d) for d in docs]
+
+
+@admin.delete("/direct-messages/{message_id}")
+async def delete_direct_message(message_id: str):
+    res = await db.direct_messages.delete_one({"id": message_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Unknown message")
+    return {"deleted": message_id}
 
 
 @admin.get("/weapons", response_model=List[WeaponPrice])

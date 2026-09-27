@@ -177,6 +177,8 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `GET /api/seasons/current` · `GET /api/seasons/me` · `POST /api/seasons/rewards/{id}/claim` | Saisons mensuelles : classement du mois (remis à zéro le 1er, heure UTC), rang du joueur et récompenses à récupérer dans le jeu. |
 | `GET /api/admin/seasons` · `PUT /api/admin/seasons/{mois}/players/{id}` · `POST /api/admin/seasons/{mois}/validate` | Onglet « Saisons » : exclure un score suspect, valider les récompenses d'un mois terminé (sinon validation automatique 3 jours après la fin du mois), historique des champions. |
 | `GET/PUT/DELETE /api/admin/suggestions` | Onglet « Suggestions » de la page d'administration (liste, statut nouvelle / lue / traitée, suppression). |
+| `POST /api/admin/players/{id}/messages` · `GET /api/admin/players/{id}/messages` · `DELETE /api/admin/direct-messages/{id}` | Messages personnels à un joueur précis (bouton ✉ de l'onglet « Joueurs ») : envoi, historique lu / non lu, suppression. |
+| `GET /api/inbox` · `POST /api/inbox/{id}/read` | Messages personnels non lus du joueur connecté (jeton du joueur), marqués lus quand il ferme la fenêtre. |
 | `GET /api/config` | Packs visibles, prix des armes de l'Armurerie et messages en ligne, lus par l'app au démarrage. |
 | `GET /api/admin/weapons` · `PUT /api/admin/weapons/{id}` | Prix en crédits de chaque arme, mise en vente et prix d'une boîte de munitions (page d'administration → Boutique et messages → Armurerie). |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
