@@ -13,10 +13,16 @@ const STREET = 7; // half width of a street
 const WALK = 9; // street + sidewalk
 const STREET_END = 112;
 
+// Where the advertising posters go (billboards.ts): 3 slots on the facades of the square,
+// 1 = north (in front of the player at the start), 2 = east, 3 = west. Centre of the poster
+// face, its rotation around y (the poster faces +z before rotation) and its size in metres.
+export type AdSpot = { slot: 1 | 2 | 3; x: number; y: number; z: number; ry: number; w: number; h: number };
+
 export type World = {
   group: THREE.Group;
   colliders: THREE.Mesh[];
   spawnPoints: THREE.Vector3[];
+  adSpots: AdSpot[];
   lighting: Lighting;
   city: CityDef;
   time: TimeOfDay;
@@ -589,7 +595,10 @@ export function buildWorld(level: number, camera: THREE.Camera, quality: WorldQu
 
   // Rows of buildings: square sides (8 half rows) and street walls (8), street ends (4).
   // A row runs from `a` to `b` along its axis; its facade is at `front`, facing `normal`.
-  const row = (axis: "x" | "z", a: number, b: number, front: number, normal: 1 | -1, depth: [number, number], hScale = 1) => {
+  // Poster candidates: facades of the square rows, the biggest poster each side can take.
+  const AD_OUT = 1.2; // the poster box stands out of the wall over balconies, signs, fire escapes
+  const adBest: Partial<Record<1 | 2 | 3, AdSpot>> = {};
+  const row = (axis: "x" | "z", a: number, b: number, front: number, normal: 1 | -1, depth: [number, number], hScale = 1, adSlot?: 1 | 2 | 3) => {
     let t = a;
     let maxDepth = 0;
     let maxH = 0;
@@ -601,8 +610,23 @@ export function buildWorld(level: number, camera: THREE.Camera, quality: WorldQu
       building(p, r, city, w - 0.2, d, h, night);
       const mid = t + w / 2;
       // Local +z (the facade) must point along the row normal.
-      if (axis === "x") p.place(all, mid, front, normal > 0 ? 0 : Math.PI);
-      else p.place(all, front, mid, normal > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const ry = axis === "x" ? (normal > 0 ? 0 : Math.PI) : normal > 0 ? Math.PI / 2 : -Math.PI / 2;
+      if (axis === "x") p.place(all, mid, front, ry);
+      else p.place(all, front, mid, ry);
+      if (adSlot) {
+        // Above the shops (4.6 m), below the roof, 2:1, up to 11 x 5.5 m.
+        let ph = Math.min(5.5, h - 0.8 - 4.6);
+        let pw = ph * 2;
+        if (pw > w - 1.4) {
+          pw = w - 1.4;
+          ph = pw / 2;
+        }
+        if (ph >= 2.2 && (!adBest[adSlot] || ph > adBest[adSlot]!.h)) {
+          const y = 4.6 + ph / 2 + Math.max(0, Math.min(2.5, (h - 0.8 - 4.6 - ph) / 2));
+          const out = front + normal * (AD_OUT + 0.02);
+          adBest[adSlot] = axis === "x" ? { slot: adSlot, x: mid, y, z: out, ry, w: pw, h: ph } : { slot: adSlot, x: out, y, z: mid, ry, w: pw, h: ph };
+        }
+      }
       maxDepth = Math.max(maxDepth, d);
       maxH = Math.max(maxH, h);
       t += w;
@@ -614,10 +638,13 @@ export function buildWorld(level: number, camera: THREE.Camera, quality: WorldQu
   const D: [number, number] = [11, 15];
   for (const s of [-1, 1] as const) {
     // Square sides (s = -1: north / west, +1: south / east), split by the street.
-    row("x", -PLAZA - 16, -WALK, s * PLAZA, (s * -1) as 1 | -1, D);
-    row("x", WALK, PLAZA + 16, s * PLAZA, (s * -1) as 1 | -1, D);
-    row("z", -PLAZA, -WALK, s * PLAZA, (s * -1) as 1 | -1, D);
-    row("z", WALK, PLAZA, s * PLAZA, (s * -1) as 1 | -1, D);
+    // Poster slots: 1 on the north side (s = -1 along x), 2 east (s = +1 along z), 3 west.
+    const xSlot = s < 0 ? 1 : undefined;
+    const zSlot = s > 0 ? 2 : 3;
+    row("x", -PLAZA - 16, -WALK, s * PLAZA, (s * -1) as 1 | -1, D, 1, xSlot);
+    row("x", WALK, PLAZA + 16, s * PLAZA, (s * -1) as 1 | -1, D, 1, xSlot);
+    row("z", -PLAZA, -WALK, s * PLAZA, (s * -1) as 1 | -1, D, 1, zSlot);
+    row("z", WALK, PLAZA, s * PLAZA, (s * -1) as 1 | -1, D, 1, zSlot);
     // Street walls from the square to the end of the street.
     for (const side of [-1, 1] as const) {
       const a = s < 0 ? -STREET_END : PLAZA + 15;
@@ -730,6 +757,7 @@ export function buildWorld(level: number, camera: THREE.Camera, quality: WorldQu
     group,
     colliders,
     spawnPoints,
+    adSpots: ([1, 2, 3] as const).map((k) => adBest[k]).filter((x): x is AdSpot => !!x),
     lighting,
     city,
     time,

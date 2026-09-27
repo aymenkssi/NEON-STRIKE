@@ -140,6 +140,7 @@ class RemoteConfig(BaseModel):
     messages: List[PublicMessage]
     weapons: List[WeaponPrice] = []
     episodes: List[Any] = []  # story episodes (episodes.py)
+    billboards: List[Any] = []  # advertising posters on the facades (billboards.py)
 
 
 # ------------------------ Helpers ------------------------
@@ -198,9 +199,16 @@ async def remote_config():
     now = utcnow()
     msgs = await db.messages.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(50)
     live = [PublicMessage(**m) for m in msgs if message_is_live(m, now)][:5]
-    from episodes import live_episodes  # episodes.py imports this module
+    from billboards import live_billboards  # these modules import this one
+    from episodes import live_episodes
 
-    return RemoteConfig(packs=[Pack(**p) for p in packs], messages=live, weapons=await weapon_prices(), episodes=await live_episodes())
+    return RemoteConfig(
+        packs=[Pack(**p) for p in packs],
+        messages=live,
+        weapons=await weapon_prices(),
+        episodes=await live_episodes(),
+        billboards=await live_billboards(),
+    )
 
 
 # Messages to one player (sent from the admin page's Players tab), shown in the app.

@@ -16,6 +16,7 @@ import { flushPendingScore } from "@/src/api/leaderboard";
 import { music } from "@/src/audio/music";
 import { setRemotePacks } from "@/src/iap/catalog";
 import { setRemoteWeapons } from "@/src/game/armory";
+import { setRemoteBillboards } from "@/src/game/billboards";
 import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
 import { getLang, useT } from "@/src/i18n";
 import StoryComic from "@/src/components/StoryComic";
@@ -104,6 +105,7 @@ export default function Index() {
         setRemotePacks(cached.packs);
         setRemoteWeapons(cached.weapons);
         setRemoteEpisodes(cached.episodes ?? []);
+        setRemoteBillboards(cached.billboards);
       }
       const live = await fetchRemoteConfig();
       if (live) {
@@ -111,6 +113,7 @@ export default function Index() {
         setRemoteWeapons(live.weapons);
         setMessages(live.messages);
         setRemoteEpisodes(live.episodes ?? []);
+        setRemoteBillboards(live.billboards ?? []);
       }
     })();
   }, []);
