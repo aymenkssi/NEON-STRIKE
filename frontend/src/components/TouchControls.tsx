@@ -9,7 +9,7 @@ import { colors, fonts } from "../theme";
 import type { FireMode, GameEngine } from "../game/GameEngine";
 import { useT, type Key } from "@/src/i18n";
 
-type Props = { getEngine: () => GameEngine | null; fireMode: FireMode; fireModes: FireMode[]; grenades: number };
+type Props = { getEngine: () => GameEngine | null; fireMode: FireMode; fireModes: FireMode[]; grenades: number; aiming: boolean };
 
 const MODE_UI: Record<FireMode, { icon: string; label: Key }> = {
   single: { icon: "numeric-1-circle-outline", label: "fire.short.single" },
@@ -21,7 +21,7 @@ const KNOB_MAX = 55;
 const RING = 120; // joystick diameter
 const SPRINT_AT = 0.85; // push beyond 85% of the radius to sprint
 
-export default function TouchControls({ getEngine, fireMode, fireModes, grenades }: Props) {
+export default function TouchControls({ getEngine, fireMode, fireModes, grenades, aiming }: Props) {
   const insets = useSafeAreaInsets();
   const t = useT();
   // Resting spot of the joystick (bottom-left of the left zone), set once the zone is measured.
@@ -134,6 +134,11 @@ export default function TouchControls({ getEngine, fireMode, fireModes, grenades
   const throwGrenade = () => {
     if (getEngine()?.throwGrenade()) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   };
+  // AIM is a toggle: the right thumb stays free to aim and fire while the left one moves.
+  const toggleAim = () => {
+    getEngine()?.toggleAim();
+    Haptics.selectionAsync().catch(() => {});
+  };
   const cycleMode = () => {
     getEngine()?.cycleFireMode();
     Haptics.selectionAsync().catch(() => {});
@@ -188,6 +193,11 @@ export default function TouchControls({ getEngine, fireMode, fireModes, grenades
       grenadePressed.value = 0;
     });
   const grenadeStyle = useAnimatedStyle(() => ({ opacity: grenadePressed.value ? 0.7 : 1 }));
+  const aimGesture = Gesture.Tap()
+    .maxDuration(10000)
+    .onBegin(() => {
+      runOnJS(toggleAim)();
+    });
   const modeGesture = Gesture.Tap().onEnd(() => {
     runOnJS(cycleMode)();
   });
@@ -245,6 +255,13 @@ export default function TouchControls({ getEngine, fireMode, fireModes, grenades
             <Text style={styles.grenadeCountText} testID="grenade-count">{grenades}</Text>
           </View>
         </Animated.View>
+      </GestureDetector>
+
+      <GestureDetector gesture={aimGesture}>
+        <View testID="aim-button" accessibilityRole="button" accessibilityState={{ selected: aiming }} style={[styles.aimBtn, aiming && styles.aimOn]}>
+          <MaterialCommunityIcons name="crosshairs" size={24} color={aiming ? colors.onBrand : colors.brandSecondary} />
+          <Text style={[styles.smallLabel, aiming && styles.aimOnLabel]}>AIM</Text>
+        </View>
       </GestureDetector>
 
       {fireModes.length > 1 && (
@@ -351,6 +368,21 @@ const styles = StyleSheet.create({
     borderColor: "rgba(57,255,20,0.6)",
   },
   grenadeEmpty: { opacity: 0.35 },
+  aimBtn: {
+    position: "absolute",
+    right: 232,
+    bottom: 32,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,255,255,0.12)",
+    borderWidth: 2,
+    borderColor: "rgba(0,255,255,0.5)",
+  },
+  aimOn: { backgroundColor: colors.brandSecondary, borderColor: colors.brandSecondary },
+  aimOnLabel: { color: colors.onBrand },
   grenadeCount: {
     position: "absolute",
     top: -4,
