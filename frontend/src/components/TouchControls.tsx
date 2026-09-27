@@ -9,7 +9,7 @@ import { colors, fonts } from "../theme";
 import type { FireMode, GameEngine } from "../game/GameEngine";
 import { useT, type Key } from "@/src/i18n";
 
-type Props = { getEngine: () => GameEngine | null; fireMode: FireMode; fireModes: FireMode[] };
+type Props = { getEngine: () => GameEngine | null; fireMode: FireMode; fireModes: FireMode[]; grenades: number };
 
 const MODE_UI: Record<FireMode, { icon: string; label: Key }> = {
   single: { icon: "numeric-1-circle-outline", label: "fire.short.single" },
@@ -21,7 +21,7 @@ const KNOB_MAX = 55;
 const RING = 120; // joystick diameter
 const SPRINT_AT = 0.85; // push beyond 85% of the radius to sprint
 
-export default function TouchControls({ getEngine, fireMode, fireModes }: Props) {
+export default function TouchControls({ getEngine, fireMode, fireModes, grenades }: Props) {
   const insets = useSafeAreaInsets();
   const t = useT();
   // Resting spot of the joystick (bottom-left of the left zone), set once the zone is measured.
@@ -131,6 +131,9 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
     getEngine()?.reload();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   };
+  const throwGrenade = () => {
+    if (getEngine()?.throwGrenade()) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+  };
   const cycleMode = () => {
     getEngine()?.cycleFireMode();
     Haptics.selectionAsync().catch(() => {});
@@ -174,6 +177,17 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
     .onFinalize(() => {
       reloadPressed.value = 0;
     });
+  const grenadePressed = useSharedValue(0);
+  const grenadeGesture = Gesture.Tap()
+    .maxDuration(10000)
+    .onBegin(() => {
+      grenadePressed.value = 1;
+      runOnJS(throwGrenade)();
+    })
+    .onFinalize(() => {
+      grenadePressed.value = 0;
+    });
+  const grenadeStyle = useAnimatedStyle(() => ({ opacity: grenadePressed.value ? 0.7 : 1 }));
   const modeGesture = Gesture.Tap().onEnd(() => {
     runOnJS(cycleMode)();
   });
@@ -221,6 +235,15 @@ export default function TouchControls({ getEngine, fireMode, fireModes }: Props)
         <Animated.View testID="reload-button" accessibilityRole="button" style={[styles.reloadBtn, reloadStyle]}>
           <MaterialCommunityIcons name="reload" size={24} color={colors.warning} />
           <Text style={styles.smallLabel}>RELOAD</Text>
+        </Animated.View>
+      </GestureDetector>
+
+      <GestureDetector gesture={grenadeGesture}>
+        <Animated.View testID="grenade-button" accessibilityRole="button" style={[styles.grenadeBtn, grenades === 0 && styles.grenadeEmpty, grenadeStyle]}>
+          <MaterialCommunityIcons name="bomb" size={24} color={colors.brand} />
+          <View style={styles.grenadeCount}>
+            <Text style={styles.grenadeCountText} testID="grenade-count">{grenades}</Text>
+          </View>
         </Animated.View>
       </GestureDetector>
 
@@ -314,6 +337,33 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(0,255,255,0.5)",
   },
+  grenadeBtn: {
+    position: "absolute",
+    right: 222,
+    bottom: 112,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(57,255,20,0.12)",
+    borderWidth: 2,
+    borderColor: "rgba(57,255,20,0.6)",
+  },
+  grenadeEmpty: { opacity: 0.35 },
+  grenadeCount: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    backgroundColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  grenadeCountText: { color: colors.onBrand, fontFamily: fonts.display, fontSize: 12 },
   reloadBtn: {
     position: "absolute",
     right: 140,

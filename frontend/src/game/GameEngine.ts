@@ -61,7 +61,11 @@ const BURST_ROUNDS = 3;
 const PROJECTILE = {
   grenade: { speed: 32, lift: 6, gravity: 22, damage: 14, radius: 4.5, fuseMs: 3000 },
   rocket: { speed: 55, lift: 0.5, gravity: 2, damage: 30, radius: 7, fuseMs: 3000 },
+  hand: { speed: 19, lift: 7, gravity: 22, damage: 16, radius: 5, fuseMs: 2200 }, // thrown grenade
 };
+export const HAND_GRENADES_PER_LEVEL = 3;
+const HAND_GRENADE_MAX = 6;
+const GRENADE_DROP_CHANCE = 0.05;
 
 // Soft star-shaped glow for the muzzle flash (generated: no image file needed on the phone).
 let flashTex: THREE.DataTexture | null = null;
@@ -106,6 +110,7 @@ export type GameStats = {
   sector: { index: number; name: string };
   powerups: { kind: PowerUpKind; remaining: number }[]; // seconds left, active ones only
   difficulty: Difficulty;
+  grenades: number; // hand grenades left
 };
 
 export type EngineOptions = {
@@ -225,7 +230,9 @@ export class GameEngine {
   private shake = 0;
   private shakeOffset = new THREE.Vector3();
   private flashes: { light: THREE.PointLight; ring: THREE.Mesh; life: number }[] = [];
-  private grenades: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number; kind: "grenade" | "rocket" }[] = [];
+  private grenades: { mesh: THREE.Mesh; vel: THREE.Vector3; born: number; kind: "grenade" | "rocket" | "hand" }[] = [];
+  private handGrenades = HAND_GRENADES_PER_LEVEL;
+  private lastThrowAt = 0;
   private beams: { line: THREE.Line; life: number }[] = [];
 
   private prevTime = 0;
@@ -762,8 +769,8 @@ export class GameEngine {
   }
 
   // cause: "contact" (exploder reached the player), "shot" (exploder killed), "grenade" (player's own).
-  private explode(center: THREE.Vector3, cause: "contact" | "shot" | "grenade" | "rocket") {
-    const blast = cause === "rocket" ? PROJECTILE.rocket : cause === "grenade" ? PROJECTILE.grenade : null;
+  private explode(center: THREE.Vector3, cause: "contact" | "shot" | "grenade" | "rocket" | "hand") {
+    const blast = cause === "contact" || cause === "shot" ? null : PROJECTILE[cause];
     const radius = blast?.radius ?? EXPLOSION.radius;
     const triggeredByContact = cause === "contact";
     this.createExplosion(center);
@@ -798,6 +805,30 @@ export class GameEngine {
     return p;
   }
 
+  // Hand grenade: thrown in an arc from the left hand, explodes on impact or after its fuse.
+  throwGrenade() {
+    if (this.paused || this.gameOver || this.levelComplete || this.handGrenades <= 0) return false;
+    const now = Date.now();
+    if (now - this.lastThrowAt < 700) return false;
+    this.lastThrowAt = now;
+    this.handGrenades--;
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshStandardMaterial({ color: 0x3f4a2c, roughness: 0.7 }));
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.07, 0.03), new THREE.MeshStandardMaterial({ color: 0x8a8f96, metalness: 0.5 }));
+    lever.position.y = 0.1;
+    mesh.add(lever);
+    const left = new THREE.Vector3().crossVectors(this.camera.up, dir).normalize();
+    mesh.position.copy(this.camera.position).addScaledVector(left, 0.3).addScaledVector(dir, 0.5).add(new THREE.Vector3(0, -0.2, 0));
+    const vel = dir.clone().multiplyScalar(PROJECTILE.hand.speed);
+    vel.y += PROJECTILE.hand.lift;
+    this.scene.add(mesh);
+    this.grenades.push({ mesh, vel, born: now, kind: "hand" });
+    this.cb.playSound("switch");
+    this.emitStats();
+    return true;
+  }
+
   private launchGrenade(origin: THREE.Vector3, dir: THREE.Vector3, kind: "grenade" | "rocket") {
     const P = PROJECTILE[kind];
     let mesh: THREE.Mesh;
@@ -825,6 +856,7 @@ export class GameEngine {
       g.vel.y -= P.gravity * delta;
       g.mesh.position.addScaledVector(g.vel, delta);
       const p = g.mesh.position;
+      if (g.kind === "hand") g.mesh.rotation.x += delta * 8; // tumbling
       if (g.kind === "rocket" && Math.random() < 0.6) this.createDeath(p.clone().addScaledVector(g.vel, -0.02).setY(p.y - 1), 0x9a9a9a); // smoke
       let hit = p.y <= 0.15 || time - g.born > P.fuseMs;
       if (!hit) hit = this.enemies.some((z) => !z.userData.dead && Math.hypot(z.position.x - p.x, z.position.z - p.z) < 0.9 * z.scale.x && p.y < 2.2 * z.scale.y);
@@ -889,8 +921,9 @@ export class GameEngine {
 
   private maybeDropPickup(position: THREE.Vector3) {
     const r = Math.random();
-    let type: "health" | "ammo" | PowerUpKind | null = null;
-    if (r < POWERUP_DROP_CHANCE) {
+    let type: "health" | "ammo" | "grenade" | PowerUpKind | null = null;
+    if (r > 1 - GRENADE_DROP_CHANCE && this.handGrenades < HAND_GRENADE_MAX) type = "grenade";
+    else if (r < POWERUP_DROP_CHANCE) {
       const kinds = Object.keys(POWERUPS) as PowerUpKind[];
       type = kinds[Math.floor(Math.random() * kinds.length)];
     } else if (r < POWERUP_DROP_CHANCE + 0.16) type = "health";
@@ -908,6 +941,11 @@ export class GameEngine {
       );
       halo.rotation.x = Math.PI / 2;
       group.add(halo);
+    } else if (type === "grenade") {
+      const g = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: 0x4b5a2e, emissive: 0x2a3a10, roughness: 0.6 }));
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.12, 8), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.5 }));
+      top.position.y = 0.24;
+      group.add(g, top);
     } else if (type === "health") {
       const mat = new THREE.MeshStandardMaterial({ color: 0xff003c, emissive: 0xff003c, emissiveIntensity: 0.6 });
       const v = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 0.15), mat);
@@ -973,6 +1011,7 @@ export class GameEngine {
     this.levelCfg = getLevelConfig(level, this.difficulty);
     this.buildWorld(this.levelCfg.level);
     this.clearSpits();
+    this.handGrenades = HAND_GRENADES_PER_LEVEL;
     this.combo = 0;
     this.powerUntil = {};
     this.shake = 0;
@@ -1060,6 +1099,7 @@ export class GameEngine {
         .map((kind) => ({ kind, remaining: Math.ceil(((this.powerUntil[kind] ?? 0) - Date.now()) / 1000) }))
         .filter((p) => p.remaining > 0),
       difficulty: this.difficulty,
+      grenades: this.handGrenades,
     });
   }
 
@@ -1409,6 +1449,9 @@ export class GameEngine {
       if (Math.sqrt(dx * dx + dz * dz) < 1.8) {
         if (pk.userData.type in POWERUPS) {
           this.activatePower(pk.userData.type as PowerUpKind);
+        } else if (pk.userData.type === "grenade") {
+          this.handGrenades = Math.min(HAND_GRENADE_MAX, this.handGrenades + 1);
+          this.cb.onNotify(t("game.grenade"));
         } else if (pk.userData.type === "health") {
           this.health = Math.min(this.mods.maxHealth, this.health + 25);
           this.cb.onNotify(t("game.health", { n: 25 }));

@@ -70,6 +70,7 @@ export const fr = {
   "pause.resume": "REPRENDRE",
   "pause.restart": "RECOMMENCER",
   "pause.mainMenu": "MENU PRINCIPAL",
+  "pause.quitGame": "QUITTER LE JEU",
 
   "over.title": "YOU DIED",
   "over.doubled": "SCORE DOUBLÉ ×2 🎉",
@@ -264,6 +265,7 @@ export const fr = {
   "game.wave": "VAGUE {n}/{max}",
   "game.health": "+{n} SANTÉ",
   "game.ammo": "MUNITIONS +",
+  "game.grenade": "+1 GRENADE",
 
   "hud.reloading": "RECHARGEMENT…",
   "hud.levelWave": "NIV {n} · VAGUE {w}/{max}",
@@ -396,6 +398,10 @@ export const fr = {
   "armory.desc.launcher": "Lance-grenades à barillet, 6 grenades explosives par chargement.",
   "armory.desc.minigun": "Mitrailleuse rotative à 6 canons : un mur de balles.",
   "armory.desc.rpg": "Lance-roquettes : une roquette, une énorme explosion.",
+
+  "exit.title": "QUITTER NEON STRIKE ?",
+  "exit.text": "Ta progression est enregistrée. À bientôt, survivant !",
+  "exit.confirm": "QUITTER",
 } as const;
 
 export type Key = keyof typeof fr;

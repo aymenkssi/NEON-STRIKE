@@ -72,6 +72,7 @@ export const en: Record<Key, string> = {
   "pause.resume": "RESUME",
   "pause.restart": "RESTART",
   "pause.mainMenu": "MAIN MENU",
+  "pause.quitGame": "QUIT GAME",
 
   "over.title": "YOU DIED",
   "over.doubled": "SCORE DOUBLED ×2 🎉",
@@ -266,6 +267,7 @@ export const en: Record<Key, string> = {
   "game.wave": "WAVE {n}/{max}",
   "game.health": "+{n} HEALTH",
   "game.ammo": "AMMO +",
+  "game.grenade": "+1 GRENADE",
 
   "hud.reloading": "RELOADING…",
   "hud.levelWave": "LVL {n} · WAVE {w}/{max}",
@@ -398,4 +400,8 @@ export const en: Record<Key, string> = {
   "armory.desc.launcher": "Revolver grenade launcher, 6 explosive grenades per load.",
   "armory.desc.minigun": "6-barrel rotary machine gun: a wall of bullets.",
   "armory.desc.rpg": "Rocket launcher: one rocket, one huge explosion.",
+
+  "exit.title": "QUIT NEON STRIKE?",
+  "exit.text": "Your progress is saved. See you soon, survivor!",
+  "exit.confirm": "QUIT",
 };
