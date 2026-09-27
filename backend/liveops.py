@@ -9,7 +9,7 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi import Path as PathParam
@@ -139,6 +139,7 @@ class RemoteConfig(BaseModel):
     packs: List[Pack]
     messages: List[PublicMessage]
     weapons: List[WeaponPrice] = []
+    episodes: List[Any] = []  # story episodes (episodes.py)
 
 
 # ------------------------ Helpers ------------------------
@@ -197,7 +198,9 @@ async def remote_config():
     now = utcnow()
     msgs = await db.messages.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(50)
     live = [PublicMessage(**m) for m in msgs if message_is_live(m, now)][:5]
-    return RemoteConfig(packs=[Pack(**p) for p in packs], messages=live, weapons=await weapon_prices())
+    from episodes import live_episodes  # episodes.py imports this module
+
+    return RemoteConfig(packs=[Pack(**p) for p in packs], messages=live, weapons=await weapon_prices(), episodes=await live_episodes())
 
 
 # Messages to one player (sent from the admin page's Players tab), shown in the app.

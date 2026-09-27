@@ -11,7 +11,7 @@ import { formatNumber, useT, type Key } from "@/src/i18n";
 type Props = {
   result: LevelResult;
   onDoubleCredits: (extra: number) => void;
-  onNext: () => void;
+  onNext?: () => void; // absent: no "next level" (story episode)
   onExit: () => void;
 };
 
@@ -98,7 +98,7 @@ export default function LevelComplete({ result, onDoubleCredits, onNext, onExit 
               <Text style={[styles.btnText, { color: colors.onWarning }]}>{doubling ? "…" : t("complete.double")}</Text>
             </Pressable>
           )}
-          {!isLast && (
+          {!isLast && onNext && (
             <Pressable testID="next-level-button" style={[styles.btn, styles.nextBtn]} onPress={onNext}>
               <Text style={[styles.btnText, { color: colors.onBrand }]}>{t("complete.next")}</Text>
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.onBrand} />

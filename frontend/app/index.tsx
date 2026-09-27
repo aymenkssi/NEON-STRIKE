@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, StatusBar } from "react-native";
 import { storage } from "@/src/utils/storage";
 import MainMenu from "@/src/components/MainMenu";
@@ -17,9 +17,9 @@ import { music } from "@/src/audio/music";
 import { setRemotePacks } from "@/src/iap/catalog";
 import { setRemoteWeapons } from "@/src/game/armory";
 import { fetchRemoteConfig, loadCachedConfig, type RemoteMessage } from "@/src/api/config";
-import { useT } from "@/src/i18n";
+import { getLang, useT } from "@/src/i18n";
 import StoryComic from "@/src/components/StoryComic";
-import { actOfLevel, introBefore, type Act } from "@/src/game/story";
+import { actOfLevel, episodeFrom, introBefore, type Act, type EpisodeRun, type RemoteEpisode } from "@/src/game/story";
 
 const KEYS = {
   lookSens: "np_look_sensitivity",
@@ -37,7 +37,11 @@ export default function Index() {
   const [musicVolume, setMusicVolume] = useState(0.5);
   const [level, setLevel] = useState(1);
   // Story comic shown over the menu (act opening before its first level, or replay from the journal).
-  const [comic, setComic] = useState<{ id: string; act: Act; then?: () => void } | null>(null);
+  // (or an episode published from the admin page: its opening or ending).
+  const [comic, setComic] = useState<{ id: string; act?: Act; episode?: { run: EpisodeRun; part: "intro" | "outro" }; then?: () => void } | null>(null);
+  // Episode being played (null: campaign level).
+  const [episode, setEpisode] = useState<EpisodeRun | null>(null);
+  const [remoteEpisodes, setRemoteEpisodes] = useState<RemoteEpisode[]>([]);
   const { account, loaded: accountLoaded, playAsGuest, signedIn, signedOut } = useAccount();
   const { settings: gameSettings, loaded: settingsLoaded, update: updateGameSettings } = useGameSettings();
   const isGuest = account.mode !== "account";
@@ -61,6 +65,8 @@ export default function Index() {
     markComicSeen,
     claimActReward,
     markDocFound,
+    markEpisodeSeen,
+    claimEpisodeReward,
     buyWeapon,
     toggleLoadout,
     buyAmmo,
@@ -97,12 +103,14 @@ export default function Index() {
       if (cached) {
         setRemotePacks(cached.packs);
         setRemoteWeapons(cached.weapons);
+        setRemoteEpisodes(cached.episodes ?? []);
       }
       const live = await fetchRemoteConfig();
       if (live) {
         setRemotePacks(live.packs);
         setRemoteWeapons(live.weapons);
         setMessages(live.messages);
+        setRemoteEpisodes(live.episodes ?? []);
       }
     })();
   }, []);
@@ -152,8 +160,23 @@ export default function Index() {
     storage.setItem(KEYS.musicVolume, v);
   };
 
+  const lang = getLang();
+  const episodes = useMemo(
+    () => remoteEpisodes.map((e) => episodeFrom(e, lang)).filter((e): e is EpisodeRun => !!e),
+    [remoteEpisodes, lang]
+  );
+  const startEpisode = (run: EpisodeRun) => {
+    const go = () => {
+      setEpisode(run);
+      setLevel(run.level);
+      setScreen("game");
+    };
+    if (!progress.story.epSeen.includes(run.id)) setComic({ id: run.id, episode: { run, part: "intro" }, then: go });
+    else go();
+  };
   const startGame = (lvl: number) => {
     const go = () => {
+      setEpisode(null);
       setLevel(lvl);
       setScreen("game");
     };
@@ -164,7 +187,9 @@ export default function Index() {
   };
   const closeComic = () => {
     if (!comic) return;
-    markComicSeen(comic.id);
+    if (comic.episode) {
+      if (comic.episode.part === "intro") markEpisodeSeen(comic.episode.run.id);
+    } else markComicSeen(comic.id);
     setComic(null);
     comic.then?.();
   };
@@ -217,6 +242,9 @@ export default function Index() {
           onToggleLoadout={toggleLoadout}
           onBuyAmmo={buyAmmo}
           onReplayComic={(id, act) => setComic({ id, act })}
+          episodes={episodes}
+          onPlayEpisode={startEpisode}
+          onReplayEpisode={(run, part) => setComic({ id: run.id + part, episode: { run, part } })}
           onClaimAct={(act) => claimActReward(act.n)}
         />
       ) : (
@@ -239,7 +267,10 @@ export default function Index() {
             weaponSkin: progress.skins.weapon,
             outfit: progress.skins.outfit,
             docsFound: progress.story.docs,
+            episodeBoss: episode?.boss,
           }}
+          episode={episode ?? undefined}
+          onClaimEpisode={claimEpisodeReward}
           onLevelDone={completeLevel}
           onAddCredits={addCredits}
           onAmmo={setAmmoStock}
@@ -252,7 +283,7 @@ export default function Index() {
           onExit={() => setScreen("menu")}
         />
       )}
-      {comic && <StoryComic key={comic.id} id={comic.id} act={comic.act} onDone={closeComic} />}
+      {comic && <StoryComic key={comic.id} id={comic.episode ? undefined : comic.id} act={comic.act} episode={comic.episode} onDone={closeComic} />}
     </View>
   );
 }

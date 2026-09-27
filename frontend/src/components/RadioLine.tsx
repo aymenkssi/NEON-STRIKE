@@ -32,7 +32,7 @@ export default function RadioLine({ line }: { line: Line }) {
       </View>
       <View style={styles.body}>
         <Text style={[styles.who, { color: look.color }]}>{t(`story.who.${line.who}` as Key)}</Text>
-        <Text style={styles.text}>{t(line.text)}</Text>
+        <Text style={styles.text}>{"raw" in line ? line.raw : t(line.text)}</Text>
       </View>
     </View>
   );

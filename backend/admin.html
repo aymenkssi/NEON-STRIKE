@@ -104,6 +104,7 @@
       <button type="button" role="tab" data-tab="stats" aria-selected="true">Statistiques</button>
       <button type="button" role="tab" data-tab="players" aria-selected="false">Joueurs</button>
       <button type="button" role="tab" data-tab="seasons" aria-selected="false">Saisons <span id="season-badge" class="pill sched" hidden></span></button>
+      <button type="button" role="tab" data-tab="episodes" aria-selected="false">Épisodes</button>
       <button type="button" role="tab" data-tab="liveops" aria-selected="false">Boutique et messages</button>
       <button type="button" role="tab" data-tab="suggestions" aria-selected="false">Suggestions <span id="sugg-badge" class="pill live" hidden></span></button>
     </nav>
@@ -181,6 +182,62 @@
       <section class="panel"><div class="table-wrap"><table class="compact" id="season-current"></table></div></section>
       <h2>Historique des champions</h2>
       <div id="season-history"></div>
+    </div>
+
+    <div id="tab-episodes" hidden>
+      <h2>Épisodes de l'histoire</h2>
+      <p class="hint">Après les 5 actes, publie un nouvel épisode chaque saison, sans mettre l'application à jour. Il apparaît dans le Journal du jeu (bouton HISTOIRE, avec une pastille « nouveau ») dès sa date de sortie. Le joueur voit la BD d'ouverture, joue le niveau choisi contre ton boss, puis voit la BD de fin et reçoit la récompense une seule fois. Le texte anglais est facultatif : sans lui, le texte français s'affiche.</p>
+      <section class="panel">
+        <h3 id="ep-form-title" style="margin:0 0 10px">Nouvel épisode</h3>
+        <form id="ep-form">
+          <div class="row">
+            <label for="ep-title-fr">Titre<input id="ep-title-fr" maxlength="60" required placeholder="Ex. : Le signal de Sydney"></label>
+            <label for="ep-title-en">Titre (anglais)<input id="ep-title-en" maxlength="60"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label for="ep-tag-fr">Résumé (une phrase)<input id="ep-tag-fr" maxlength="200"></label>
+            <label for="ep-tag-en">Résumé (anglais)<input id="ep-tag-en" maxlength="200"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label for="ep-level" style="flex:0 0 240px">Niveau joué (ville et difficulté)<select id="ep-level"></select></label>
+            <label for="ep-boss" style="flex:0 0 220px">Apparence du boss<select id="ep-boss"></select></label>
+            <label for="ep-boss-fr">Nom du boss<input id="ep-boss-fr" maxlength="40" placeholder="Ex. : LE ROI DES ÉGOUTS"></label>
+            <label for="ep-boss-en">Nom du boss (anglais)<input id="ep-boss-en" maxlength="40"></label>
+            <label for="ep-hp" style="flex:0 0 130px">Vie du boss (×)<input id="ep-hp" type="number" min="1" max="4" step="0.1" value="1.5"></label>
+          </div>
+          <h3 style="margin:16px 0 4px;font-size:15px">Radio pendant le niveau</h3>
+          <div class="row">
+            <label for="ep-rs-who" style="flex:0 0 170px">Au début : qui parle<select id="ep-rs-who"></select></label>
+            <label for="ep-rs-fr">Texte<input id="ep-rs-fr" maxlength="200"></label>
+            <label for="ep-rs-en">Texte (anglais)<input id="ep-rs-en" maxlength="200"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label for="ep-rb-who" style="flex:0 0 170px">Arrivée du boss : qui parle<select id="ep-rb-who"></select></label>
+            <label for="ep-rb-fr">Texte<input id="ep-rb-fr" maxlength="200"></label>
+            <label for="ep-rb-en">Texte (anglais)<input id="ep-rb-en" maxlength="200"></label>
+          </div>
+          <h3 style="margin:16px 0 4px;font-size:15px">BD d'ouverture <span class="muted" style="font-weight:400">(1 à 8 cases)</span></h3>
+          <div id="ep-intro"></div>
+          <button type="button" id="ep-add-intro" style="margin-top:6px">+ Ajouter une case</button>
+          <h3 style="margin:16px 0 4px;font-size:15px">BD de fin <span class="muted" style="font-weight:400">(0 à 8 cases, avant la récompense)</span></h3>
+          <div id="ep-outro"></div>
+          <button type="button" id="ep-add-outro" style="margin-top:6px">+ Ajouter une case</button>
+          <h3 style="margin:16px 0 4px;font-size:15px">Récompense et publication</h3>
+          <div class="row">
+            <label for="ep-credits" style="flex:0 0 160px">Crédits<input id="ep-credits" type="number" min="0" max="20000" step="50" value="500"></label>
+            <label for="ep-skin" style="flex:0 0 260px">Skin offert (facultatif)<select id="ep-skin"></select></label>
+            <label for="ep-starts" style="flex:0 0 230px">Sortie (vide = tout de suite)<input id="ep-starts" type="datetime-local"></label>
+            <label class="check" for="ep-published"><input id="ep-published" type="checkbox"> Publié</label>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" type="submit" id="ep-save">Créer l'épisode</button>
+            <button type="button" id="ep-cancel" hidden>Annuler la modification</button>
+          </div>
+        </form>
+        <div id="ep-status" class="status"></div>
+      </section>
+      <h2>Épisodes</h2>
+      <div id="ep-list"></div>
     </div>
 
     <div id="tab-suggestions" hidden>
@@ -486,7 +543,8 @@
   // ---------------- Statistiques ----------------
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("nav.tabs button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
-    ["stats", "players", "seasons", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    ["stats", "players", "seasons", "episodes", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    if (b.dataset.tab === "episodes") loadEpisodes();
     if (b.dataset.tab === "seasons") loadSeasons();
     if (b.dataset.tab === "suggestions") loadSuggestions();
     if (b.dataset.tab === "players") loadPlayers();
@@ -755,6 +813,122 @@
     }
     t.replaceChildren(thead, tbody);
   }
+
+  // ---------------- Épisodes ----------------
+  const EP_ARTS = [
+    ["lab", "Décor : labo Helix"], ["leak", "Décor : alerte fuite"], ["radio", "Décor : radio"], ["tower", "Décor : Tour Helix"],
+    ["badge", "Décor : badge Helix"], ["skyline", "Décor : New York la nuit"], ["crates", "Décor : entrepôt, caisses"],
+    ["neon", "Décor : Tokyo néons"], ["servers", "Décor : serveurs secrets"], ["satellite", "Décor : satellite HX-1"],
+    ["desert", "Décor : désert du Caire"], ["signal", "Décor : signal inconnu"],
+    ["hero:o_soldier", "Personnage : Max"], ["hero:o_commando", "Personnage : Rex"], ["hero:o_ninja", "Personnage : Kira"],
+    ["hero:o_astronaut", "Personnage : Nova"], ["hero:o_cyber", "Personnage : Zed"], ["hero:o_royal", "Personnage : Leo"],
+    ["team", "L'équipe (6 héros)"], ["horde", "Max face à une horde"],
+    ["boss:boss", "Boss classique"], ["boss:guardian", "Boss : le Gardien"], ["boss:spitterking", "Boss : Cracheur Géant"],
+    ["boss:commander", "Boss : Commandant Helix"], ["boss:queen", "Boss : Reine Néon"], ["boss:founder", "Boss : le Fondateur"],
+  ];
+  const EP_WHO = [
+    ["narrator", "Narrateur (encadré jaune)"], ["max", "Max"], ["radio", "Voix radio"], ["rex", "Rex"], ["kira", "Kira"],
+    ["zed", "Zed"], ["nova", "Nova"], ["leo", "Leo"], ["doc", "Document secret"], ["guardian", "Le Gardien"],
+    ["commander", "Le Commandant"], ["queen", "La Reine Néon"], ["founder", "Le Fondateur"],
+  ];
+  const EP_BOSS = [["boss", "Boss classique (couronne)"], ["guardian", "Gardien (vigile Helix)"], ["spitterking", "Cracheur Géant"], ["commander", "Commandant Helix"], ["queen", "Reine Néon"], ["founder", "Le Fondateur"]];
+  const EP_SKINS = [["", "Aucun"], ["w_camo", "Arme : Camouflage"], ["w_arctic", "Arme : Arctique"], ["w_candy", "Arme : Bonbon"], ["w_neon", "Arme : Néon"], ["w_lava", "Arme : Lave"], ["w_gold", "Arme : Or"],
+    ["o_soldier_2", "Max : skin 2"], ["o_soldier_3", "Max : skin 3"], ["o_commando_2", "Rex : skin 2"], ["o_commando_3", "Rex : skin 3"], ["o_ninja_2", "Kira : skin 2"], ["o_ninja_3", "Kira : skin 3"],
+    ["o_astronaut_2", "Nova : skin 2"], ["o_astronaut_3", "Nova : skin 3"], ["o_cyber_2", "Zed : skin 2"], ["o_cyber_3", "Zed : skin 3"], ["o_royal_2", "Leo : skin 2"], ["o_royal_3", "Leo : skin 3"]];
+  const CITY_OF = (l) => ["Paris", "New York", "Tokyo", "Londres", "Le Caire", "Rio"][Math.min(5, Math.floor((l - 1) / 5))];
+  const fill = (sel, list, value) => { sel.replaceChildren(...list.map(([v, t]) => { const o = el("option", null, t); o.value = v; return o; })); if (value != null) sel.value = value; };
+  fill($("ep-level"), Array.from({ length: 30 }, (_, i) => [String(i + 1), "Niveau " + (i + 1) + " · " + CITY_OF(i + 1)]), "12");
+  fill($("ep-boss"), EP_BOSS, "boss");
+  fill($("ep-rs-who"), EP_WHO, "radio");
+  fill($("ep-rb-who"), EP_WHO, "radio");
+  fill($("ep-skin"), EP_SKINS, "");
+  let epEditing = null;
+  let epList = [];
+
+  function panelRow(box, p) {
+    const row = el("div", "row");
+    row.style.cssText = "margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:10px";
+    const art = el("select"); fill(art, EP_ARTS, p?.art || "lab"); art.className = "ep-art"; art.setAttribute("aria-label", "Image de la case");
+    const who = el("select"); fill(who, EP_WHO, p?.who || "narrator"); who.className = "ep-who"; who.setAttribute("aria-label", "Qui parle");
+    const fr = el("textarea"); fr.className = "ep-fr"; fr.maxLength = 400; fr.required = true; fr.value = p?.text_fr || ""; fr.placeholder = "Texte de la case"; fr.style.minHeight = "54px"; fr.setAttribute("aria-label", "Texte");
+    const en = el("textarea"); en.className = "ep-en"; en.maxLength = 400; en.value = p?.text_en || ""; en.placeholder = "Texte anglais (facultatif)"; en.style.minHeight = "54px"; en.setAttribute("aria-label", "Texte anglais");
+    const wrap = (label, input, flex) => { const l = el("label", null, label); l.style.flex = flex; l.append(input); return l; };
+    const del = el("button", "danger", "✕"); del.type = "button"; del.title = "Retirer cette case"; del.onclick = () => row.remove();
+    row.append(wrap("Image", art, "0 0 200px"), wrap("Qui parle", who, "0 0 170px"), wrap("Texte", fr, "1 1 220px"), wrap("Anglais", en, "1 1 220px"), del);
+    box.append(row);
+  }
+  const panelsOf = (box) => [...box.children].map((r) => ({ art: r.querySelector(".ep-art").value, who: r.querySelector(".ep-who").value, text_fr: r.querySelector(".ep-fr").value.trim(), text_en: r.querySelector(".ep-en").value.trim() }));
+  $("ep-add-intro").addEventListener("click", () => { if ($("ep-intro").children.length < 8) panelRow($("ep-intro")); });
+  $("ep-add-outro").addEventListener("click", () => { if ($("ep-outro").children.length < 8) panelRow($("ep-outro")); });
+
+  function epReset() {
+    epEditing = null; $("ep-form").reset(); $("ep-form-title").textContent = "Nouvel épisode"; $("ep-save").textContent = "Créer l'épisode"; $("ep-cancel").hidden = true;
+    $("ep-level").value = "12"; $("ep-boss").value = "boss"; $("ep-hp").value = "1.5"; $("ep-credits").value = "500";
+    $("ep-intro").replaceChildren(); $("ep-outro").replaceChildren(); panelRow($("ep-intro")); panelRow($("ep-outro"));
+  }
+  function epEdit(e) {
+    epEditing = e.id; $("ep-form-title").textContent = "Modifier l'épisode " + e.number; $("ep-save").textContent = "Enregistrer"; $("ep-cancel").hidden = false;
+    $("ep-title-fr").value = e.title_fr; $("ep-title-en").value = e.title_en; $("ep-tag-fr").value = e.tagline_fr; $("ep-tag-en").value = e.tagline_en;
+    $("ep-level").value = String(e.level); $("ep-boss").value = e.boss_look; $("ep-boss-fr").value = e.boss_name_fr; $("ep-boss-en").value = e.boss_name_en; $("ep-hp").value = e.boss_hp;
+    $("ep-rs-who").value = e.radio_start_who; $("ep-rs-fr").value = e.radio_start_fr; $("ep-rs-en").value = e.radio_start_en;
+    $("ep-rb-who").value = e.radio_boss_who; $("ep-rb-fr").value = e.radio_boss_fr; $("ep-rb-en").value = e.radio_boss_en;
+    $("ep-credits").value = e.reward_credits; $("ep-skin").value = e.reward_skin || ""; $("ep-published").checked = e.published;
+    $("ep-starts").value = e.starts_at ? new Date(new Date(e.starts_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+    $("ep-intro").replaceChildren(); $("ep-outro").replaceChildren();
+    e.intro.forEach((p) => panelRow($("ep-intro"), p)); e.outro.forEach((p) => panelRow($("ep-outro"), p));
+    $("ep-form").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  $("ep-cancel").addEventListener("click", epReset);
+  const epPayload = () => ({
+    title_fr: $("ep-title-fr").value.trim(), title_en: $("ep-title-en").value.trim(), tagline_fr: $("ep-tag-fr").value.trim(), tagline_en: $("ep-tag-en").value.trim(),
+    level: Number($("ep-level").value), boss_look: $("ep-boss").value, boss_name_fr: $("ep-boss-fr").value.trim(), boss_name_en: $("ep-boss-en").value.trim(), boss_hp: Number($("ep-hp").value) || 1.5,
+    radio_start_who: $("ep-rs-who").value, radio_start_fr: $("ep-rs-fr").value.trim(), radio_start_en: $("ep-rs-en").value.trim(),
+    radio_boss_who: $("ep-rb-who").value, radio_boss_fr: $("ep-rb-fr").value.trim(), radio_boss_en: $("ep-rb-en").value.trim(),
+    intro: panelsOf($("ep-intro")), outro: panelsOf($("ep-outro")).filter((p) => p.text_fr),
+    reward_credits: Number($("ep-credits").value) || 0, reward_skin: $("ep-skin").value || null,
+    published: $("ep-published").checked, starts_at: $("ep-starts").value ? new Date($("ep-starts").value).toISOString() : null,
+  });
+  $("ep-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      const body = epPayload();
+      if (!body.intro.length) throw new Error("Ajoute au moins une case à la BD d'ouverture.");
+      const saved = epEditing ? await api("PUT", "/episodes/" + epEditing, body) : await api("POST", "/episodes", body);
+      say($("ep-status"), "Épisode " + saved.number + " enregistré" + (saved.published ? " et publié." : " (brouillon)."), true);
+      epReset(); loadEpisodes();
+    } catch (err) { say($("ep-status"), err.message.startsWith("[") || err.message.includes("Erreur 422") ? "Vérifie les champs (textes obligatoires, 1 à 8 cases)." : err.message, false); }
+  });
+
+  function epState(e) {
+    if (!e.published) return ["off", "BROUILLON"];
+    if (e.starts_at && new Date(e.starts_at) > new Date()) return ["sched", "PROGRAMMÉ · " + new Date(e.starts_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })];
+    return ["live", "PUBLIÉ"];
+  }
+  async function loadEpisodes() {
+    const box = $("ep-list");
+    try { epList = await api("GET", "/episodes"); } catch (err) { say($("ep-status"), err.message, false); return; }
+    box.replaceChildren();
+    if (!epList.length) { box.append(el("p", "hint", "Aucun épisode pour l'instant.")); return; }
+    for (const e of epList) {
+      const card = el("article", "msg kind-info");
+      const [cls, label] = epState(e);
+      const meta = el("div", "meta");
+      const skin = EP_SKINS.find(([v]) => v === e.reward_skin);
+      meta.append(el("span", "pill " + cls, label), el("span", null, "Épisode " + e.number), el("span", null, "Niveau " + e.level + " · " + CITY_OF(e.level)),
+        el("span", null, "Boss : " + (e.boss_name_fr || "—")), el("span", null, "Récompense : " + nf.format(e.reward_credits) + " crédits" + (skin && skin[0] ? " + " + skin[1] : "")),
+        el("span", null, e.intro.length + " + " + e.outro.length + " cases"));
+      const actions = el("div", "actions");
+      const edit = el("button", null, "Modifier"); edit.type = "button"; edit.onclick = () => epEdit(e);
+      const toggle = el("button", null, e.published ? "Dépublier" : "Publier"); toggle.type = "button";
+      toggle.onclick = async () => { const { id, number, created_at, updated_at, ...body } = e; await api("PUT", "/episodes/" + id, { ...body, published: !e.published }).catch((err) => say($("ep-status"), err.message, false)); loadEpisodes(); };
+      const del = el("button", "danger", "Supprimer"); del.type = "button";
+      del.onclick = async () => { if (!confirm("Supprimer l'épisode « " + e.title_fr + " » ?")) return; await api("DELETE", "/episodes/" + e.id).catch(() => {}); loadEpisodes(); };
+      actions.append(edit, toggle, del);
+      card.append(meta, el("h3", null, e.title_fr), el("div", "body", e.tagline_fr || ""), actions);
+      box.append(card);
+    }
+  }
+  epReset();
 
   async function loadSeasons() {
     let r;

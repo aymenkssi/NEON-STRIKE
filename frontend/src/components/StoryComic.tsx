@@ -4,10 +4,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "@/src/utils/haptics";
 import { colors, fonts, spacing, radius } from "../theme";
-import { COMICS, type Act, type ActReward, type Panel, type SceneId, type Speaker } from "../game/story";
+import { COMICS, type Act, type ActReward, type EpisodeRun, type Panel, type SceneId, type Speaker } from "../game/story";
 import { formatNumber, useT, type Key } from "@/src/i18n";
 import ComicStage from "./ComicStage";
-import { outfit as outfitOf } from "../game/skins";
+import { outfit as outfitOf, skinTitle } from "../game/skins";
 
 // Reward page picture: the reward skin, or the characters who join the team.
 function rewardCast(r: ActReward) {
@@ -17,9 +17,11 @@ function rewardCast(r: ActReward) {
 
 // Comic pages of the story: one panel at a time (art + caption or speech bubble), tap to go on.
 // With `reward`, a last page shows the act reward and a button to collect it.
+// A built-in comic (id + act), or a page of an episode from the admin page.
 type Props = {
-  id: string;
-  act: Act;
+  id?: string;
+  act?: Act;
+  episode?: { run: EpisodeRun; part: "intro" | "outro" };
   reward?: ActReward | null;
   owned?: string[]; // skins owned: characters of the reward already bought
   onClaim?: () => void;
@@ -169,9 +171,11 @@ const SCENES: Record<SceneId, { colors: [string, string]; decos: Deco[]; label?:
   },
 };
 
-export default function StoryComic({ id, act, reward, owned = [], onClaim, onDone }: Props) {
+export default function StoryComic({ id, act, episode, reward, owned = [], onClaim, onDone }: Props) {
   const t = useT();
-  const panels: Panel[] = COMICS[id] ?? [];
+  const panels: Panel[] = episode ? episode.run[episode.part] : (id && COMICS[id]) || [];
+  const tag = episode ? t("story.episodeN", { n: episode.run.number }) : t("story.actN", { n: act?.n ?? 1 });
+  const title = episode ? episode.run.title : act ? t(act.title) : "";
   const [i, setI] = useState(0);
   const [claimed, setClaimed] = useState(false);
   const onReward = !!reward && i >= panels.length;
@@ -196,8 +200,8 @@ export default function StoryComic({ id, act, reward, owned = [], onClaim, onDon
   return (
     <View style={styles.overlay} testID="story-comic">
       <View style={styles.top}>
-        <Text style={styles.actTag}>{t("story.actN", { n: act.n })}</Text>
-        <Text style={styles.actTitle}>{t(act.title)}</Text>
+        <Text style={styles.actTag}>{tag}</Text>
+        <Text style={styles.actTitle} numberOfLines={1}>{title}</Text>
         <View style={{ flex: 1 }} />
         {!onReward && (
           <Pressable testID="story-skip" onPress={skip} hitSlop={10} style={styles.skip}>
@@ -229,7 +233,7 @@ export default function StoryComic({ id, act, reward, owned = [], onClaim, onDon
 
         {onReward ? (
           <View style={styles.side}>
-            <Text style={styles.done} testID="story-act-done">{t("story.actDone", { n: act.n })}</Text>
+            <Text style={styles.done} testID="story-act-done">{episode ? t("story.episodeDone", { n: episode.run.number }) : t("story.actDone", { n: act?.n ?? 1 })}</Text>
             <View style={styles.rewardRow}>
               <MaterialCommunityIcons name="circle-multiple" size={22} color={colors.warning} />
               <Text style={styles.rewardText}>+{formatNumber(reward!.credits)}</Text>
@@ -237,7 +241,7 @@ export default function StoryComic({ id, act, reward, owned = [], onClaim, onDon
             {reward!.skin && (
               <View style={styles.rewardRow}>
                 <MaterialCommunityIcons name="tshirt-crew" size={22} color={colors.skins} />
-                <Text style={[styles.rewardText, { color: colors.skins }]}>{t(`skin.${reward!.skin}` as Key)}</Text>
+                <Text style={[styles.rewardText, { color: colors.skins }]}>{skinTitle(reward!.skin, t)}</Text>
               </View>
             )}
             {(reward!.heroes ?? []).map((h) => {
@@ -251,8 +255,8 @@ export default function StoryComic({ id, act, reward, owned = [], onClaim, onDon
                 </View>
               );
             })}
-            {claimed && reward!.skin && <Text style={styles.equipped}>{t("story.equipped", { skin: t(`skin.${reward!.skin}` as Key) })}</Text>}
-            <Text style={styles.soon}>{t(act.next)}</Text>
+            {claimed && reward!.skin && <Text style={styles.equipped}>{t("story.equipped", { skin: skinTitle(reward!.skin, t) })}</Text>}
+            <Text style={styles.soon}>{episode ? t("story.episodeNext") : act ? t(act.next) : ""}</Text>
             <Pressable
               testID={claimed ? "story-finish" : "story-claim"}
               style={[styles.btn, { backgroundColor: claimed ? colors.brand : colors.warning }]}
@@ -276,7 +280,7 @@ export default function StoryComic({ id, act, reward, owned = [], onClaim, onDon
             )}
             <View style={p?.who === "narrator" ? styles.caption : styles.bubble} testID="story-text">
               {p?.who !== "narrator" && <View style={styles.tail} />}
-              <Text style={p?.who === "narrator" ? styles.captionText : styles.bubbleText}>{p ? t(p.text) : ""}</Text>
+              <Text style={p?.who === "narrator" ? styles.captionText : styles.bubbleText}>{!p ? "" : "raw" in p ? p.raw : t(p.text)}</Text>
             </View>
             <Text style={styles.tap}>{t("story.tap")}</Text>
           </View>

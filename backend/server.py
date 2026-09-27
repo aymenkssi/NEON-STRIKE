@@ -15,6 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 import accounts
 import cloudsave
+import episodes
 import liveops
 import seasons
 import stats
@@ -244,6 +245,7 @@ app.include_router(stats.public)
 app.include_router(stats.admin)
 app.include_router(seasons.public)
 app.include_router(seasons.admin)
+app.include_router(episodes.admin)
 app.include_router(suggestions.public)
 app.include_router(suggestions.admin)
 app.include_router(cloudsave.router)
@@ -272,6 +274,7 @@ async def create_indexes():
     await stats.setup()
     await suggestions.setup()
     await seasons.setup()
+    await episodes.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
 

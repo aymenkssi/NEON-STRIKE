@@ -341,6 +341,7 @@ export const fr = {
   "skin.o_cyber": "Cyber",
   "skin.o_royal": "Royal",
   "skin.o_soldier_vet": "Max Vétéran",
+  "skin.variantN": "skin {n}",
 
   "hero.soldier": "Max",
   "hero.commando": "Rex",
@@ -634,6 +635,15 @@ export const fr = {
   "story.scene.satellite": "SATELLITE HX-1",
   "story.scene.desert": "LE CAIRE",
   "story.scene.signal": "SIGNAL INCONNU",
+  "story.episodeN": "ÉPISODE {n}",
+  "story.episodeDone": "ÉPISODE {n} TERMINÉ",
+  "story.episodeNext": "Un nouvel épisode arrive à chaque saison.",
+  "story.episodes": "Épisodes de la saison",
+  "story.episodesHint": "L'histoire continue : un nouvel épisode sort à chaque saison.",
+  "story.new": "NOUVEAU",
+  "story.playEpisode": "Jouer l'épisode",
+  "story.episodeLevel": "Niveau {level} · {city}",
+  "story.replayEpisode": "Revoir la BD",
 } as const;
 
 export type Key = keyof typeof fr;
