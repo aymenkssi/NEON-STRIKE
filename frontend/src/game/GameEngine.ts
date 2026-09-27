@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { Renderer } from "expo-three";
 import type { ExpoWebGLRenderingContext } from "expo-gl";
-import { buildWorld, type World, type WorldQuality } from "./world";
+import { buildWorld, type AdSpot, type World, type WorldQuality } from "./world";
 import { CITIES } from "./cities";
 import { buildZombie, disposeZombie } from "./characters";
 import { MUZZLE, VIEW, buildWeaponModel } from "./weapons";
 import { STANCE, buildHero, type Hero } from "./heroes";
 import { storyBoss, type StoryBoss } from "./story";
+import { billboardsFor } from "./billboards";
 import { WEAPONS, ammoBox, ammoCap, startAmmo, unlimitedAmmo, weaponOf, type FireMode, type WeaponConfig } from "./armory";
 import {
   CREDITS_PER_BOSS,
@@ -374,6 +375,7 @@ export class GameEngine {
     this.spawnPoints = world.spawnPoints;
     this.scene.add(world.group);
     this.spawnDocument(level);
+    this.placeBillboards(level, world.adSpots, world.group);
 
     const L = world.lighting;
     this.scene.background = new THREE.Color(L.horizon);
@@ -1086,6 +1088,26 @@ export class GameEngine {
     group.userData = { type, spin: Math.random() * Math.PI };
     this.scene.add(group);
     this.pickups.push(group);
+  }
+
+  // Advertising posters (admin page): a framed poster box on the facade of each slot that has
+  // one; the others keep their normal facade. Part of the world group, removed with the level.
+  private placeBillboards(level: number, spots: AdSpot[], into: THREE.Group) {
+    for (const ad of billboardsFor(level)) {
+      const spot = spots.find((s) => s.slot === ad.slot);
+      if (!spot) continue;
+      const g = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(spot.w + 0.5, spot.h + 0.5, 1.2), new THREE.MeshStandardMaterial({ color: 0x1b1d22, roughness: 0.6, metalness: 0.3 }));
+      frame.position.z = -0.6;
+      const poster = new THREE.Mesh(new THREE.PlaneGeometry(spot.w, spot.h), new THREE.MeshBasicMaterial({ map: ad.texture, toneMapped: false }));
+      poster.position.z = 0.01;
+      poster.name = "billboard";
+      poster.userData.billboard = ad.id;
+      g.add(frame, poster);
+      g.position.set(spot.x, spot.y, spot.z);
+      g.rotation.y = spot.ry;
+      into.add(g);
+    }
   }
 
   // Story: the secret Helix document of the level, a glowing tablet under a beam of cyan light,

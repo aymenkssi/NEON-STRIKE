@@ -180,7 +180,9 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `POST /api/admin/players/{id}/messages` · `GET /api/admin/players/{id}/messages` · `DELETE /api/admin/direct-messages/{id}` | Messages personnels à un joueur précis (bouton ✉ de l'onglet « Joueurs ») : envoi, historique lu / non lu, suppression. |
 | `GET /api/inbox` · `POST /api/inbox/{id}/read` | Messages personnels non lus du joueur connecté (jeton du joueur), marqués lus quand il ferme la fenêtre. |
 | `GET /api/admin/episodes` · `POST /api/admin/episodes` · `PUT/DELETE /api/admin/episodes/{id}` | Onglet « Épisodes » : épisodes de l'histoire publiés à chaque saison (BD, boss, radio, récompense), sans mise à jour de l'app. |
-| `GET /api/config` | Packs visibles, prix des armes de l'Armurerie, messages en ligne et épisodes publiés, lus par l'app au démarrage. |
+| `GET/POST /api/admin/billboards` · `PUT/DELETE /api/admin/billboards/{id}` | Onglet « Publicités » : affiches sur les façades du jeu (image, emplacement, niveaux, dates, vues). |
+| `GET /api/billboards/{id}-{version}.jpg` · `POST /api/billboards/views` | Image d'une affiche (mise en cache longue, nouvelle URL à chaque nouvelle image) et compteur de vues envoyé par le jeu. |
+| `GET /api/config` | Packs visibles, prix des armes de l'Armurerie, messages en ligne, épisodes publiés et affiches publicitaires, lus par l'app au démarrage. |
 | `GET /api/admin/weapons` · `PUT /api/admin/weapons/{id}` | Prix en crédits de chaque arme, mise en vente et prix d'une boîte de munitions (page d'administration → Boutique et messages → Armurerie). |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
 | `POST /api/purchases/verify` | Interroge Google Play. Répond `valid` uniquement si l'achat est payé. Un même reçu ne peut servir qu'à un seul joueur et un seul produit. |

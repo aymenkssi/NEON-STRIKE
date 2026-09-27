@@ -14,6 +14,7 @@ from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
 import accounts
+import billboards
 import cloudsave
 import episodes
 import liveops
@@ -246,6 +247,8 @@ app.include_router(stats.admin)
 app.include_router(seasons.public)
 app.include_router(seasons.admin)
 app.include_router(episodes.admin)
+app.include_router(billboards.public)
+app.include_router(billboards.admin)
 app.include_router(suggestions.public)
 app.include_router(suggestions.admin)
 app.include_router(cloudsave.router)
@@ -275,6 +278,7 @@ async def create_indexes():
     await suggestions.setup()
     await seasons.setup()
     await episodes.setup()
+    await billboards.setup()
     if PURCHASE_VERIFICATION != "google":
         logger.warning("Purchase verification is %s — never use this in production", PURCHASE_VERIFICATION)
 

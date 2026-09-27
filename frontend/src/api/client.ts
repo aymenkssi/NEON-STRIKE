@@ -10,6 +10,8 @@ const BASE = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/+$/, "");
 const SESSION_KEY = "np_player_session";
 
 export const backendConfigured = BASE.length > 0;
+// Full URL of a backend path (e.g. an image served by the backend).
+export const backendUrl = (path: string) => (path.startsWith("http") ? path : `${BASE}${path}`);
 
 type Session = { id: string; token: string };
 let session: Session | null = null;

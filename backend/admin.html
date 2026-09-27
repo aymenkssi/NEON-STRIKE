@@ -105,6 +105,7 @@
       <button type="button" role="tab" data-tab="players" aria-selected="false">Joueurs</button>
       <button type="button" role="tab" data-tab="seasons" aria-selected="false">Saisons <span id="season-badge" class="pill sched" hidden></span></button>
       <button type="button" role="tab" data-tab="episodes" aria-selected="false">Épisodes</button>
+      <button type="button" role="tab" data-tab="ads" aria-selected="false">Publicités</button>
       <button type="button" role="tab" data-tab="liveops" aria-selected="false">Boutique et messages</button>
       <button type="button" role="tab" data-tab="suggestions" aria-selected="false">Suggestions <span id="sugg-badge" class="pill live" hidden></span></button>
     </nav>
@@ -238,6 +239,39 @@
       </section>
       <h2>Épisodes</h2>
       <div id="ep-list"></div>
+    </div>
+
+    <div id="tab-ads" hidden>
+      <h2>Affiches publicitaires dans le jeu</h2>
+      <p class="hint">Chaque niveau a 3 emplacements d'affiche sur les façades de la place : <b>1</b> au nord (face au joueur au départ), <b>2</b> à l'est (à droite), <b>3</b> à l'ouest (à gauche). Le jeu télécharge les affiches actives à son ouverture et les garde sur le téléphone. Un emplacement sans affiche garde sa façade normale. Si plusieurs affiches visent le même emplacement et le même niveau, le jeu en tire une au hasard à chaque partie. Chaque niveau joué compte une vue par affiche montrée.</p>
+      <section class="panel">
+        <h3 id="ad-form-title" style="margin:0 0 10px">Nouvelle affiche</h3>
+        <form id="ad-form">
+          <div class="row">
+            <label for="ad-name">Annonceur ou campagne<input id="ad-name" maxlength="60" required placeholder="Ex. : Pizza Roma — octobre"></label>
+            <label for="ad-slot" style="flex:0 0 240px">Emplacement<select id="ad-slot">
+              <option value="0">Les 3 emplacements</option><option value="1">1 · Façade nord (en face)</option><option value="2">2 · Façade est (à droite)</option><option value="3">3 · Façade ouest (à gauche)</option>
+            </select></label>
+            <label for="ad-from" style="flex:0 0 150px">Du niveau<input id="ad-from" type="number" min="1" max="30" value="1"></label>
+            <label for="ad-to" style="flex:0 0 150px">Au niveau<input id="ad-to" type="number" min="1" max="30" value="30"></label>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <label for="ad-file">Image (JPEG ou PNG, recadrée en 1024 × 512, format 2:1)<input id="ad-file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+            <label for="ad-fit" style="flex:0 0 220px">Recadrage<select id="ad-fit"><option value="cover">Remplir (rogner les bords)</option><option value="contain">Tout montrer (bandes)</option></select></label>
+            <label for="ad-start" style="flex:0 0 220px">Début (facultatif)<input id="ad-start" type="datetime-local"></label>
+            <label for="ad-end" style="flex:0 0 220px">Fin (facultatif)<input id="ad-end" type="datetime-local"></label>
+            <label class="check" for="ad-active"><input id="ad-active" type="checkbox" checked> Active</label>
+          </div>
+          <canvas id="ad-preview" width="1024" height="512" style="margin-top:10px;width:100%;max-width:512px;aspect-ratio:2/1;border:1px solid var(--line);border-radius:8px;background:#222" hidden></canvas>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" type="submit" id="ad-save">Ajouter l'affiche</button>
+            <button type="button" id="ad-cancel" hidden>Annuler la modification</button>
+          </div>
+        </form>
+        <div id="ad-status" class="status"></div>
+      </section>
+      <h2>Affiches</h2>
+      <div id="ad-list"></div>
     </div>
 
     <div id="tab-suggestions" hidden>
@@ -543,7 +577,8 @@
   // ---------------- Statistiques ----------------
   document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll("nav.tabs button").forEach((o) => o.setAttribute("aria-selected", String(o === b)));
-    ["stats", "players", "seasons", "episodes", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    ["stats", "players", "seasons", "episodes", "ads", "liveops", "suggestions"].forEach((t) => ($("tab-" + t).hidden = b.dataset.tab !== t));
+    if (b.dataset.tab === "ads") loadAds();
     if (b.dataset.tab === "episodes") loadEpisodes();
     if (b.dataset.tab === "seasons") loadSeasons();
     if (b.dataset.tab === "suggestions") loadSuggestions();
@@ -929,6 +964,97 @@
     }
   }
   epReset();
+
+  // ---------------- Publicités ----------------
+  const SLOT_NAMES = ["Les 3 emplacements", "1 · Nord", "2 · Est", "3 · Ouest"];
+  let adEditing = null;
+  let adImage = null; // data URL of the resized image (null: keep the current one when editing)
+  let adSource = null; // the original picture, to redraw when the crop mode changes
+  function drawAd() {
+    const c = $("ad-preview"), g = c.getContext("2d");
+    g.fillStyle = "#111"; g.fillRect(0, 0, c.width, c.height);
+    if (!adSource) return;
+    const cover = $("ad-fit").value === "cover";
+    const k = (cover ? Math.max : Math.min)(c.width / adSource.width, c.height / adSource.height);
+    const w = adSource.width * k, h = adSource.height * k;
+    g.drawImage(adSource, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    adImage = c.toDataURL("image/jpeg", 0.86);
+  }
+  $("ad-file").addEventListener("change", () => {
+    const f = $("ad-file").files[0];
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => { adSource = img; $("ad-preview").hidden = false; drawAd(); URL.revokeObjectURL(img.src); };
+    img.onerror = () => say($("ad-status"), "Image illisible.", false);
+    img.src = URL.createObjectURL(f);
+  });
+  $("ad-fit").addEventListener("change", drawAd);
+  const localInput = (iso) => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+  function adReset() {
+    adEditing = null; adImage = null; adSource = null; $("ad-form").reset(); $("ad-preview").hidden = true;
+    $("ad-form-title").textContent = "Nouvelle affiche"; $("ad-save").textContent = "Ajouter l'affiche"; $("ad-cancel").hidden = true;
+  }
+  function adEdit(a) {
+    adReset(); adEditing = a.id;
+    $("ad-form-title").textContent = "Modifier « " + a.name + " »"; $("ad-save").textContent = "Enregistrer"; $("ad-cancel").hidden = false;
+    $("ad-name").value = a.name; $("ad-slot").value = String(a.slot); $("ad-from").value = a.level_from; $("ad-to").value = a.level_to;
+    $("ad-active").checked = a.active; $("ad-start").value = localInput(a.starts_at); $("ad-end").value = localInput(a.ends_at);
+    const img = new Image(); img.onload = () => { adSource = img; $("ad-preview").hidden = false; drawAd(); adImage = null; }; img.src = a.image_url;
+    $("ad-form").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  $("ad-cancel").addEventListener("click", adReset);
+  const adBody = (a) => ({
+    name: a ? a.name : $("ad-name").value.trim(), slot: Number(a ? a.slot : $("ad-slot").value),
+    level_from: Number(a ? a.level_from : $("ad-from").value) || 1, level_to: Number(a ? a.level_to : $("ad-to").value) || 30,
+    active: a ? !a.active : $("ad-active").checked,
+    starts_at: a ? a.starts_at : ($("ad-start").value ? new Date($("ad-start").value).toISOString() : null),
+    ends_at: a ? a.ends_at : ($("ad-end").value ? new Date($("ad-end").value).toISOString() : null),
+  });
+  $("ad-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      if (!adEditing && !adImage) throw new Error("Choisis une image.");
+      const body = { ...adBody(), image: adImage };
+      const saved = adEditing ? await api("PUT", "/billboards/" + adEditing, body) : await api("POST", "/billboards", body);
+      say($("ad-status"), "Affiche « " + saved.name + " » enregistrée.", true);
+      adReset(); loadAds();
+    } catch (err) { say($("ad-status"), err.message.includes("Erreur 422") ? "Vérifie les champs (niveaux, dates)." : err.message, false); }
+  });
+  function adState(a) {
+    const now = new Date();
+    if (!a.active) return ["off", "EN PAUSE"];
+    if (a.starts_at && new Date(a.starts_at) > now) return ["sched", "PROGRAMMÉE"];
+    if (a.ends_at && new Date(a.ends_at) <= now) return ["off", "TERMINÉE"];
+    return ["live", "EN LIGNE"];
+  }
+  async function loadAds() {
+    const box = $("ad-list");
+    let list;
+    try { list = await api("GET", "/billboards"); } catch (err) { say($("ad-status"), err.message, false); return; }
+    box.replaceChildren();
+    if (!list.length) { box.append(el("p", "hint", "Aucune affiche : les façades du jeu restent normales.")); return; }
+    for (const a of list) {
+      const card = el("article", "msg kind-promo");
+      card.style.gridTemplateColumns = "minmax(0, 240px) 1fr"; card.style.alignItems = "start";
+      const img = el("img"); img.src = a.image_url; img.alt = a.name; img.style.cssText = "width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:8px;border:1px solid var(--line)";
+      const info = el("div"); info.style.cssText = "display:grid;gap:6px";
+      const [cls, label] = adState(a);
+      const meta = el("div", "meta");
+      meta.append(el("span", "pill " + cls, label), el("span", null, SLOT_NAMES[a.slot]), el("span", null, "Niveaux " + a.level_from + " à " + a.level_to),
+        el("span", null, nf.format(a.views) + " vue" + (a.views > 1 ? "s" : "")));
+      if (a.starts_at || a.ends_at) meta.append(el("span", null, (a.starts_at ? "du " + new Date(a.starts_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "") + (a.ends_at ? " au " + new Date(a.ends_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "")));
+      const actions = el("div", "actions");
+      const edit = el("button", null, "Modifier"); edit.type = "button"; edit.onclick = () => adEdit(a);
+      const toggle = el("button", null, a.active ? "Mettre en pause" : "Activer"); toggle.type = "button";
+      toggle.onclick = async () => { await api("PUT", "/billboards/" + a.id, adBody(a)).catch((err) => say($("ad-status"), err.message, false)); loadAds(); };
+      const del = el("button", "danger", "Supprimer"); del.type = "button";
+      del.onclick = async () => { if (!confirm("Supprimer l'affiche « " + a.name + " » ?")) return; await api("DELETE", "/billboards/" + a.id).catch(() => {}); loadAds(); };
+      actions.append(edit, toggle, del);
+      info.append(meta, el("h3", null, a.name), actions);
+      card.append(img, info);
+      box.append(card);
+    }
+  }
 
   async function loadSeasons() {
     let r;

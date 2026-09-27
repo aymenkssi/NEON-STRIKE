@@ -16,8 +16,9 @@ export type RemoteMessage = {
 };
 export type RemoteWeaponPrice = { key: string; price: number; on_sale: boolean };
 import type { RemoteEpisode } from "@/src/game/story";
+import type { RemoteBillboard } from "@/src/game/billboards";
 
-export type RemoteConfig = { packs: RemotePack[]; messages: RemoteMessage[]; weapons?: RemoteWeaponPrice[]; episodes?: RemoteEpisode[] };
+export type RemoteConfig = { packs: RemotePack[]; messages: RemoteMessage[]; weapons?: RemoteWeaponPrice[]; episodes?: RemoteEpisode[]; billboards?: RemoteBillboard[] };
 
 const CACHE_KEY = "np_remote_config";
 
@@ -37,7 +38,7 @@ export async function fetchRemoteConfig(): Promise<RemoteConfig | null> {
     const cfg = await get<RemoteConfig>("/config");
     if (!Array.isArray(cfg?.packs) || !Array.isArray(cfg?.messages)) return null;
     // Messages are time-limited: cache only the packs, weapon prices and story episodes.
-    await storage.setItem(CACHE_KEY, JSON.stringify({ packs: cfg.packs, messages: [], weapons: cfg.weapons ?? [], episodes: cfg.episodes ?? [] }));
+    await storage.setItem(CACHE_KEY, JSON.stringify({ packs: cfg.packs, messages: [], weapons: cfg.weapons ?? [], episodes: cfg.episodes ?? [], billboards: cfg.billboards ?? [] }));
     return cfg;
   } catch {
     return null;
