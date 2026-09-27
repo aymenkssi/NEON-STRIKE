@@ -155,6 +155,7 @@ export default function HUD({ stats, hitSignal, damageSignal, onPause, onSwitchW
 
       {/* Crosshair + hit marker */}
       <View style={styles.center} pointerEvents="none">
+        {stats.aiming && <View style={styles.aimRing} testID="aim-ring" />}
         <View style={styles.crossDot} />
         <Animated.View style={[styles.hitMarker, hitStyle]} />
       </View>
@@ -241,6 +242,14 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: colors.error,
+  },
+  aimRing: {
+    position: "absolute",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,255,255,0.85)",
   },
   hitMarker: {
     position: "absolute",

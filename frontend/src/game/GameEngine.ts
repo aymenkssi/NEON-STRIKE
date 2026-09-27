@@ -51,6 +51,13 @@ const CONFIG = {
   swayAmount: 0.006,
   swaySmooth: 10,
   standHeight: 2.0,
+  // Aiming (AIM button): zoom over the shoulder, tighter spread, slower view and walk, no sprint.
+  aimFov: 50,
+  aimBack: 1.3, // third-person camera distance while aiming
+  aimSensitivity: 0.6,
+  aimSpread: 0.4,
+  aimSpeedMult: 0.7,
+  aimBlendSpeed: 12,
 };
 
 // SINGLE: one round per tap. BURST: 3 rounds per tap. AUTO: fires while the trigger is held.
@@ -113,6 +120,7 @@ export type GameStats = {
   powerups: { kind: PowerUpKind; remaining: number }[]; // seconds left, active ones only
   difficulty: Difficulty;
   grenades: number; // hand grenades left
+  aiming: boolean; // AIM mode on (zoomed, precise; the player can still move)
 };
 
 export type EngineOptions = {
@@ -196,6 +204,8 @@ export class GameEngine {
   private swayY = 0;
 
   lookSensitivity = 0.008;
+  private aiming = false;
+  private aimBlend = 0; // 0 = hip, 1 = fully zoomed (eased toward `aiming`)
   // Options from the Settings panel (see use-game-settings.ts) and the equipped skins.
   private opts: EngineOptions = { aimAssist: true, invertY: false, quality: "normal", weaponSkin: undefined, outfit: undefined };
   private difficulty: Difficulty = "normal";
@@ -605,12 +615,24 @@ export class GameEngine {
     this.sprint = sprint;
   }
 
+  // AIM button: zooms and steadies the weapon; moving (joystick) keeps working, only sprint is off.
+  setAim(on: boolean) {
+    if (on && (this.paused || this.gameOver || this.levelComplete)) return;
+    if (this.aiming === on) return;
+    this.aiming = on;
+    this.emitStats();
+  }
+  toggleAim() {
+    this.setAim(!this.aiming);
+  }
+
   applyLook(dx: number, dy: number) {
     if (this.paused || this.gameOver || this.levelComplete) return;
     if (this.opts.invertY) dy = -dy;
     this.lastLookAt = Date.now();
     // Aim assist "friction": the view slows down while the crosshair is on a zombie.
-    const slow = this.opts.aimAssist && this.assistTarget(ASSIST.frictionAngle) ? ASSIST.friction : 1;
+    const assist = this.opts.aimAssist && this.assistTarget(ASSIST.frictionAngle) ? ASSIST.friction : 1;
+    const slow = assist * (this.aiming ? CONFIG.aimSensitivity : 1);
     this.camera.rotation.y -= dx * this.lookSensitivity * slow;
     this.camera.rotation.x -= dy * this.lookSensitivity * slow;
     this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
@@ -738,7 +760,7 @@ export class GameEngine {
 
     for (let i = 0; i < wpn.pellets; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = Math.random() * wpn.spread;
+      const radius = Math.random() * wpn.spread * (this.aiming ? CONFIG.aimSpread : 1);
       const spreadVec = new THREE.Vector3()
         .addScaledVector(right, Math.cos(angle) * radius)
         .addScaledVector(up, Math.sin(angle) * radius);
@@ -970,6 +992,7 @@ export class GameEngine {
 
   private finishLevel() {
     this.levelComplete = true;
+    this.aiming = false;
     this.setMove(0, 0, false);
     this.isSpaceHeld = false;
     this.cb.onAmmo?.(this.ammoStock());
@@ -1120,6 +1143,10 @@ export class GameEngine {
     this.gameOver = false;
     this.levelComplete = false;
     this.paused = false;
+    this.aiming = false;
+    this.aimBlend = 0;
+    this.camera.fov = CONFIG.fov;
+    this.camera.updateProjectionMatrix();
     this.spawningNextWave = false;
     this.playerVelocity.set(0, 0, 0);
     this.camera.position.set(0, CONFIG.standHeight, 12);
@@ -1189,6 +1216,7 @@ export class GameEngine {
         .filter((p) => p.remaining > 0),
       difficulty: this.difficulty,
       grenades: this.handGrenades,
+      aiming: this.aiming,
     });
   }
 
@@ -1278,6 +1306,7 @@ export class GameEngine {
     if (this.gameOver) return;
     this.gameOver = true;
     this.health = 0;
+    this.aiming = false;
     this.cb.playSound("gameover");
     this.cb.onEvent?.({ type: "death" });
     this.emitStats();
@@ -1320,6 +1349,16 @@ export class GameEngine {
       }
     }
     return best && this.clearLine(eye, this.aimPoint(best)) ? best : null;
+  }
+
+  // Eases the zoom (field of view and third-person distance) toward the AIM state.
+  private updateAimZoom(delta: number) {
+    const target = this.aiming ? 1 : 0;
+    if (this.aimBlend === target) return;
+    const step = delta * CONFIG.aimBlendSpeed;
+    this.aimBlend = Math.abs(target - this.aimBlend) <= step ? target : this.aimBlend + Math.sign(target - this.aimBlend) * step;
+    this.camera.fov = THREE.MathUtils.lerp(CONFIG.fov, CONFIG.aimFov, this.aimBlend);
+    this.camera.updateProjectionMatrix();
   }
 
   private updateAimAssist(delta: number, time: number) {
@@ -1524,6 +1563,7 @@ export class GameEngine {
     this.updateSpits(delta, time);
     if (this.gameOver) return;
     this.updateAimAssist(delta, time);
+    this.updateAimZoom(delta);
 
     // Refresh power-up timers in the HUD a few times per second while one is active.
     if (Object.keys(this.powerUntil).length && time - this.lastPowerEmit > 250) {
@@ -1575,7 +1615,8 @@ export class GameEngine {
     this.playerVelocity.y -= CONFIG.gravity * delta;
 
     let jetpack = false;
-    if (this.sprint && this.isSpaceHeld) {
+    const sprint = this.sprint && !this.aiming;
+    if (sprint && this.isSpaceHeld) {
       this.jetpackHoldTime += delta;
       const threshold = this.spacePressedOnGround ? 1.3 : 0.0;
       if (this.jetpackHoldTime >= threshold) {
@@ -1601,7 +1642,8 @@ export class GameEngine {
 
     let speedMult = 1.0;
     if (jetpack) speedMult = CONFIG.jetpackMult;
-    else if (this.sprint) speedMult = CONFIG.sprintMult;
+    else if (sprint) speedMult = CONFIG.sprintMult;
+    if (this.aiming) speedMult *= CONFIG.aimSpeedMult;
     const speed = CONFIG.speed * speedMult * (this.powerActive("haste") ? HASTE_MULT : 1);
     if (hasInput) {
       this.playerVelocity.x += inputDir.x * speed * delta;
@@ -1744,7 +1786,7 @@ export class GameEngine {
     let bobX = 0;
     let bobY = 0;
     if (speedMag > 0.5) {
-      const intensity = this.sprint ? 0.0012 : 0.0008;
+      const intensity = this.sprint && !this.aiming ? 0.0012 : 0.0008;
       bobX = Math.cos(time * 0.015) * speedMag * intensity;
       bobY = Math.abs(Math.sin(time * 0.015)) * speedMag * intensity;
     } else {
@@ -1809,7 +1851,7 @@ export class GameEngine {
     this.camera.getWorldDirection(dir);
     const pivot = this.aimPivot(dir);
     const back = dir.clone().negate();
-    let dist = this.clearDistance(pivot, back, TP.back);
+    let dist = this.clearDistance(pivot, back, THREE.MathUtils.lerp(TP.back, CONFIG.aimBack, this.aimBlend));
     // Never under the ground when looking up.
     if (back.y < -0.01) dist = Math.min(dist, (pivot.y - 0.35) / -back.y);
     const cam = pivot.clone().addScaledVector(back, Math.max(0.3, dist));

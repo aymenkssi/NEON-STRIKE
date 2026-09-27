@@ -57,6 +57,7 @@ const INITIAL: GameStats = {
   difficulty: "normal",
   grenades: 3,
   reserve: null,
+  aiming: false,
 };
 
 export default function GameScreen({
@@ -235,7 +236,7 @@ export default function GameScreen({
     <View style={styles.root}>
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
 
-      {status === "playing" && <TouchControls getEngine={getEngine} fireMode={stats.fireMode} fireModes={stats.fireModes} grenades={stats.grenades} />}
+      {status === "playing" && <TouchControls getEngine={getEngine} fireMode={stats.fireMode} fireModes={stats.fireModes} grenades={stats.grenades} aiming={stats.aiming} />}
 
       {(status === "playing" || status === "paused") && (
         <HUD
