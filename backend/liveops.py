@@ -28,20 +28,22 @@ DEFAULT_PACKS = [
 ]
 
 # Armory: weapons bought with credits in the app. The models and stats live in the app; the
-# admin page only sets the price and whether a weapon is on sale. Price 0 = free for everyone.
+# admin page sets the price, whether a weapon is on sale, and the price of a box of ammo.
+# (key, name, weapon price, ammo box price, rounds per box). Price 0 = free for everyone.
+# The pistol has unlimited ammo (box 0): the player always has something to shoot with.
 WEAPONS = [
-    ("pistol", "Pistolet", 0),
-    ("shotgun", "Fusil à pompe", 0),
-    ("mp5", "MP5", 800),
-    ("m16", "M16", 1500),
-    ("m4", "M4", 2200),
-    ("ak47", "AK-47", 2800),
-    ("sniper", "Sniper .50", 4000),
-    ("launcher", "Lance-grenades", 5000),
-    ("minigun", "Minigun M134", 6000),
-    ("rpg", "Lance-roquettes RPG-7", 8000),
+    ("pistol", "Pistolet", 0, 0, 0),
+    ("shotgun", "Fusil à pompe", 0, 60, 10),
+    ("mp5", "MP5", 800, 80, 60),
+    ("m16", "M16", 1500, 100, 60),
+    ("m4", "M4", 2200, 100, 60),
+    ("ak47", "AK-47", 2800, 110, 60),
+    ("sniper", "Sniper .50", 4000, 150, 10),
+    ("launcher", "Lance-grenades", 5000, 200, 6),
+    ("minigun", "Minigun M134", 6000, 150, 150),
+    ("rpg", "Lance-roquettes RPG-7", 8000, 250, 2),
 ]
-WEAPON_KEYS = [k for k, _, _ in WEAPONS]
+WEAPON_KEYS = [w[0] for w in WEAPONS]
 WEAPON_PATTERN = "^(" + "|".join(WEAPON_KEYS) + ")$"
 
 # Play Console product ID rules: lowercase letters, digits, "_" and ".", starting with a letter or digit.
@@ -111,11 +113,13 @@ class PublicMessage(BaseModel):
 class WeaponPriceIn(BaseModel):
     price: int = Field(..., ge=0, le=1_000_000)
     on_sale: bool = True
+    ammo_price: Optional[int] = Field(default=None, ge=0, le=1_000_000)  # credits per box of ammo
 
 
 class WeaponPrice(WeaponPriceIn):
     key: str
     name: str = ""
+    ammo_box: int = 0  # rounds per box (0: unlimited ammo)
 
 
 class RemoteConfig(BaseModel):
@@ -145,9 +149,18 @@ async def weapon_prices() -> List[WeaponPrice]:
     """Every weapon of the app with its price: the stored one, else the default."""
     stored = {w["key"]: w async for w in db.weapon_prices.find({}, {"_id": 0})}
     out = []
-    for key, name, price in WEAPONS:
+    for key, name, price, ammo_price, box in WEAPONS:
         w = stored.get(key, {})
-        out.append(WeaponPrice(key=key, name=name, price=w.get("price", price), on_sale=w.get("on_sale", True)))
+        out.append(
+            WeaponPrice(
+                key=key,
+                name=name,
+                price=w.get("price", price),
+                on_sale=w.get("on_sale", True),
+                ammo_price=w.get("ammo_price") if w.get("ammo_price") is not None else ammo_price,
+                ammo_box=box,
+            )
+        )
     return out
 
 
@@ -239,7 +252,10 @@ async def list_weapons():
 
 @admin.put("/weapons/{key}", response_model=WeaponPrice)
 async def set_weapon(payload: WeaponPriceIn, key: str = PathParam(..., pattern=WEAPON_PATTERN)):
-    await db.weapon_prices.update_one({"key": key}, {"$set": payload.model_dump()}, upsert=True)
+    data = payload.model_dump()
+    if data["ammo_price"] is None:
+        data.pop("ammo_price")  # keep the current ammo price
+    await db.weapon_prices.update_one({"key": key}, {"$set": data}, upsert=True)
     return next(w for w in await weapon_prices() if w.key == key)
 
 

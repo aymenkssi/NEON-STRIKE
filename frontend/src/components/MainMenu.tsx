@@ -61,6 +61,7 @@ type Props = {
   onSeasonReward: (credits: number, skin: string | null) => void;
   onBuyWeapon: (key: string) => boolean;
   onToggleLoadout: (key: string) => boolean;
+  onBuyAmmo: (key: string) => boolean;
 };
 
 // Auto-open the daily reward once per app launch, not every time the menu mounts.
@@ -249,6 +250,7 @@ export default function MainMenu(props: Props) {
           upgrades={progress.upgrades}
           onBuyWeapon={props.onBuyWeapon}
           onToggleLoadout={props.onToggleLoadout}
+          onBuyAmmo={props.onBuyAmmo}
           onBuyUpgrade={props.onBuyUpgrade}
           onOpenShop={() => setShowShop(true)}
           onClose={() => setShowArsenal(false)}

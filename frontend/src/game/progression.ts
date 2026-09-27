@@ -74,6 +74,7 @@ export type LevelResult = {
   maxHealth: number;
   credits: number; // credits picked up during the level (kills, boss), difficulty included
   difficulty?: Difficulty;
+  runKills?: number; // kills of the whole run (score submission)
 };
 
 export function computeStars(r: Pick<LevelResult, "health" | "maxHealth" | "kills" | "headshots">): number {

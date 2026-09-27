@@ -178,7 +178,7 @@ docker compose exec -T mongo mongorestore --gzip --archive=/backups/neon-XXXX.gz
 | `GET /api/admin/seasons` · `PUT /api/admin/seasons/{mois}/players/{id}` · `POST /api/admin/seasons/{mois}/validate` | Onglet « Saisons » : exclure un score suspect, valider les récompenses d'un mois terminé (sinon validation automatique 3 jours après la fin du mois), historique des champions. |
 | `GET/PUT/DELETE /api/admin/suggestions` | Onglet « Suggestions » de la page d'administration (liste, statut nouvelle / lue / traitée, suppression). |
 | `GET /api/config` | Packs visibles, prix des armes de l'Armurerie et messages en ligne, lus par l'app au démarrage. |
-| `GET /api/admin/weapons` · `PUT /api/admin/weapons/{id}` | Prix en crédits de chaque arme et mise en vente (page d'administration → Boutique et messages → Armurerie). |
+| `GET /api/admin/weapons` · `PUT /api/admin/weapons/{id}` | Prix en crédits de chaque arme, mise en vente et prix d'une boîte de munitions (page d'administration → Boutique et messages → Armurerie). |
 | `/api/admin/…` et `/admin` | Administration (jeton `ADMIN_TOKEN` obligatoire). |
 | `POST /api/purchases/verify` | Interroge Google Play. Répond `valid` uniquement si l'achat est payé. Un même reçu ne peut servir qu'à un seul joueur et un seul produit. |
 

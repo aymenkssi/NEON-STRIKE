@@ -6,6 +6,7 @@ import { GameEngine, type EngineOptions, type GameStats, type RunResult } from "
 import { levelReward, type Difficulty, type LevelResult, type PlayerModifiers } from "../game/progression";
 import { applyEvent, emptyStats, type MetaEvent, type PlayerStats } from "../game/meta";
 import { sound } from "../audio/sound";
+import { submitRunScore } from "../api/leaderboard";
 import { showInterstitialAtBreak, showRewarded } from "../ads";
 import { colors, fonts } from "../theme";
 import HUD from "./HUD";
@@ -27,6 +28,8 @@ type Props = {
   // Persists a finished level (stars + credits) and unlocks the next one.
   onLevelDone: (level: number, stars: number, credits: number, difficulty: Difficulty) => void;
   onAddCredits: (credits: number) => void;
+  // Rounds left per weapon (limited ammo), saved at the end of a level, on death and on exit.
+  onAmmo: (stock: Record<string, number>) => void;
   // Stats of the play session (kills, levels…) for missions and achievements.
   onSession: (session: PlayerStats) => void;
   onExit: () => void;
@@ -53,6 +56,7 @@ const INITIAL: GameStats = {
   powerups: [],
   difficulty: "normal",
   grenades: 3,
+  reserve: null,
 };
 
 export default function GameScreen({
@@ -67,6 +71,7 @@ export default function GameScreen({
   options,
   onLevelDone,
   onAddCredits,
+  onAmmo,
   onSession,
   onExit,
 }: Props) {
@@ -78,8 +83,8 @@ export default function GameScreen({
   // Credits picked up before dying are paid out when the player leaves the game-over screen
   // (not on revive, which continues the level and pays through the level reward instead).
   const pendingRunCredits = useRef(0);
-  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession });
-  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession };
+  const latest = useRef({ unlockedLevel, modifiers, onLevelDone, onSession, onAmmo });
+  latest.current = { unlockedLevel, modifiers, onLevelDone, onSession, onAmmo };
 
   // Events are batched and saved at natural breaks (level end, death, exit).
   const session = useRef<PlayerStats>(emptyStats());
@@ -107,6 +112,7 @@ export default function GameScreen({
     sound.init().then(() => sound.setEnabled(soundEnabled));
     return () => {
       flushSession();
+      if (engineRef.current) latest.current.onAmmo(engineRef.current.ammoStock());
       engineRef.current?.dispose();
       engineRef.current = null;
     };
@@ -142,6 +148,8 @@ export default function GameScreen({
           onLevelComplete: (r) => {
             const reward = levelReward(r);
             latest.current.onLevelDone(r.level, reward.stars, reward.total, r.difficulty ?? "normal");
+            // Accounts: every level cleared counts for the leaderboard (not only a game over).
+            if (!guest) submitRunScore({ name: username, score: r.score, level: r.level, kills: r.runKills ?? r.kills }).catch(() => {});
             track({ type: "level", stars: reward.stars });
             flushSession();
             setLevelResult(r);
@@ -151,6 +159,7 @@ export default function GameScreen({
           onNotify: notify,
           playSound: (n) => sound.play(n),
           onEvent: track,
+          onAmmo: (stock) => latest.current.onAmmo(stock),
         },
         { lookSensitivity, level: startLevel, unlockedLevel, modifiers, difficulty, options }
       );

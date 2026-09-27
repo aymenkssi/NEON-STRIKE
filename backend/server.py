@@ -36,7 +36,7 @@ verifier = PlayVerifier(
 
 
 MAX_LEVEL = 30
-SCORE_COOLDOWN_S = 5
+SCORE_COOLDOWN_S = 2
 
 app = FastAPI(title="Neon Strike API")
 api = APIRouter(prefix="/api")
@@ -123,9 +123,11 @@ async def create_player(payload: PlayerCreate, request: Request):
 
 
 def plausible(p: ScoreCreate) -> bool:
-    # Engine: 100-150 points per kill, 1000 per boss (at most one per level played),
-    # and the game-over screen can double the final score with a rewarded ad.
-    return p.score <= 2 * (p.kills * 150 + p.level * 1000)
+    # Engine: 100-270 points per kill (shield zombie + headshot) plus the combo bonus (+50 per
+    # chained kill), 1000 per boss (at most one per level played), and the game-over screen can
+    # double the final score with a rewarded ad. Generous on purpose: a legit long combo must
+    # never be rejected; absurd scores (many points for few kills) still are.
+    return p.score <= 2 * (p.kills * 1000 + p.level * 2000)
 
 
 @api.post("/scores", response_model=SubmitResult)

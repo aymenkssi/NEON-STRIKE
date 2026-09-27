@@ -61,6 +61,11 @@ class TestScores:
         r = api.post("/api/scores", json={"name": "X", "score": 999999, "level": 1, "kills": 3}, headers=player())
         assert r.status_code == 422
 
+    def test_accepts_long_combos(self, api, player):
+        # 80 kills in long combos on shield zombies with headshots, 8 levels, doubled by an ad.
+        r = api.post("/api/scores", json={"name": "X", "score": 2 * (80 * 700 + 8 * 1000), "level": 8, "kills": 80}, headers=player())
+        assert r.status_code == 200, r.text
+
     def test_validation(self, api, player):
         h = player()
         assert api.post("/api/scores", json={"name": "", "score": 1}, headers=h).status_code == 422

@@ -84,7 +84,26 @@ export const DEFAULT_PRICE: Record<string, number> = {
   pistol: 0, shotgun: 0, mp5: 800, m16: 1500, m4: 2200, ak47: 2800, sniper: 4000, launcher: 5000, minigun: 6000, rpg: 8000,
 };
 
-export type ArmoryState = { owned: string[]; loadout: string[] };
+// ---------------- Ammo ----------------
+// Each weapon has a limited stock of rounds (magazine included), kept from one game to the next.
+// Reloading takes rounds from it; boxes are bought in the Armory or found on zombies.
+// The pistol has unlimited ammo so the player always has something to shoot with.
+export const AMMO: Record<string, { start: number; cap: number; box: number; boxPrice: number }> = {
+  shotgun: { start: 40, cap: 80, box: 10, boxPrice: 60 },
+  mp5: { start: 180, cap: 360, box: 60, boxPrice: 80 },
+  m16: { start: 180, cap: 360, box: 60, boxPrice: 100 },
+  m4: { start: 180, cap: 360, box: 60, boxPrice: 100 },
+  ak47: { start: 180, cap: 360, box: 60, boxPrice: 110 },
+  sniper: { start: 30, cap: 60, box: 10, boxPrice: 150 },
+  launcher: { start: 12, cap: 36, box: 6, boxPrice: 200 },
+  minigun: { start: 450, cap: 900, box: 150, boxPrice: 150 },
+  rpg: { start: 4, cap: 12, box: 2, boxPrice: 250 },
+};
+export const unlimitedAmmo = (key: string) => !AMMO[key];
+export const ammoCap = (key: string) => AMMO[key]?.cap ?? Infinity;
+export const startAmmo = (key: string) => AMMO[key]?.start ?? Infinity;
+
+export type ArmoryState = { owned: string[]; loadout: string[]; ammo: Record<string, number> };
 
 // Saves made before the Armory: weapons were unlocked by level. Players keep them.
 const LEGACY: [string, string, number][] = [
@@ -96,7 +115,11 @@ export function initialArmory(unlockedLevel: number): ArmoryState {
   // Loadout: the shotgun and the most powerful weapons already earned.
   const best = owned.filter((k) => k !== "pistol" && k !== "shotgun").reverse();
   const loadout = ["shotgun", ...best, "pistol"].slice(0, LOADOUT_SIZE);
-  return { owned, loadout };
+  return { owned, loadout, ammo: fullAmmo(owned) };
+}
+
+function fullAmmo(keys: string[]) {
+  return Object.fromEntries(keys.filter((k) => !unlimitedAmmo(k)).map((k) => [k, startAmmo(k)]));
 }
 
 export function cleanArmory(a: Partial<ArmoryState> | undefined, unlockedLevel: number): ArmoryState {
@@ -106,11 +129,17 @@ export function cleanArmory(a: Partial<ArmoryState> | undefined, unlockedLevel: 
   let loadout = (Array.isArray(a.loadout) ? a.loadout : []).filter((k) => known(k) && owned.includes(k));
   loadout = Array.from(new Set(loadout)).slice(0, LOADOUT_SIZE);
   if (!loadout.length) loadout = ["shotgun"];
-  return { owned, loadout };
+  const ammo: Record<string, number> = {};
+  for (const k of owned) {
+    if (unlimitedAmmo(k)) continue;
+    const v = (a.ammo as Record<string, unknown> | undefined)?.[k];
+    ammo[k] = typeof v === "number" && v >= 0 ? Math.min(ammoCap(k), Math.floor(v)) : startAmmo(k);
+  }
+  return { owned, loadout, ammo };
 }
 
 // ---------------- Prices from the admin page ----------------
-export type RemoteWeapon = { key: string; price: number; on_sale: boolean };
+export type RemoteWeapon = { key: string; price: number; on_sale: boolean; ammo_price?: number; ammo_box?: number };
 let remote: Record<string, RemoteWeapon> = {};
 const listeners = new Set<() => void>();
 
@@ -129,6 +158,8 @@ export function onWeaponPricesChange(fn: () => void) {
 
 export const priceOf = (key: string) => remote[key]?.price ?? DEFAULT_PRICE[key] ?? 0;
 export const onSale = (key: string) => remote[key]?.on_sale ?? true;
+export const ammoBoxPrice = (key: string) => remote[key]?.ammo_price ?? AMMO[key]?.boxPrice ?? 0;
+export const ammoBox = (key: string) => (remote[key]?.ammo_box || AMMO[key]?.box) ?? 0;
 
 // Stats shown in the Armory (0..1 bars).
 export function weaponBars(w: WeaponConfig) {

@@ -184,11 +184,11 @@
     <div id="tab-liveops" hidden>
 
     <h2>Armurerie : prix des armes</h2>
-    <p class="hint">Prix en crédits des armes vendues dans l'Armurerie du jeu. Prix 0 = arme gratuite pour tout le monde. Décoche « En vente » pour la retirer de l'Armurerie : les joueurs qui l'ont déjà la gardent. Les changements s'appliquent au prochain lancement du jeu.</p>
+    <p class="hint">Prix en crédits des armes vendues dans l'Armurerie du jeu. Prix 0 = arme gratuite pour tout le monde. Décoche « En vente » pour la retirer de l'Armurerie : les joueurs qui l'ont déjà la gardent. Chaque arme a un stock de munitions limité : le joueur en rachète par boîtes dans l'Armurerie (prix de la boîte réglable ici) ou en ramasse en jeu. Le pistolet a des munitions illimitées. Les changements s'appliquent au prochain lancement du jeu.</p>
     <section class="panel">
       <div class="table-wrap">
         <table class="compact">
-          <thead><tr><th>Arme</th><th>ID</th><th>Prix (crédits)</th><th>En vente</th><th></th></tr></thead>
+          <thead><tr><th>Arme</th><th>ID</th><th>Prix (crédits)</th><th>En vente</th><th>Boîte de munitions</th><th></th></tr></thead>
           <tbody id="weapons"></tbody>
         </table>
       </div>
@@ -316,15 +316,22 @@
       const name = document.createElement("strong"); name.textContent = w.name;
       const price = input("number", w.price, { min: 0 }); price.setAttribute("aria-label", "Prix " + w.name);
       const onSale = input("checkbox", w.on_sale); onSale.setAttribute("aria-label", "En vente " + w.name);
+      const ammoCell = document.createElement("td");
+      let ammo = null;
+      if (w.ammo_box > 0) {
+        ammo = input("number", w.ammo_price, { min: 0 }); ammo.setAttribute("aria-label", "Prix munitions " + w.name); ammo.style.maxWidth = "110px";
+        const unit = document.createElement("span"); unit.className = "muted"; unit.textContent = " crédits / " + w.ammo_box + " balles";
+        ammoCell.append(ammo, unit);
+      } else ammoCell.append(Object.assign(document.createElement("span"), { className: "muted", textContent: "illimitées" }));
       const save = document.createElement("button"); save.textContent = "Enregistrer"; save.className = "primary"; save.type = "button";
       save.onclick = async () => {
         try {
-          await api("PUT", "/weapons/" + w.key, { price: Number(price.value), on_sale: onSale.checked });
+          await api("PUT", "/weapons/" + w.key, { price: Number(price.value), on_sale: onSale.checked, ...(ammo ? { ammo_price: Number(ammo.value) } : {}) });
           say($("weapons-status"), w.name + " : " + nf.format(Number(price.value)) + " crédits" + (onSale.checked ? "" : " (retirée de la vente)") + ".", true); loadWeapons();
         } catch (err) { say($("weapons-status"), err.message, false); }
       };
       const c = cell(price); c.className = "num";
-      tr.append(cell(name), cell(key), c, cell(onSale), cell(save));
+      tr.append(cell(name), cell(key), c, cell(onSale), ammoCell, cell(save));
       tbody.appendChild(tr);
     }
   }
