@@ -1,0 +1,18 @@
+<fr-FR>
+NOUVEAU : le mode histoire « L'Épidémie Néon » ! 5 actes en BD, des messages radio, 30 documents secrets et des boss légendaires.
+• Joue en 3e personne avec 6 héros et 18 skins
+• Armurerie : 10 armes réelles (AK-47, M4, sniper, RPG…) et munitions limitées
+• Grenades, bouton AIM pour viser en courant, aide à la visée
+• Difficultés Facile, Normal et Cauchemar, nouveaux zombies
+• Saisons mensuelles avec récompenses
+• Nouveaux réglages et corrections du classement
+</fr-FR>
+<en-US>
+NEW: the "Neon Outbreak" story mode! 5 acts told in comics, radio chatter, 30 secret documents and legendary bosses.
+• Play in third person with 6 heroes and 18 skins
+• Armory: 10 real weapons (AK-47, M4, sniper, RPG…) and limited ammo
+• Grenades, AIM button to aim on the move, aim assist
+• Easy, Normal and Nightmare difficulties, new zombies
+• Monthly seasons with rewards
+• New settings and leaderboard fixes
+</en-US>

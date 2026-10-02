@@ -1,5 +1,7 @@
 # Fiche Google Play de Neon Strike
 
+> **Mise à jour 1.0.1** : les nouvelles captures, l'image de présentation, les notes de version et la description à jour sont dans [`mise-a-jour-1.0.1/`](mise-a-jour-1.0.1/LISEZ-MOI.md). Ce fichier décrit la fiche de la version 1.0.0.
+
 Images et textes à utiliser dans **Play Console → Croissance → Présence sur le Store → Fiche principale du Store**.
 
 ## Images

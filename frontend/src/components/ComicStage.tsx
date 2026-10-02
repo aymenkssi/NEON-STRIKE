@@ -80,8 +80,10 @@ export default function ComicStage({ actors, bg, night }: Props) {
       const t = (Date.now() - t0) / 1000;
       // Slow camera drift, zombies reaching forward.
       // One character: closer; a group: wider.
-      const solo = current.current.actors.length <= 1;
-      camera.position.set(Math.sin(t * 0.25) * (solo ? 0.5 : 0.8), solo ? 1.5 : 1.7, solo ? 4.3 : 6.4);
+      const n = current.current.actors.length;
+      const solo = n <= 1;
+      const dist = solo ? 4.3 : n > 4 ? 6.4 + (n - 4) * 1.4 : 6.4; // a team of 6 stays in the frame
+      camera.position.set(Math.sin(t * 0.25) * (solo ? 0.5 : 0.8), solo ? 1.5 : 1.7, dist);
       camera.lookAt(0, solo ? 1.0 : 1.05, 0);
       arms.current.forEach((a, i) => (a.rotation.x = -Math.PI / 2 + Math.sin(t * 3 + i) * 0.15));
       r.render(scene, camera);
