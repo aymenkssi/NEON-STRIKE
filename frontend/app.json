@@ -47,7 +47,17 @@
       ],
       "expo-asset",
       "expo-iap",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "# React Native / Hermes / Reanimated: classes reached through JNI or reflection\n-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.swmansion.reanimated.** { *; }"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -26,7 +26,10 @@
     "production": {
       "autoIncrement": true,
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "buildArtifactPaths": [
+          "android/app/build/outputs/mapping/release/mapping.txt"
+        ]
       },
       "env": {
         "EXPO_PUBLIC_AD_MODE": "production",

@@ -143,6 +143,16 @@ Free to play with ads and optional in-app purchases (credit packs).
    yarn build:android:prod
    ```
    Télécharge le `.aab` depuis la page du build sur expo.dev.
+   **Nouveau dans cette version : R8 est activé** (réduction et brouillage du code Android). Google l'exige : la Play Console signalait « Obfuscation 1 % ». R8 peut, rarement, casser une bibliothèque. Avant la production, envoie donc ce `.aab` en **Tests internes** (Tester et publier → Tests → Tests internes). Installe-le sur ton téléphone et vérifie :
+   - le menu ;
+   - une partie complète ;
+   - une BD de l'histoire ;
+   - l'Armurerie ;
+   - un achat de crédits ;
+   - une publicité ;
+   - la connexion à un compte.
+
+   Si tout marche, passe la même release en production (« Promouvoir la release »).
 3. **Play Console → Tester et publier → Production → Créer une release.**
    1. Importe le `.aab`.
    2. Colle les notes de version (fichier `notes-de-version.txt`).
@@ -153,9 +163,16 @@ Free to play with ads and optional in-app purchases (credit packs).
    2. Remplace l'image de présentation.
    3. Colle la description courte et la description complète.
    4. Fais la même chose dans **Gérer les traductions → anglais (en-US)** avec les fichiers `en`.
-5. **Envoyer pour examen** (Vue d'ensemble de la publication). L'examen de Google prend en général quelques heures à quelques jours.
+5. **Envoyer le fichier de désobfuscation**. Il sert à rendre lisibles les rapports de plantage malgré R8, et fait disparaître l'avertissement « There is no deobfuscation file ».
+   1. Sur la page du build sur expo.dev, télécharge **Build artifacts** : c'est le fichier `mapping.txt`.
+   2. Dans la Play Console, va dans **Tester et publier → Explorateur d'app bundle**.
+   3. Choisis la version, onglet **Téléchargements**.
+   4. Dans **Fichier de désobfuscation ReTrace**, importe `mapping.txt`.
+6. **Envoyer pour examen** (Vue d'ensemble de la publication). L'examen de Google prend en général quelques heures à quelques jours.
 
 ## 5. Points à vérifier dans la Play Console
+
+- **Optimisation du code DEX (obfuscation 1 %) :** corrigé dans cette version. R8 est activé pour les builds de production (`expo-build-properties` dans `frontend/app.json`). Le pourcentage remonte dès que Google analyse la nouvelle version publiée.
 
 - **Classification du contenu :** rien ne change. La violence reste cartoon, sans sang ; la vue à la 3e personne et les nouveaux boss n'y changent rien. Tu n'as pas besoin de refaire le questionnaire.
 - **Sécurité des données :** pas de nouveau type de donnée collecté.
