@@ -2,7 +2,7 @@
   "expo": {
     "name": "Neon Strike",
     "slug": "neon-strike",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "landscape",
     "icon": "./assets/images/icon.png",
     "scheme": "neonstrike",
@@ -54,7 +54,7 @@
           "android": {
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "# React Native / Hermes / Reanimated: classes reached through JNI or reflection\n-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.swmansion.reanimated.** { *; }"
+            "extraProguardRules": "# React Native / Hermes / Reanimated: classes reached through JNI or reflection\n-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.swmansion.reanimated.** { *; }\n# expo-gl: its C++ calls GLContext.flush() by name (JNI GetMethodID); without this, R8 renames it\n# and the game closes as soon as a level opens its 3D view.\n-keep class expo.modules.gl.** { *; }"
           }
         }
       ]
